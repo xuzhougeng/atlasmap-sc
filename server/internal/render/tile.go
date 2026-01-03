@@ -70,7 +70,8 @@ func (r *TileRenderer) RenderTile(bins []zarr.Bin, zoom int, tileX, tileY int) (
 
 	// Calculate rendering parameters
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxis := float64(1 << zoom)
+	nBinsPerAxisInt := 1 << zoom
+	nBinsPerAxis := float64(nBinsPerAxisInt)
 	binSize := tileSize / nBinsPerAxis
 
 	// Render each bin
@@ -156,7 +157,8 @@ func (r *TileRenderer) RenderExpressionTile(
 
 	// Calculate rendering parameters
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxis := float64(1 << zoom)
+	nBinsPerAxisInt := 1 << zoom
+	nBinsPerAxis := float64(nBinsPerAxisInt)
 	binSize := tileSize / nBinsPerAxis
 
 	// Render each bin
@@ -217,7 +219,8 @@ func (r *TileRenderer) RenderCategoryTile(
 	cmap := r.colormaps["categorical"]
 
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxis := float64(1 << zoom)
+	nBinsPerAxisInt := 1 << zoom
+	nBinsPerAxis := float64(nBinsPerAxisInt)
 	binSize := tileSize / nBinsPerAxis
 
 	for i, bin := range bins {
