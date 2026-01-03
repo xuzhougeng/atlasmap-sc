@@ -26,7 +26,7 @@ dev:
 	@make -j2 dev-server dev-frontend
 
 dev-server:
-	cd $(GO_SERVER_DIR) && go run ./cmd/server
+	cd $(GO_SERVER_DIR) && go run ./cmd/server -config ../config/server.yaml
 
 dev-frontend:
 	cd $(FRONTEND_DIR) && npm run dev
@@ -47,7 +47,7 @@ preprocess:
 		echo "Usage: make preprocess INPUT=path/to/data.h5ad"; \
 		exit 1; \
 	fi
-	cd $(PREPROCESS_DIR) && python -m soma_tiles_preprocess run \
+	cd $(PREPROCESS_DIR) && python -m soma_tiles_preprocess.cli run \
 		--input $(INPUT) \
 		--output ../$(DATA_DIR)/preprocessed \
 		--zoom-levels 8 \

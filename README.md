@@ -2,6 +2,8 @@
 
 High-performance single-cell visualization system for 10M+ cells.
 
+Detailed usage/deployment guide: `doc/how-to-use.md`.
+
 ## Architecture
 
 ```
@@ -69,7 +71,7 @@ make dev
 
 # Or start separately:
 # Terminal 1: Go server
-cd server && go run ./cmd/server
+cd server && go run ./cmd/server -config ../config/server.yaml
 
 # Terminal 2: Frontend
 cd frontend && npm run dev
