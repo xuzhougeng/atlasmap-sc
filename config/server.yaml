@@ -5,8 +5,8 @@ server:
     - "http://localhost:5173"
 
 data:
-  zarr_path: "/data/preprocessed/zarr/bins.zarr"
-  soma_path: "/data/soma"
+  zarr_path: "/data/xzg_data/software/soma-tiles/data/preprocessed/zarr/bins.zarr"
+  soma_path: "/data/xzg_data/software/soma-tiles/data/soma"
 
 cache:
   tile_size_mb: 512
