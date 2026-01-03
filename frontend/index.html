@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOMA-Tiles - Single-Cell Visualization</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1 class="header-title">SOMA-Tiles</h1>
+            <div class="header-info" id="dataset-info"></div>
+        </header>
+
+        <main class="main-content">
+            <aside class="sidebar">
+                <section class="panel">
+                    <h2 class="panel-title">Gene Expression</h2>
+                    <div class="gene-selector" id="gene-selector">
+                        <input type="text"
+                               id="gene-input"
+                               class="gene-input"
+                               placeholder="Search genes..."
+                               autocomplete="off">
+                        <div id="gene-dropdown" class="gene-dropdown"></div>
+                    </div>
+                    <div id="expression-legend" class="legend"></div>
+                </section>
+
+                <section class="panel">
+                    <h2 class="panel-title">Categories</h2>
+                    <div id="category-filters" class="category-filters"></div>
+                </section>
+
+                <section class="panel">
+                    <h2 class="panel-title">Tools</h2>
+                    <div class="toolbar">
+                        <button id="btn-lasso" class="tool-btn" title="Lasso Selection">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                            </svg>
+                        </button>
+                        <button id="btn-reset" class="tool-btn" title="Reset View">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <h2 class="panel-title">Selection Info</h2>
+                    <div id="selection-info" class="selection-info">
+                        <p class="placeholder">No selection</p>
+                    </div>
+                </section>
+            </aside>
+
+            <div id="map-container" class="map-container"></div>
+        </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

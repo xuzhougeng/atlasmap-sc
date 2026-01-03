@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Go backend server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data:ro
+      - ./config:/app/config:ro
+    environment:
+      - GOMAXPROCS=4
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # Optional: Preprocessing container (run manually)
+  preprocess:
+    build:
+      context: ./preprocessing
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/data
+    profiles:
+      - tools
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
+volumes:
+  data:
