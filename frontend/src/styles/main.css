@@ -21,6 +21,12 @@
     padding: 0;
 }
 
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
     background-color: var(--bg-primary);
@@ -67,6 +73,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    min-height: 0; /* Critical for nested flex containers */
 }
 
 /* Sidebar */
@@ -267,11 +274,20 @@ body {
 .map-container {
     flex: 1;
     background-color: var(--bg-primary);
+    position: relative;
+    min-height: 0; /* Important for flex child with overflow */
+}
+
+#map-container {
+    height: 100%;
+    width: 100%;
 }
 
 /* Leaflet Overrides */
 .leaflet-container {
     background-color: #0d0d1a;
+    height: 100%;
+    width: 100%;
 }
 
 .zoom-info {
