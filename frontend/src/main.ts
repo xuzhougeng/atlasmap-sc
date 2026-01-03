@@ -3,6 +3,9 @@
 import { MapController } from './map/MapController';
 import { GeneSelector } from './components/GeneSelector';
 import { CategoryFilter } from './components/CategoryFilter';
+import { ColorModeSwitch } from './components/ColorModeSwitch';
+import { CategoryLegend } from './components/CategoryLegend';
+import { CellQueryPanel } from './components/CellQueryPanel';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 
@@ -47,15 +50,80 @@ async function init() {
         bounds: metadata.bounds,
     });
 
+    // Get available category columns
+    const availableCategories = api.getAvailableCategories(metadata);
+    const defaultCategory = availableCategories.includes('cell_type')
+        ? 'cell_type'
+        : availableCategories[0] || '';
+
+    // Initialize category legend
+    const categoryLegend = new CategoryLegend(
+        document.getElementById('category-legend')!,
+        api
+    );
+
+    // Initialize color mode switch
+    const colorModeSwitch = new ColorModeSwitch(
+        document.getElementById('color-mode-switch')!,
+        {
+            onModeChange: (mode) => {
+                console.log('Color mode changed:', mode);
+                state.setState({ colorMode: mode });
+
+                if (mode === 'category') {
+                    const column = colorModeSwitch.getSelectedCategory();
+                    mapController.setCategoryColumn(column);
+                    categoryLegend.loadLegend(column);
+                    categoryLegend.show();
+                } else {
+                    categoryLegend.hide();
+                }
+            },
+            onCategoryChange: (column) => {
+                console.log('Category column changed:', column);
+                mapController.setCategoryColumn(column);
+                categoryLegend.loadLegend(column);
+            },
+        }
+    );
+
+    // Set available categories and initialize
+    colorModeSwitch.setCategories(availableCategories);
+    if (defaultCategory) {
+        mapController.setCategoryColumn(defaultCategory);
+        categoryLegend.loadLegend(defaultCategory);
+    }
+
     // Initialize gene selector
     const geneSelector = new GeneSelector(
         document.getElementById('gene-selector')!,
         api
     );
+
+    // Initialize cell query panel
+    const cellQueryPanel = new CellQueryPanel(
+        document.getElementById('cell-query-panel')!,
+        api,
+        {
+            onBinSelect: (bin) => {
+                console.log('Bin selected:', bin);
+                // Pan map to the selected bin
+                mapController.panTo(bin.bin_x, bin.bin_y);
+            },
+        }
+    );
+
     geneSelector.onGeneSelect((gene) => {
         console.log('Gene selected:', gene);
         state.setState({ colorMode: 'expression', colorGene: gene });
+
+        // Switch to expression mode
+        colorModeSwitch.switchToExpression();
         mapController.setExpressionGene(gene);
+        categoryLegend.hide();
+
+        // Update cell query panel with selected gene
+        cellQueryPanel.setGene(gene);
     });
 
     // Initialize category filter
@@ -72,7 +140,7 @@ async function init() {
     }
 
     // Set up toolbar buttons
-    setupToolbar(mapController, state);
+    setupToolbar(mapController, state, colorModeSwitch, categoryLegend, cellQueryPanel, defaultCategory);
 
     console.log('SOMA-Tiles initialized successfully');
 }
@@ -88,7 +156,14 @@ function updateDatasetInfo(metadata: any) {
     }
 }
 
-function setupToolbar(map: MapController, state: StateManager) {
+function setupToolbar(
+    map: MapController,
+    state: StateManager,
+    colorModeSwitch: ColorModeSwitch,
+    categoryLegend: CategoryLegend,
+    cellQueryPanel: CellQueryPanel,
+    defaultCategory: string
+) {
     const lassoBtn = document.getElementById('btn-lasso');
     const resetBtn = document.getElementById('btn-reset');
 
@@ -103,6 +178,18 @@ function setupToolbar(map: MapController, state: StateManager) {
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             map.resetView();
+
+            // Reset to category mode
+            colorModeSwitch.switchToCategory();
+            if (defaultCategory) {
+                map.setCategoryColumn(defaultCategory);
+                categoryLegend.loadLegend(defaultCategory);
+                categoryLegend.show();
+            }
+
+            // Clear cell query panel
+            cellQueryPanel.clear();
+
             state.setState({
                 colorMode: 'category',
                 colorGene: null,

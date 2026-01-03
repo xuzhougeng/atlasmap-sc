@@ -28,6 +28,46 @@ export interface GeneInfo {
     preaggregated: boolean;
 }
 
+export interface CategoryLegendItem {
+    value: string;
+    color: string;
+    index: number;
+}
+
+export interface BinExpressionInfo {
+    bin_index: number;
+    bin_x: number;
+    bin_y: number;
+    cell_count: number;
+    expression: number;
+    categories: Record<string, string>;
+}
+
+export interface BinQueryResult {
+    bins: BinExpressionInfo[];
+    total_count: number;
+    offset: number;
+    limit: number;
+    gene: string;
+    threshold: number;
+}
+
+export interface GeneStats {
+    gene: string;
+    index: number;
+    expressing_bins: number;
+    total_bins: number;
+    total_cells: number;
+    mean_expression: number;
+    max_expression: number;
+}
+
+export interface BinQueryParams {
+    threshold?: number;
+    offset?: number;
+    limit?: number;
+}
+
 export class ApiClient {
     private baseUrl: string;
 
@@ -85,5 +125,78 @@ export class ApiClient {
         return genes
             .filter(g => g.toLowerCase().includes(queryLower))
             .slice(0, limit);
+    }
+
+    /**
+     * Get color mapping for a category column
+     */
+    async getCategoryColors(column: string): Promise<Record<string, string>> {
+        const response = await fetch(
+            `${this.baseUrl}/categories/${encodeURIComponent(column)}/colors`
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to fetch category colors: ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * Get legend data for a category column
+     */
+    async getCategoryLegend(column: string): Promise<CategoryLegendItem[]> {
+        const response = await fetch(
+            `${this.baseUrl}/categories/${encodeURIComponent(column)}/legend`
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to fetch category legend: ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * Get available category columns
+     */
+    getAvailableCategories(metadata: Metadata): string[] {
+        return Object.keys(metadata.categories);
+    }
+
+    /**
+     * Get bins expressing a gene above threshold
+     */
+    async getBinsExpressingGene(
+        gene: string,
+        params: BinQueryParams = {}
+    ): Promise<BinQueryResult> {
+        const query = new URLSearchParams();
+        if (params.threshold !== undefined) {
+            query.set('threshold', params.threshold.toString());
+        }
+        if (params.offset !== undefined) {
+            query.set('offset', params.offset.toString());
+        }
+        if (params.limit !== undefined) {
+            query.set('limit', params.limit.toString());
+        }
+
+        const response = await fetch(
+            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/bins?${query}`
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to query bins: ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * Get gene expression statistics
+     */
+    async getGeneStats(gene: string): Promise<GeneStats> {
+        const response = await fetch(
+            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/stats`
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to get gene stats: ${response.statusText}`);
+        }
+        return response.json();
     }
 }

@@ -48,13 +48,18 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	// Tile endpoints
 	r.Get("/tiles/{z}/{x}/{y}.png", tileHandler(cfg.TileService))
 	r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", expressionTileHandler(cfg.TileService))
+	r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(cfg.TileService))
 
 	// API endpoints
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/metadata", metadataHandler(cfg.TileService))
 		r.Get("/genes", genesHandler(cfg.TileService))
 		r.Get("/genes/{gene}", geneInfoHandler(cfg.TileService))
+		r.Get("/genes/{gene}/bins", geneBinsHandler(cfg.TileService))
+		r.Get("/genes/{gene}/stats", geneStatsHandler(cfg.TileService))
 		r.Get("/categories", categoriesHandler(cfg.TileService))
+		r.Get("/categories/{column}/colors", categoryColorsHandler(cfg.TileService))
+		r.Get("/categories/{column}/legend", categoryLegendHandler(cfg.TileService))
 		r.Get("/stats", statsHandler(cfg.TileService))
 	})
 
@@ -113,6 +118,24 @@ func expressionTileHandler(svc *service.TileService) http.HandlerFunc {
 	}
 }
 
+func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		z, _ := strconv.Atoi(chi.URLParam(r, "z"))
+		x, _ := strconv.Atoi(chi.URLParam(r, "x"))
+		y, _ := strconv.Atoi(chi.URLParam(r, "y"))
+		column := chi.URLParam(r, "column")
+
+		data, err := svc.GetCategoryTile(z, x, y, column)
+		if err != nil {
+			data, _ = svc.GetEmptyTile()
+		}
+
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Write(data)
+	}
+}
+
 func metadataHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := svc.Metadata()
@@ -155,11 +178,79 @@ func geneInfoHandler(svc *service.TileService) http.HandlerFunc {
 	}
 }
 
+func geneBinsHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gene := chi.URLParam(r, "gene")
+
+		// Parse query parameters
+		threshold, _ := strconv.ParseFloat(r.URL.Query().Get("threshold"), 32)
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		if limit <= 0 || limit > 1000 {
+			limit = 100
+		}
+
+		result, err := svc.QueryBinsExpressingGene(gene, float32(threshold), offset, limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	}
+}
+
+func geneStatsHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gene := chi.URLParam(r, "gene")
+
+		stats, err := svc.GetGeneStats(gene)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(stats)
+	}
+}
+
 func categoriesHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := svc.Metadata()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(metadata.Categories)
+	}
+}
+
+func categoryColorsHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		column := chi.URLParam(r, "column")
+
+		colors, err := svc.GetCategoryColors(column)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(colors)
+	}
+}
+
+func categoryLegendHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		column := chi.URLParam(r, "column")
+
+		legend, err := svc.GetCategoryLegend(column)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(legend)
 	}
 }
 

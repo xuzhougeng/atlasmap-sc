@@ -100,6 +100,11 @@ func ExpressionTileKey(z, x, y int, gene, colormap string) string {
 	return fmt.Sprintf("expr:%d/%d/%d:%s:%s", z, x, y, gene, colormap)
 }
 
+// CategoryTileKey generates a cache key for a category tile.
+func CategoryTileKey(z, x, y int, column string) string {
+	return fmt.Sprintf("cat:%d/%d/%d:%s", z, x, y, column)
+}
+
 // Stats returns cache statistics.
 func (m *Manager) Stats() map[string]interface{} {
 	return map[string]interface{}{

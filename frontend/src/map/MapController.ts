@@ -2,6 +2,8 @@
 
 import L from 'leaflet';
 
+export type ColorMode = 'expression' | 'category' | 'default';
+
 export interface MapConfig {
     apiUrl: string;
     tileSize: number;
@@ -19,7 +21,10 @@ export class MapController {
     private config: MapConfig;
     private tileLayer: L.TileLayer;
     private expressionLayer: L.TileLayer | null = null;
+    private categoryLayer: L.TileLayer | null = null;
     private bounds: L.LatLngBounds;
+    private currentColorMode: ColorMode = 'default';
+    private currentCategory: string | null = null;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.config = config;
@@ -100,8 +105,9 @@ export class MapController {
      * Set expression gene for coloring
      */
     setExpressionGene(gene: string, colorScale: string = 'viridis'): void {
-        // Remove existing expression layer
+        // Remove existing coloring layers
         this.clearExpression();
+        this.clearCategoryLayer();
 
         // Add expression-colored tile layer
         this.expressionLayer = L.tileLayer(
@@ -117,6 +123,7 @@ export class MapController {
 
         // Bring expression layer to front
         this.expressionLayer.bringToFront();
+        this.currentColorMode = 'expression';
     }
 
     /**
@@ -130,11 +137,72 @@ export class MapController {
     }
 
     /**
+     * Set category column for coloring
+     */
+    setCategoryColumn(column: string): void {
+        // Clear other coloring layers
+        this.clearExpression();
+        this.clearCategoryLayer();
+
+        // Add category-colored tile layer
+        this.categoryLayer = L.tileLayer(
+            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`,
+            {
+                tileSize: this.config.tileSize,
+                noWrap: true,
+                bounds: this.bounds,
+                maxZoom: this.config.maxZoom,
+                minZoom: 0,
+            }
+        ).addTo(this.map);
+
+        // Bring category layer to front
+        this.categoryLayer.bringToFront();
+        this.currentCategory = column;
+        this.currentColorMode = 'category';
+    }
+
+    /**
+     * Clear category coloring layer
+     */
+    clearCategoryLayer(): void {
+        if (this.categoryLayer) {
+            this.map.removeLayer(this.categoryLayer);
+            this.categoryLayer = null;
+        }
+        this.currentCategory = null;
+    }
+
+    /**
+     * Get current color mode
+     */
+    getColorMode(): ColorMode {
+        return this.currentColorMode;
+    }
+
+    /**
+     * Get current category column
+     */
+    getCurrentCategory(): string | null {
+        return this.currentCategory;
+    }
+
+    /**
      * Reset view to initial state
      */
     resetView(): void {
         this.clearExpression();
+        this.clearCategoryLayer();
         this.map.fitBounds(this.bounds);
+        this.currentColorMode = 'default';
+    }
+
+    /**
+     * Pan to specific coordinates
+     */
+    panTo(x: number, y: number, zoom?: number): void {
+        const targetZoom = zoom ?? this.map.getZoom();
+        this.map.setView([y, x], targetZoom);
     }
 
     /**
@@ -159,6 +227,9 @@ export class MapController {
         this.tileLayer.redraw();
         if (this.expressionLayer) {
             this.expressionLayer.redraw();
+        }
+        if (this.categoryLayer) {
+            this.categoryLayer.redraw();
         }
     }
 
