@@ -3,7 +3,8 @@
 import { MapController } from './map/MapController';
 import { GeneSelector } from './components/GeneSelector';
 import { CategoryFilter } from './components/CategoryFilter';
-import { ColorModeSwitch } from './components/ColorModeSwitch';
+import { TabPanel, TabType } from './components/TabPanel';
+import { CategoryColumnSelector } from './components/CategoryColumnSelector';
 import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
 import { StateManager, AppState } from './state/StateManager';
@@ -56,22 +57,16 @@ async function init() {
         ? 'cell_type'
         : availableCategories[0] || '';
 
-    // Initialize category legend
-    const categoryLegend = new CategoryLegend(
-        document.getElementById('category-legend')!,
-        api
-    );
-
-    // Initialize color mode switch
-    const colorModeSwitch = new ColorModeSwitch(
-        document.getElementById('color-mode-switch')!,
+    // Initialize TabPanel
+    const tabPanel = new TabPanel(
+        document.getElementById('tab-panel-container')!,
         {
-            onModeChange: (mode) => {
-                console.log('Color mode changed:', mode);
-                state.setState({ colorMode: mode });
+            onTabChange: (tab: TabType) => {
+                console.log('Tab changed:', tab);
+                state.setState({ colorMode: tab });
 
-                if (mode === 'category') {
-                    const column = colorModeSwitch.getSelectedCategory();
+                if (tab === 'category') {
+                    const column = categoryColumnSelector.getSelectedCategory();
                     mapController.setCategoryColumn(column);
                     categoryLegend.loadLegend(column);
                     categoryLegend.show();
@@ -79,6 +74,24 @@ async function init() {
                     categoryLegend.hide();
                 }
             },
+        }
+    );
+
+    // Get tab containers
+    const categoryContainer = tabPanel.getCategoryContainer();
+    const expressionContainer = tabPanel.getExpressionContainer();
+
+    // === Category Tab Content ===
+
+    // Create category column selector container
+    const categoryColumnSelectorContainer = document.createElement('div');
+    categoryColumnSelectorContainer.id = 'category-column-selector';
+    categoryContainer.appendChild(categoryColumnSelectorContainer);
+
+    // Initialize category column selector
+    const categoryColumnSelector = new CategoryColumnSelector(
+        categoryColumnSelectorContainer,
+        {
             onCategoryChange: (column) => {
                 console.log('Category column changed:', column);
                 mapController.setCategoryColumn(column);
@@ -86,39 +99,89 @@ async function init() {
             },
         }
     );
+    categoryColumnSelector.setCategories(availableCategories);
 
-    // Set available categories and initialize
-    colorModeSwitch.setCategories(availableCategories);
-    if (defaultCategory) {
-        mapController.setCategoryColumn(defaultCategory);
-        categoryLegend.loadLegend(defaultCategory);
+    // Create category legend container
+    const categoryLegendContainer = document.createElement('div');
+    categoryLegendContainer.id = 'category-legend';
+    categoryLegendContainer.className = 'category-legend-container';
+    categoryContainer.appendChild(categoryLegendContainer);
+
+    // Initialize category legend
+    const categoryLegend = new CategoryLegend(categoryLegendContainer, api);
+
+    // Create category filter section
+    const filterTitle = document.createElement('h3');
+    filterTitle.className = 'tab-section-title';
+    filterTitle.textContent = 'Filter';
+    categoryContainer.appendChild(filterTitle);
+
+    const categoryFiltersContainer = document.createElement('div');
+    categoryFiltersContainer.id = 'category-filters';
+    categoryFiltersContainer.className = 'category-filters';
+    categoryContainer.appendChild(categoryFiltersContainer);
+
+    // Initialize category filter
+    if (metadata.categories) {
+        const categoryFilter = new CategoryFilter(
+            categoryFiltersContainer,
+            metadata.categories
+        );
+        categoryFilter.onFilterChange((categories) => {
+            console.log('Categories filtered:', categories);
+            state.setState({ selectedCategories: categories });
+        });
     }
 
+    // === Expression Tab Content ===
+
+    // Create gene selector section
+    const geneSelectorContainer = document.createElement('div');
+    geneSelectorContainer.className = 'gene-selector';
+    geneSelectorContainer.id = 'gene-selector';
+    geneSelectorContainer.innerHTML = `
+        <input type="text"
+               id="gene-input"
+               class="gene-input"
+               placeholder="Search genes..."
+               autocomplete="off">
+        <div id="gene-dropdown" class="gene-dropdown"></div>
+    `;
+    expressionContainer.appendChild(geneSelectorContainer);
+
     // Initialize gene selector
-    const geneSelector = new GeneSelector(
-        document.getElementById('gene-selector')!,
-        api
-    );
+    const geneSelector = new GeneSelector(geneSelectorContainer, api);
+
+    // Create expression legend container
+    const expressionLegendContainer = document.createElement('div');
+    expressionLegendContainer.id = 'expression-legend';
+    expressionLegendContainer.className = 'legend';
+    expressionContainer.appendChild(expressionLegendContainer);
+
+    // Create cell query panel container
+    const cellQueryContainer = document.createElement('div');
+    cellQueryContainer.id = 'cell-query-panel';
+    expressionContainer.appendChild(cellQueryContainer);
 
     // Initialize cell query panel
     const cellQueryPanel = new CellQueryPanel(
-        document.getElementById('cell-query-panel')!,
+        cellQueryContainer,
         api,
         {
             onBinSelect: (bin) => {
                 console.log('Bin selected:', bin);
-                // Pan map to the selected bin
                 mapController.panTo(bin.bin_x, bin.bin_y);
             },
         }
     );
 
+    // Gene selection handler
     geneSelector.onGeneSelect((gene) => {
         console.log('Gene selected:', gene);
         state.setState({ colorMode: 'expression', colorGene: gene });
 
-        // Switch to expression mode
-        colorModeSwitch.switchToExpression();
+        // Switch to expression tab (this will also trigger mode change)
+        tabPanel.switchTab('expression');
         mapController.setExpressionGene(gene);
         categoryLegend.hide();
 
@@ -126,21 +189,14 @@ async function init() {
         cellQueryPanel.setGene(gene);
     });
 
-    // Initialize category filter
-    if (metadata.categories) {
-        const categoryFilter = new CategoryFilter(
-            document.getElementById('category-filters')!,
-            metadata.categories
-        );
-        categoryFilter.onFilterChange((categories) => {
-            console.log('Categories filtered:', categories);
-            state.setState({ selectedCategories: categories });
-            // Refresh tiles with filter
-        });
+    // Initialize with default category
+    if (defaultCategory) {
+        mapController.setCategoryColumn(defaultCategory);
+        categoryLegend.loadLegend(defaultCategory);
     }
 
     // Set up toolbar buttons
-    setupToolbar(mapController, state, colorModeSwitch, categoryLegend, cellQueryPanel, defaultCategory);
+    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel, defaultCategory);
 
     console.log('SOMA-Tiles initialized successfully');
 }
@@ -159,7 +215,7 @@ function updateDatasetInfo(metadata: any) {
 function setupToolbar(
     map: MapController,
     state: StateManager,
-    colorModeSwitch: ColorModeSwitch,
+    tabPanel: TabPanel,
     categoryLegend: CategoryLegend,
     cellQueryPanel: CellQueryPanel,
     defaultCategory: string
@@ -179,8 +235,8 @@ function setupToolbar(
         resetBtn.addEventListener('click', () => {
             map.resetView();
 
-            // Reset to category mode
-            colorModeSwitch.switchToCategory();
+            // Reset to category tab
+            tabPanel.switchTab('category');
             if (defaultCategory) {
                 map.setCategoryColumn(defaultCategory);
                 categoryLegend.loadLegend(defaultCategory);
