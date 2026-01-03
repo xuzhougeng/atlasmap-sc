@@ -63,6 +63,19 @@ def main():
     help="Number of genes to pre-aggregate",
 )
 @click.option(
+    "--all-expressed", "-a",
+    "use_all_expressed",
+    is_flag=True,
+    default=False,
+    help="Use all genes with non-zero expression instead of top N genes",
+)
+@click.option(
+    "--min-cells",
+    default=1,
+    type=int,
+    help="Minimum cells where gene must be expressed (only with --all-expressed)",
+)
+@click.option(
     "--category", "-c",
     "categories",
     multiple=True,
@@ -96,6 +109,8 @@ def run(
     umap_key: str,
     zoom_levels: int,
     n_genes: int,
+    use_all_expressed: bool,
+    min_cells: int,
     categories: tuple[str, ...],
     chunk_size: int,
     batch_size: int,
@@ -121,6 +136,8 @@ def run(
         umap_key=umap_key,
         zoom_levels=zoom_levels,
         n_genes=n_genes,
+        use_all_expressed=use_all_expressed,
+        min_cells_expressed=min_cells,
         category_columns=list(categories),
         chunk_size=chunk_size,
         batch_size=batch_size,

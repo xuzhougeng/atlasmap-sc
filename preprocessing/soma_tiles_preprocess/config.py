@@ -26,6 +26,8 @@ class PreprocessConfig:
     n_genes: int = 500  # Number of genes to pre-aggregate
     hvg_n_top: int = 300  # Top highly variable genes
     marker_genes: list[str] = field(default_factory=list)
+    use_all_expressed: bool = False  # If True, use all genes with expression > 0
+    min_cells_expressed: int = 1  # Minimum cells where gene must be expressed
 
     # Category settings
     category_columns: list[str] = field(default_factory=list)  # obs columns to include
@@ -69,6 +71,8 @@ class PreprocessConfig:
             "n_genes": self.n_genes,
             "hvg_n_top": self.hvg_n_top,
             "marker_genes": self.marker_genes,
+            "use_all_expressed": self.use_all_expressed,
+            "min_cells_expressed": self.min_cells_expressed,
             "category_columns": self.category_columns,
             "default_category": self.default_category,
             "zarr_compressor": self.zarr_compressor,
@@ -89,8 +93,11 @@ class PreprocessConfig:
         if self.zoom_levels < 1 or self.zoom_levels > 12:
             raise ValueError(f"zoom_levels must be between 1 and 12, got {self.zoom_levels}")
 
-        if self.n_genes < 1:
+        if not self.use_all_expressed and self.n_genes < 1:
             raise ValueError(f"n_genes must be positive, got {self.n_genes}")
+
+        if self.min_cells_expressed < 1:
+            raise ValueError(f"min_cells_expressed must be >= 1, got {self.min_cells_expressed}")
 
         if self.tile_size not in [128, 256, 512]:
             raise ValueError(f"tile_size must be 128, 256, or 512, got {self.tile_size}")

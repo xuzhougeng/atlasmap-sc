@@ -95,6 +95,8 @@ class PreprocessingPipeline:
             n_genes=self.config.n_genes,
             hvg_n_top=self.config.hvg_n_top,
             marker_genes=self.config.marker_genes,
+            use_all_expressed=self.config.use_all_expressed,
+            min_cells_expressed=self.config.min_cells_expressed,
         )
 
         logger.info(f"Selected {len(self.selected_genes)} genes for pre-aggregation")

@@ -26,22 +26,44 @@ class GeneSelector:
         n_genes: int = 500,
         hvg_n_top: int = 300,
         marker_genes: Optional[list[str]] = None,
+        use_all_expressed: bool = False,
+        min_cells_expressed: int = 1,
     ) -> list[str]:
         """Select genes for pre-aggregation.
 
         Selection strategy:
-        1. Highly variable genes (top hvg_n_top)
-        2. User-specified marker genes
-        3. Fill remaining with most expressed genes
+        - If use_all_expressed is True: all genes expressed in >= min_cells_expressed cells
+        - Otherwise:
+          1. Highly variable genes (top hvg_n_top)
+          2. User-specified marker genes
+          3. Fill remaining with most expressed genes
 
         Args:
-            n_genes: Total number of genes to select
+            n_genes: Total number of genes to select (ignored if use_all_expressed=True)
             hvg_n_top: Number of highly variable genes to include
             marker_genes: User-specified marker genes to include
+            use_all_expressed: If True, use all genes with expression > 0
+            min_cells_expressed: Minimum cells where gene must be expressed
 
         Returns:
             List of selected gene names
         """
+        # If use_all_expressed, return all expressed genes
+        if use_all_expressed:
+            expressed = self._get_expressed_genes(min_cells=min_cells_expressed)
+            selected_set = set(expressed)
+
+            # Still include marker genes
+            if marker_genes:
+                valid_markers = [g for g in marker_genes if g in self.gene_names]
+                selected_set.update(valid_markers)
+                logger.info(f"Added {len(valid_markers)} marker genes")
+
+            final_genes = sorted(list(selected_set))
+            logger.info(f"Final selection (all expressed): {len(final_genes)} genes")
+            return final_genes
+
+        # Original selection strategy
         selected: set[str] = set()
 
         # 1. Add highly variable genes
@@ -154,3 +176,33 @@ class GeneSelector:
 
         top_indices = np.argsort(total_expr)[::-1][:n_top]
         return [self.gene_names[i] for i in top_indices]
+
+    def _get_expressed_genes(self, min_cells: int = 1) -> list[str]:
+        """Get all genes expressed in at least min_cells cells.
+
+        Args:
+            min_cells: Minimum number of cells where gene must have expression > 0
+
+        Returns:
+            List of gene names with non-zero expression in at least min_cells cells
+        """
+        from scipy import sparse
+
+        X = self.adata.X
+
+        if sparse.issparse(X):
+            # For sparse matrix: count non-zero entries per gene (column)
+            n_cells_expressed = np.array((X > 0).sum(axis=0)).flatten()
+        else:
+            n_cells_expressed = np.sum(X > 0, axis=0)
+
+        # Filter genes by minimum cell threshold
+        mask = n_cells_expressed >= min_cells
+        expressed_genes = [self.gene_names[i] for i in range(len(self.gene_names)) if mask[i]]
+
+        logger.info(
+            f"Found {len(expressed_genes)} genes expressed in >= {min_cells} cells "
+            f"(out of {len(self.gene_names)} total genes)"
+        )
+
+        return expressed_genes
