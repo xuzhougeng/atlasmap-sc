@@ -27,6 +27,30 @@
 - `GET /d/{dataset}/api/categories/{column}/colors`：分类颜色映射
 - `GET /d/{dataset}/api/categories/{column}/legend`：分类图例
 
+### SOMA（实验级表达查询，TileDB-SOMA）
+
+> 注意：该接口需要后端以 `-tags soma` 构建，并且运行环境安装 TileDB C 库（`libtiledb` + headers）；否则会返回 `501`（not implemented）。
+
+- `GET /d/{dataset}/api/soma/expression?gene={gene}&cells={c1,c2,...}&mode={sparse|dense}`
+  - `gene`：基因名（`ms/RNA/var.gene_id`；注意不是 `gene_name`）
+  - `cells`：细胞 `soma_joinid`（整数，逗号分隔；不是 `cell_id` 字符串）
+  - `mode`：
+    - `sparse`（默认）：返回非零项 `items=[{cell_joinid,value}, ...]`
+    - `dense`：返回与输入 `cells` 对齐的 `values=[...]`（缺失视为 0）
+  - 限制：`cells` 最多 10000 个（超出会 400）
+
+示例：
+
+```bash
+curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG00000038116&cells=95,118,143&mode=dense'
+```
+
+状态码说明（当前实现）：
+
+- 404：该 dataset 未配置 `soma_path` 或 experiment 不存在
+- 501：服务未以 `-tags soma` 构建
+- 400：参数错误 / gene 不存在 / TileDB 查询失败（错误体为纯文本）
+
 ### Tiles（PNG）
 
 - `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`：基础 tile

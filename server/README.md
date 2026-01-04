@@ -11,6 +11,21 @@ cd server
 go run ./cmd/server -config ../config/server.yaml
 ```
 
+如果你需要启用 **TileDB-SOMA（任意基因 × 任意细胞表达查询）**（需要 CGO + TileDB C 库）：
+
+```bash
+cd server
+
+# 安装 TileDB core（conda-forge）
+conda install -c conda-forge -y tiledb
+
+export CGO_ENABLED=1
+export CGO_CFLAGS="-I$CONDA_PREFIX/include"
+export CGO_LDFLAGS="-L$CONDA_PREFIX/lib -ltiledb -Wl,-rpath,$CONDA_PREFIX/lib"
+
+go run -tags soma ./cmd/server -config ../config/server.yaml
+```
+
 默认监听端口来自配置文件 `server.port`（默认 `8080`）。健康检查：
 
 ```bash
@@ -112,6 +127,7 @@ render:
 - `GET /d/{dataset}/api/genes/{gene}`
 - `GET /d/{dataset}/api/genes/{gene}/stats`
 - `GET /d/{dataset}/api/genes/{gene}/bins?threshold=&offset=&limit=`
+- `GET /d/{dataset}/api/soma/expression?gene={gene}&cells={c1,c2,...}&mode={sparse|dense}`（需要 `-tags soma`）
 - `GET /d/{dataset}/api/categories`
 - `GET /d/{dataset}/api/categories/{column}/colors`
 - `GET /d/{dataset}/api/categories/{column}/legend`
@@ -411,4 +427,49 @@ curl -sS "http://localhost:8080/d/default/api/categories/cell_type/legend"
   { "value": "Myeloid", "color": "#2ca02c", "index": 2 }
 ]
 ```
+
+## SOMA 表达查询（TileDB-SOMA，实验级）
+
+该接口用于从 `soma/experiment.soma` 的完整表达矩阵里查询 **任意基因 × 任意细胞** 的表达值。
+
+前提：
+
+- 配置里该数据集设置了 `soma_path`（指向 `.../soma` 目录；内部会寻找 `experiment.soma`）
+- 后端以 `-tags soma` 构建/运行，并且系统能找到 TileDB core（`libtiledb` + headers）
+- 版本兼容：本仓库 `server/go.mod` 固定 `TileDB-Go v0.38.0`，对应 TileDB core `2.29.x`
+
+### `GET /d/{dataset}/api/soma/expression?gene=&cells=&mode=`
+
+- `gene`：基因名（`ms/RNA/var.gene_id`）
+- `cells`：细胞 `soma_joinid`（整数，逗号分隔；不是 `cell_id`）
+- `mode`：
+  - `dense`：返回与输入 `cells` 对齐的 `values`（缺失视为 0）
+  - `sparse`：仅返回非零项 `items=[{cell_joinid,value}, ...]`
+
+示例（retina）：
+
+```bash
+curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG00000038116&cells=95,118,143,206,276,367,373,385,386,497&mode=dense'
+```
+
+返回（示例）：
+
+```json
+{
+  "cells": [95,118,143,206,276,367,373,385,386,497],
+  "gene": "ENSMICG00000038116",
+  "gene_joinid": 2315,
+  "mode": "dense",
+  "nnz": 10,
+  "values": [2.0556595,0.8455493,2.0095484,1.3307723,2.1727157,2.3340511,2.3182132,2.1789465,2.3348932,2.1009095]
+}
+```
+
+状态码说明（当前实现）：
+
+- 404：该 dataset 未配置 `soma_path` 或 experiment 不存在
+- 501：服务未以 `-tags soma` 构建
+- 400：参数错误 / gene 不存在 / TileDB 查询失败（错误体为纯文本）
+
+> Docker 注意：当前 `server/Dockerfile` 使用 `CGO_ENABLED=0` 的静态构建，默认不支持 `-tags soma`。如需在容器内启用 SOMA，需要自定义镜像并安装 TileDB core。
 

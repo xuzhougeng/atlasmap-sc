@@ -141,6 +141,34 @@ cd server
 go run ./cmd/server -config ../config/server.yaml
 ```
 
+如果你需要启用 **TileDB-SOMA（任意基因 × 任意细胞表达查询）**：
+
+第一步, 安装 TileDB C 库（`libtiledb` / headers）
+
+```bash
+conda install -c conda-forge -y tiledb
+```
+
+> 版本兼容：TileDB-Go 与 TileDB core 需要匹配。本仓库 `server/go.mod` 固定使用 `github.com/TileDB-Inc/TileDB-Go v0.38.0`，对应 TileDB `2.29.x`（例如 `2.29.1`）。
+
+第二步, 使用 build tag 构建/运行（需要 CGO）：
+
+```bash
+cd server
+
+export CGO_ENABLED=1
+export CGO_CFLAGS="-I$CONDA_PREFIX/include"
+export CGO_LDFLAGS="-L$CONDA_PREFIX/lib -ltiledb -Wl,-rpath,$CONDA_PREFIX/lib"
+
+go run -tags soma ./cmd/server -config ../config/server.yaml
+```
+
+如果你看到一堆 `deprecated` 的编译 warning：不影响运行。想静默可加：
+
+```bash
+export CGO_CFLAGS="-I$CONDA_PREFIX/include -Wno-deprecated-declarations"
+```
+
 关键配置项在 `config/server.yaml`：
 
 - `server.port`：默认 `8080`
