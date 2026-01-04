@@ -43,7 +43,6 @@ async function init() {
         center: [128, 128],
         selectedCategories: [],
         expressionFilter: { gene: null, min: 0, max: 1 },
-        selection: { id: null, type: null, polygon: null, cellCount: 0 },
         colorMode: 'category',
         colorGene: null,
         colorScale: 'viridis',
@@ -285,18 +284,9 @@ function setupToolbar(
     cellQueryPanel: CellQueryPanel,
     defaultCategory: string
 ) {
-    const lassoBtn = document.getElementById('btn-lasso');
     const resetBtn = document.getElementById('btn-reset');
     const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
     const downloadStatus = document.getElementById('download-status');
-
-    if (lassoBtn) {
-        lassoBtn.addEventListener('click', () => {
-            // Toggle lasso mode
-            lassoBtn.classList.toggle('active');
-            // map.toggleLassoMode();
-        });
-    }
 
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -317,7 +307,6 @@ function setupToolbar(
                 colorMode: 'category',
                 colorGene: null,
                 selectedCategories: [],
-                selection: { id: null, type: null, polygon: null, cellCount: 0 },
             });
         });
     }

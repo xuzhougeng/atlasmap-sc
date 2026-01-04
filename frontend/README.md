@@ -135,14 +135,6 @@ interface AppState {
         max: number;
     };
 
-    // 选择状态
-    selection: {
-        id: string | null;
-        type: 'lasso' | 'rect' | null;
-        polygon: [number, number][] | null;
-        cellCount: number;
-    };
-
     // 显示状态
     colorMode: 'category' | 'expression';
     colorGene: string | null;

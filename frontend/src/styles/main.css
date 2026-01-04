@@ -262,11 +262,6 @@ body {
     border-color: var(--accent-primary);
 }
 
-/* Selection Info */
-.selection-info {
-    font-size: 0.875rem;
-}
-
 .placeholder {
     color: var(--text-secondary);
     font-style: italic;

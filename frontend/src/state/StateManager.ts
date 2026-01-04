@@ -13,14 +13,6 @@ export interface AppState {
         max: number;
     };
 
-    // Selection state
-    selection: {
-        id: string | null;
-        type: 'lasso' | 'rect' | null;
-        polygon: [number, number][] | null;
-        cellCount: number;
-    };
-
     // Display state
     colorMode: 'category' | 'expression';
     colorGene: string | null;
@@ -101,7 +93,6 @@ export class StateManager {
         if (prev.center !== next.center) keys.push('center');
         if (prev.selectedCategories !== next.selectedCategories) keys.push('selectedCategories');
         if (prev.expressionFilter !== next.expressionFilter) keys.push('expressionFilter');
-        if (prev.selection !== next.selection) keys.push('selection');
         if (prev.colorMode !== next.colorMode) keys.push('colorMode');
         if (prev.colorGene !== next.colorGene) keys.push('colorGene');
         if (prev.colorScale !== next.colorScale) keys.push('colorScale');
