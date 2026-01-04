@@ -13,12 +13,12 @@ server:
 
 # Multi-dataset format:
 data:
-  pbmc:
-    zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc/zarr/bins.zarr"
-    soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc/soma"
-  pbmc2:
-    zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc2/zarr/bins.zarr"
-    soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc2/soma"
+  blood:
+    zarr_path: "/data/xzg_data/software/soma-tiles/data/blood/zarr/bins.zarr"
+    soma_path: "/data/xzg_data/software/soma-tiles/data/blood/soma"
+  retina:
+    zarr_path: "/data/xzg_data/software/soma-tiles/data/retina/zarr/bins.zarr"
+    soma_path: "/data/xzg_data/software/soma-tiles/data/retina/soma"
 # The first dataset in the list becomes the default.
 
 # data:

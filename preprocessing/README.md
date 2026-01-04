@@ -36,14 +36,23 @@ pip install -e .
 
 ### 命令行使用
 
+基本用法
+
 ```bash
-# 下载示例数据
-wget -O data.h5ad https://datasets.cellxgene.cziscience.com/c3d1a5e6-780b-4fe9-a39b-1864f927e87b.h5ad
+wget -O blood.h5ad https://datasets.cellxgene.cziscience.com/c3d1a5e6-780b-4fe9-a39b-1864f927e87b.h5ad
+soma-preprocess run -i blood.h5ad -o ./data/blood
+```
 
-# 基本用法
-soma-preprocess run -i data.h5ad -o ./output
+使用所有的表达基因
 
-# 完整参数
+```bash
+wget -O retina.h5ad https://datasets.cellxgene.cziscience.com/fc4b5c6c-26ae-4c65-9798-51f604b69ba6.h5ad
+soma-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --category cell_type
+```
+
+完整参数
+
+```bash
 soma-preprocess run \
     -i data.h5ad \
     -o ./output \
@@ -57,6 +66,7 @@ soma-preprocess run \
     --name "My Dataset" \
     --verbose
 ```
+
 
 ### 使用配置文件
 
