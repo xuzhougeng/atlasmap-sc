@@ -54,6 +54,7 @@ render:
   - 404：资源不存在（如 gene/category 不存在）
   - 500：内部错误
 - Tile 接口容错：如果渲染/读取数据失败，通常会返回**空白（透明）PNG tile**，HTTP 状态仍为 `200`（用于前端地图不因局部错误中断）。
+- 示例说明：本文档的 JSON 示例会用小规模数据展示字段结构；实际生产数据里数组可能很大。
 
 ## 接口总览
 
@@ -143,9 +144,9 @@ curl -sS "http://localhost:8080/api/metadata"
 {
   "zoom_levels": 8,
   "tile_size": 256,
-  "n_genes_preaggregated": 500,
+  "n_genes_preaggregated": 3,
   "n_categories": {
-    "cell_type": 27
+    "cell_type": 3
   },
   "format_version": "1",
   "dataset_name": "example_dataset",
@@ -183,12 +184,16 @@ curl -sS "http://localhost:8080/api/metadata"
 curl -sS "http://localhost:8080/api/stats"
 ```
 
+字段说明：
+
+- `n_genes`：**预聚合基因数**（与 `/api/metadata` 的 `n_genes_preaggregated` 一致）
+
 代表性响应（示例）：
 
 ```json
 {
   "n_cells": 100000,
-  "n_genes": 500,
+  "n_genes": 3,
   "zoom_levels": 8,
   "dataset_name": "example_dataset"
 }
@@ -210,7 +215,7 @@ curl -sS "http://localhost:8080/api/genes"
 {
   "genes": ["CD3D", "CD8A", "MS4A1"],
   "total": 3,
-  "preaggregated_count": 500
+  "preaggregated_count": 3
 }
 ```
 
@@ -263,6 +268,11 @@ Query 参数：
 - `threshold`：浮点数，默认 `0`
 - `offset`：整数，默认 `0`
 - `limit`：整数，默认 `100`，最大 `1000`
+
+状态码说明：
+
+- `200`：成功
+- `500`：后端查询失败（**当前实现里 gene 不存在也会走 500**，错误文本类似 `gene not found: XXX`）
 
 ```bash
 curl -sS "http://localhost:8080/api/genes/CD3D/bins?threshold=1.0&offset=0&limit=2"
@@ -362,5 +372,4 @@ curl -sS "http://localhost:8080/api/categories/cell_type/legend"
   { "value": "Myeloid", "color": "#2ca02c", "index": 2 }
 ]
 ```
-
 
