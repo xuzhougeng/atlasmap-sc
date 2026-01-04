@@ -462,7 +462,7 @@ func (s *TileService) QueryBinsExpressingGene(
 	return s.zarr.GetBinsExpressingGene(gene, threshold, offset, limit)
 }
 
-// GetGeneStats returns statistics for a gene.
-func (s *TileService) GetGeneStats(gene string) (*zarr.GeneStats, error) {
-	return s.zarr.GetGeneStats(gene)
+// GetGeneStats returns statistics for a gene at a specific zoom level.
+func (s *TileService) GetGeneStats(gene string, zoom int) (*zarr.GeneStats, error) {
+	return s.zarr.GetGeneStats(gene, zoom)
 }

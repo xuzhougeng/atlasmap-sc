@@ -891,23 +891,25 @@ type GeneStats struct {
 	MaxExpression  float32 `json:"max_expression"`
 }
 
-// GetGeneStats returns statistics for a gene.
-func (r *Reader) GetGeneStats(gene string) (*GeneStats, error) {
+// GetGeneStats returns statistics for a gene at a specific zoom level.
+func (r *Reader) GetGeneStats(gene string, zoom int) (*GeneStats, error) {
 	geneIdx, ok := r.metadata.GeneIndex[gene]
 	if !ok {
 		return nil, fmt.Errorf("gene not found: %s", gene)
 	}
 
-	// Use zoom level 0
-	zoom := 0
+	// Validate zoom level
+	if zoom < 0 || zoom >= r.metadata.ZoomLevels {
+		return nil, fmt.Errorf("invalid zoom level: %d (valid: 0-%d)", zoom, r.metadata.ZoomLevels-1)
+	}
 
-	// Load expression
+	// Load expression at specified zoom level
 	expression, err := r.GetExpression(zoom, geneIdx, "mean")
 	if err != nil {
 		return nil, err
 	}
 
-	// Load bins for cell counts
+	// Load bins for cell counts at specified zoom level
 	bins, err := r.GetBins(zoom, 0, 0)
 	if err != nil {
 		return nil, err

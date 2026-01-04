@@ -263,9 +263,24 @@ func geneStatsHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gene := chi.URLParam(r, "gene")
 
-		stats, err := svc.GetGeneStats(gene)
+		// Parse zoom parameter (default to 0 for backward compatibility)
+		zoom := 0
+		if zoomStr := r.URL.Query().Get("zoom"); zoomStr != "" {
+			z, err := strconv.Atoi(zoomStr)
+			if err != nil {
+				http.Error(w, "invalid zoom parameter", http.StatusBadRequest)
+				return
+			}
+			zoom = z
+		}
+
+		stats, err := svc.GetGeneStats(gene, zoom)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			status := http.StatusNotFound
+			if strings.Contains(err.Error(), "invalid zoom") {
+				status = http.StatusBadRequest
+			}
+			http.Error(w, err.Error(), status)
 			return
 		}
 
