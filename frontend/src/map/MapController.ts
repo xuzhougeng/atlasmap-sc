@@ -153,7 +153,8 @@ export class MapController {
         // Build tile URL with optional category filter
         let tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
         if (this.selectedCategories.length > 0) {
-            const categories = encodeURIComponent(this.selectedCategories.join(','));
+            // Use JSON array to handle category values with commas
+            const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
             tileUrl += `?categories=${categories}`;
         }
 

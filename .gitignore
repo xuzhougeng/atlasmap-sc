@@ -75,3 +75,4 @@ temp/
 
 .gocache/
 .gopath/
+.gomodcache/
