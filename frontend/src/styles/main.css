@@ -539,6 +539,115 @@ body {
     display: none;
 }
 
+.category-mean-hist {
+    padding: 8px;
+    background-color: var(--bg-primary);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.category-mean-hist.hidden {
+    display: none;
+}
+
+.category-mean-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.category-mean-title {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.category-mean-column {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-mean-chart {
+    height: 180px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background-color: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.category-mean-bars {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.category-mean-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+}
+
+.category-mean-row-bar-track {
+    width: 12px;
+    height: 28px;
+    flex: 0 0 auto;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+
+.category-mean-row-bar-fill {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+}
+
+.category-mean-row-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-mean-row-value {
+    width: 64px;
+    flex: 0 0 auto;
+    text-align: right;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.category-mean-footer {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.category-mean-loading,
+.category-mean-error,
+.category-mean-empty {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    padding: 8px 4px;
+}
+
 .stat-row {
     display: flex;
     justify-content: space-between;

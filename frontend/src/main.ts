@@ -16,6 +16,7 @@ async function init() {
 
     // Create API client
     const api = new ApiClient('/api');
+    let cellQueryPanel: CellQueryPanel | null = null;
 
     // Load metadata
     let metadata;
@@ -102,6 +103,7 @@ async function init() {
                 console.log('Category column changed:', column);
                 mapController.setCategoryColumn(column);
                 categoryLegend.loadLegend(column);
+                cellQueryPanel?.setCategoryColumn(column);
             },
         }
     );
@@ -170,7 +172,7 @@ async function init() {
     expressionContainer.appendChild(cellQueryContainer);
 
     // Initialize cell query panel
-    const cellQueryPanel = new CellQueryPanel(
+    cellQueryPanel = new CellQueryPanel(
         cellQueryContainer,
         api,
         {
@@ -180,6 +182,9 @@ async function init() {
             },
         }
     );
+    if (defaultCategory) {
+        cellQueryPanel.setCategoryColumn(defaultCategory);
+    }
 
     // Gene selection handler
     geneSelector.onGeneSelect((gene) => {
@@ -192,7 +197,7 @@ async function init() {
         categoryLegend.hide();
 
         // Update cell query panel with selected gene
-        cellQueryPanel.setGene(gene);
+        cellQueryPanel?.setGene(gene);
     });
 
     // Initialize with default category
@@ -202,7 +207,7 @@ async function init() {
     }
 
     // Set up toolbar buttons
-    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel, defaultCategory);
+    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel!, defaultCategory);
 
     console.log('SOMA-Tiles initialized successfully');
 }

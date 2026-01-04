@@ -62,6 +62,20 @@ export interface GeneStats {
     max_expression: number;
 }
 
+export interface GeneCategoryMeanItem {
+    value: string;
+    color: string;
+    index: number;
+    bin_count: number;
+    mean_expression: number;
+}
+
+export interface GeneCategoryMeansResponse {
+    gene: string;
+    column: string;
+    items: GeneCategoryMeanItem[];
+}
+
 export interface BinQueryParams {
     threshold?: number;
     offset?: number;
@@ -198,5 +212,19 @@ export class ApiClient {
             throw new Error(`Failed to get gene stats: ${response.statusText}`);
         }
         return response.json();
+    }
+
+    /**
+     * Get mean expression per category value for a gene
+     */
+    async getGeneCategoryMeans(gene: string, column: string): Promise<GeneCategoryMeanItem[]> {
+        const response = await fetch(
+            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/category/${encodeURIComponent(column)}/means`
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to get gene category means: ${response.statusText}`);
+        }
+        const data: GeneCategoryMeansResponse = await response.json();
+        return data.items;
     }
 }
