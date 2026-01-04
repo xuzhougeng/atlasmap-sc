@@ -19,14 +19,12 @@ export interface MapConfig {
 export class MapController {
     private map: L.Map;
     private config: MapConfig;
-    private baseOverlay: L.ImageOverlay;
-    private expressionOverlay: L.ImageOverlay | null = null;
-    private categoryOverlay: L.ImageOverlay | null = null;
+    private tileLayer: L.TileLayer;
+    private expressionLayer: L.TileLayer | null = null;
+    private categoryLayer: L.TileLayer | null = null;
     private bounds: L.LatLngBounds;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
-    private currentExpressionGene: string | null = null;
-    private currentExpressionColormap: string = 'viridis';
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.config = config;
@@ -37,7 +35,8 @@ export class MapController {
             [config.bounds.max_y, config.bounds.max_x]
         );
 
-        // Initialize map with a CRS that keeps Y increasing downward (more natural for image-like coordinates)
+        // Initialize map with a CRS that keeps Y increasing downward (image-like coordinates),
+        // which also keeps tile y indices non-negative.
         const crs = L.Util.extend({}, L.CRS.Simple, {
             transformation: new L.Transformation(1, 0, 1, 0),
         }) as L.CRS;
@@ -56,12 +55,16 @@ export class MapController {
         this.map.fitBounds(this.bounds);
         this.map.setMaxBounds(this.bounds.pad(0.1));
 
-        // Create base overlay image (server currently renders full-view tiles at x=0,y=0)
-        const initialZoom = this.getTileZoom();
-        this.baseOverlay = L.imageOverlay(
-            this.getBaseUrl(initialZoom),
-            this.bounds,
-            { interactive: false, zIndex: 0 }
+        // Create base tile layer
+        this.tileLayer = L.tileLayer(
+            `${config.apiUrl}/tiles/{z}/{x}/{y}.png`,
+            {
+                tileSize: config.tileSize,
+                noWrap: true,
+                bounds: this.bounds,
+                maxZoom: config.maxZoom,
+                minZoom: 0,
+            }
         ).addTo(this.map);
 
         // Add zoom info display
@@ -69,39 +72,6 @@ export class MapController {
 
         // Handle map events
         this.setupEvents();
-    }
-
-    private getTileZoom(): number {
-        const zoom = this.map.getZoom();
-        // Leaflet zoom is integer here (zoomSnap=1), but clamp anyway
-        return Math.max(0, Math.min(this.config.maxZoom, Math.round(zoom)));
-    }
-
-    private getBaseUrl(zoom: number): string {
-        return `${this.config.apiUrl}/tiles/${zoom}/0/0.png`;
-    }
-
-    private getCategoryUrl(zoom: number, column: string): string {
-        return `${this.config.apiUrl}/tiles/${zoom}/0/0/category/${column}.png`;
-    }
-
-    private getExpressionUrl(zoom: number, gene: string, colormap: string): string {
-        return `${this.config.apiUrl}/tiles/${zoom}/0/0/expression/${gene}.png?colormap=${colormap}`;
-    }
-
-    private updateOverlaysForZoom(): void {
-        const zoom = this.getTileZoom();
-        this.baseOverlay.setUrl(this.getBaseUrl(zoom));
-
-        if (this.categoryOverlay && this.currentCategory) {
-            this.categoryOverlay.setUrl(this.getCategoryUrl(zoom, this.currentCategory));
-        }
-
-        if (this.expressionOverlay && this.currentExpressionGene) {
-            this.expressionOverlay.setUrl(
-                this.getExpressionUrl(zoom, this.currentExpressionGene, this.currentExpressionColormap)
-            );
-        }
     }
 
     private addZoomDisplay(): void {
@@ -132,7 +102,6 @@ export class MapController {
         // Zoom change handler
         this.map.on('zoomend', () => {
             console.log(`Zoom level: ${this.map.getZoom()}`);
-            this.updateOverlaysForZoom();
         });
     }
 
@@ -144,18 +113,20 @@ export class MapController {
         this.clearExpression();
         this.clearCategoryLayer();
 
-        // Add expression-colored overlay
-        const zoom = this.getTileZoom();
-        this.currentExpressionGene = gene;
-        this.currentExpressionColormap = colorScale;
-        this.expressionOverlay = L.imageOverlay(
-            this.getExpressionUrl(zoom, gene, colorScale),
-            this.bounds,
-            { interactive: false, zIndex: 2 }
+        // Add expression-colored tile layer
+        this.expressionLayer = L.tileLayer(
+            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?colormap=${colorScale}`,
+            {
+                tileSize: this.config.tileSize,
+                noWrap: true,
+                bounds: this.bounds,
+                maxZoom: this.config.maxZoom,
+                minZoom: 0,
+            }
         ).addTo(this.map);
 
-        // Bring expression overlay to front
-        this.expressionOverlay.bringToFront();
+        // Bring expression layer to front
+        this.expressionLayer.bringToFront();
         this.currentColorMode = 'expression';
     }
 
@@ -163,11 +134,10 @@ export class MapController {
      * Clear expression coloring
      */
     clearExpression(): void {
-        if (this.expressionOverlay) {
-            this.map.removeLayer(this.expressionOverlay);
-            this.expressionOverlay = null;
+        if (this.expressionLayer) {
+            this.map.removeLayer(this.expressionLayer);
+            this.expressionLayer = null;
         }
-        this.currentExpressionGene = null;
     }
 
     /**
@@ -178,17 +148,20 @@ export class MapController {
         this.clearExpression();
         this.clearCategoryLayer();
 
-        // Add category-colored overlay
-        const zoom = this.getTileZoom();
-        this.currentCategory = column;
-        this.categoryOverlay = L.imageOverlay(
-            this.getCategoryUrl(zoom, column),
-            this.bounds,
-            { interactive: false, zIndex: 1 }
+        // Add category-colored tile layer
+        this.categoryLayer = L.tileLayer(
+            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`,
+            {
+                tileSize: this.config.tileSize,
+                noWrap: true,
+                bounds: this.bounds,
+                maxZoom: this.config.maxZoom,
+                minZoom: 0,
+            }
         ).addTo(this.map);
 
-        // Bring category overlay to front
-        this.categoryOverlay.bringToFront();
+        // Bring category layer to front
+        this.categoryLayer.bringToFront();
         this.currentCategory = column;
         this.currentColorMode = 'category';
     }
@@ -197,9 +170,9 @@ export class MapController {
      * Clear category coloring layer
      */
     clearCategoryLayer(): void {
-        if (this.categoryOverlay) {
-            this.map.removeLayer(this.categoryOverlay);
-            this.categoryOverlay = null;
+        if (this.categoryLayer) {
+            this.map.removeLayer(this.categoryLayer);
+            this.categoryLayer = null;
         }
         this.currentCategory = null;
     }
@@ -255,7 +228,13 @@ export class MapController {
      * Refresh tiles (e.g., after filter change)
      */
     refreshTiles(): void {
-        this.updateOverlaysForZoom();
+        this.tileLayer.redraw();
+        if (this.expressionLayer) {
+            this.expressionLayer.redraw();
+        }
+        if (this.categoryLayer) {
+            this.categoryLayer.redraw();
+        }
     }
 
     /**

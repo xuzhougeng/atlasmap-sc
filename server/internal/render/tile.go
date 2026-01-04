@@ -55,7 +55,7 @@ func NewTileRenderer(cfg Config) *TileRenderer {
 }
 
 // RenderTile renders a tile from bins using category coloring.
-func (r *TileRenderer) RenderTile(bins []zarr.Bin, zoom int, tileX, tileY int) ([]byte, error) {
+func (r *TileRenderer) RenderTile(bins []zarr.Bin, binsPerTileAxis int, tileX, tileY int) ([]byte, error) {
 	// Get context from pool
 	dc := r.contextPool.Get().(*gg.Context)
 	defer r.contextPool.Put(dc)
@@ -70,16 +70,18 @@ func (r *TileRenderer) RenderTile(bins []zarr.Bin, zoom int, tileX, tileY int) (
 
 	// Calculate rendering parameters
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxisInt := 1 << zoom
-	nBinsPerAxis := float64(nBinsPerAxisInt)
-	binSize := tileSize / nBinsPerAxis
+	if binsPerTileAxis <= 0 {
+		binsPerTileAxis = 1
+	}
+	nBinsPerTile := float64(binsPerTileAxis)
+	binSize := tileSize / nBinsPerTile
 
 	// Render each bin
 	for _, bin := range bins {
 		// Calculate pixel position within tile
 		// Bin coords are global, need to convert to tile-local
-		localX := float64(bin.X) - float64(tileX)*nBinsPerAxis
-		localY := float64(bin.Y) - float64(tileY)*nBinsPerAxis
+		localX := float64(bin.X) - float64(tileX)*nBinsPerTile
+		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
 		py := localY * binSize
@@ -118,7 +120,9 @@ func (r *TileRenderer) RenderTile(bins []zarr.Bin, zoom int, tileX, tileY int) (
 func (r *TileRenderer) RenderExpressionTile(
 	bins []zarr.Bin,
 	expression []float32,
-	zoom int,
+	exprMin float32,
+	exprMax float32,
+	binsPerTileAxis int,
 	tileX, tileY int,
 	colormapName string,
 ) ([]byte, error) {
@@ -140,26 +144,18 @@ func (r *TileRenderer) RenderExpressionTile(
 		cmap = r.colormaps[r.config.DefaultColormap]
 	}
 
-	// Find expression range for normalization
-	var minExpr, maxExpr float32 = expression[0], expression[0]
-	for _, v := range expression {
-		if v < minExpr {
-			minExpr = v
-		}
-		if v > maxExpr {
-			maxExpr = v
-		}
-	}
-	exprRange := maxExpr - minExpr
+	exprRange := exprMax - exprMin
 	if exprRange == 0 {
 		exprRange = 1
 	}
 
 	// Calculate rendering parameters
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxisInt := 1 << zoom
-	nBinsPerAxis := float64(nBinsPerAxisInt)
-	binSize := tileSize / nBinsPerAxis
+	if binsPerTileAxis <= 0 {
+		binsPerTileAxis = 1
+	}
+	nBinsPerTile := float64(binsPerTileAxis)
+	binSize := tileSize / nBinsPerTile
 
 	// Render each bin
 	for i, bin := range bins {
@@ -168,8 +164,8 @@ func (r *TileRenderer) RenderExpressionTile(
 		}
 
 		// Calculate pixel position
-		localX := float64(bin.X) - float64(tileX)*nBinsPerAxis
-		localY := float64(bin.Y) - float64(tileY)*nBinsPerAxis
+		localX := float64(bin.X) - float64(tileX)*nBinsPerTile
+		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
 		py := localY * binSize
@@ -179,7 +175,7 @@ func (r *TileRenderer) RenderExpressionTile(
 		}
 
 		// Normalize expression value
-		normalized := float64(expression[i]-minExpr) / float64(exprRange)
+		normalized := float64(expression[i]-exprMin) / float64(exprRange)
 
 		c := cmap.At(normalized)
 		dc.SetColor(c)
@@ -203,7 +199,7 @@ func (r *TileRenderer) RenderExpressionTile(
 func (r *TileRenderer) RenderCategoryTile(
 	bins []zarr.Bin,
 	categoryIdx []int,
-	zoom int,
+	binsPerTileAxis int,
 	tileX, tileY int,
 ) ([]byte, error) {
 	dc := r.contextPool.Get().(*gg.Context)
@@ -219,13 +215,15 @@ func (r *TileRenderer) RenderCategoryTile(
 	cmap := r.colormaps["categorical"]
 
 	tileSize := float64(r.config.TileSize)
-	nBinsPerAxisInt := 1 << zoom
-	nBinsPerAxis := float64(nBinsPerAxisInt)
-	binSize := tileSize / nBinsPerAxis
+	if binsPerTileAxis <= 0 {
+		binsPerTileAxis = 1
+	}
+	nBinsPerTile := float64(binsPerTileAxis)
+	binSize := tileSize / nBinsPerTile
 
 	for i, bin := range bins {
-		localX := float64(bin.X) - float64(tileX)*nBinsPerAxis
-		localY := float64(bin.Y) - float64(tileY)*nBinsPerAxis
+		localX := float64(bin.X) - float64(tileX)*nBinsPerTile
+		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
 		py := localY * binSize

@@ -72,3 +72,6 @@ temp/
 # yarn.lock
 # pnpm-lock.yaml
 # uv.lock
+
+.gocache/
+.gopath/
