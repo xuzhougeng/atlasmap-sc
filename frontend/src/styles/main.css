@@ -803,19 +803,22 @@ body {
     display: block;
 }
 
-/* Category Column Selector */
-.category-column-selector {
+/* Selectors */
+.category-column-selector,
+.colormap-selector {
     margin-bottom: 16px;
 }
 
-.category-column-selector label {
+.category-column-selector label,
+.colormap-selector label {
     display: block;
     font-size: 0.75rem;
     color: var(--text-secondary);
     margin-bottom: 8px;
 }
 
-.category-column-selector select {
+.category-column-selector select,
+.colormap-selector select {
     width: 100%;
     padding: 8px 12px;
     background-color: var(--bg-primary);
@@ -826,7 +829,8 @@ body {
     cursor: pointer;
 }
 
-.category-column-selector select:focus {
+.category-column-selector select:focus,
+.colormap-selector select:focus {
     border-color: var(--accent-primary);
     outline: none;
 }

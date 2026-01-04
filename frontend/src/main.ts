@@ -7,6 +7,7 @@ import { TabPanel, TabType } from './components/TabPanel';
 import { CategoryColumnSelector } from './components/CategoryColumnSelector';
 import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
+import { ColorScaleSelector } from './components/ColorScaleSelector';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 
@@ -160,6 +161,24 @@ async function init() {
     // Initialize gene selector
     const geneSelector = new GeneSelector(geneSelectorContainer, api);
 
+    // Create colormap selector container
+    const colormapSelectorContainer = document.createElement('div');
+    colormapSelectorContainer.id = 'colormap-selector';
+    expressionContainer.appendChild(colormapSelectorContainer);
+
+    // Initialize colormap selector
+    const colormapSelector = new ColorScaleSelector(colormapSelectorContainer, {
+        onScaleChange: (scale) => {
+            state.setState({ colorScale: scale });
+            const { colorGene, colorMode } = state.getState();
+            if (colorMode === 'expression' && colorGene) {
+                mapController.setExpressionGene(colorGene, scale);
+            }
+        },
+    });
+    colormapSelector.setScales(['viridis', 'plasma', 'inferno', 'magma']);
+    colormapSelector.setSelectedScale(state.getState().colorScale);
+
     // Create expression legend container
     const expressionLegendContainer = document.createElement('div');
     expressionLegendContainer.id = 'expression-legend';
@@ -193,7 +212,7 @@ async function init() {
 
         // Switch to expression tab (this will also trigger mode change)
         tabPanel.switchTab('expression');
-        mapController.setExpressionGene(gene);
+        mapController.setExpressionGene(gene, state.getState().colorScale);
         categoryLegend.hide();
 
         // Update cell query panel with selected gene
