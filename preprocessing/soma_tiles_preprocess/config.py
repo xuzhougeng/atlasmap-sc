@@ -41,6 +41,11 @@ class PreprocessConfig:
     # Memory settings
     batch_size: int = 100000  # Cells to process at once
 
+    # SOMA storage settings
+    enable_soma: bool = True  # Enable TileDBSOMA storage for all genes
+    soma_compression: str = "zstd"
+    soma_compression_level: int = 9
+
     # Metadata
     dataset_name: Optional[str] = None
     dataset_description: Optional[str] = None
@@ -79,6 +84,9 @@ class PreprocessConfig:
             "zarr_compression_level": self.zarr_compression_level,
             "chunk_size": self.chunk_size,
             "batch_size": self.batch_size,
+            "enable_soma": self.enable_soma,
+            "soma_compression": self.soma_compression,
+            "soma_compression_level": self.soma_compression_level,
             "dataset_name": self.dataset_name,
             "dataset_description": self.dataset_description,
         }

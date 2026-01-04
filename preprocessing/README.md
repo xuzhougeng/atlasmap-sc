@@ -7,6 +7,7 @@
 - **多分辨率分箱**：基于四叉树的空间分箱算法，支持 1-12 级缩放
 - **智能基因选择**：自动选择高变异基因、用户指定的标记基因和高表达基因
 - **表达量聚合**：为每个 bin 预计算平均表达量和最大表达量
+- **TileDBSOMA 存储**：可选存储完整表达矩阵，支持查询任意基因
 - **类别数据处理**：支持多个 obs 列的类别统计（如 cell_type、leiden 等）
 - **高效压缩**：使用 Zarr 格式存储，支持 zstd 压缩
 - **批量处理**：支持大规模数据集的内存高效处理
@@ -80,6 +81,7 @@ soma-preprocess from-config -c config.yaml
 | `--n-genes` | `-g` | `500` | 预聚合的基因数量 |
 | `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
 | `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
+| `--no-soma` | | | 禁用 TileDBSOMA 存储（默认启用） |
 | `--category` | `-c` | | 要包含的类别列（可多次指定） |
 | `--chunk-size` | | `256` | Zarr chunk 大小 |
 | `--batch-size` | | `100000` | 处理批次大小 |
@@ -177,13 +179,19 @@ dataset_description: Single-cell dataset description
 
 ```
 output/
-└── zarr/
-    ├── bins.zarr/           # 多分辨率 bin 数据
-    │   ├── zoom_0/          # 缩放级别 0
-    │   ├── zoom_1/          # 缩放级别 1
-    │   └── ...
-    ├── metadata.json        # 数据集元数据
-    └── gene_index.json      # 基因索引映射
+├── zarr/
+│   ├── bins.zarr/           # 多分辨率 bin 数据
+│   │   ├── zoom_0/          # 缩放级别 0
+│   │   ├── zoom_1/          # 缩放级别 1
+│   │   └── ...
+│   ├── metadata.json        # 数据集元数据
+│   └── gene_index.json      # 基因索引映射
+│
+└── soma/                    # TileDBSOMA 存储（默认启用）
+    └── experiment.soma/     # 完整单细胞数据
+        ├── obs              # 细胞元数据（含归一化坐标和 bin 索引）
+        ├── ms/RNA/var       # 基因元数据
+        └── ms/RNA/X/data    # 完整表达矩阵（稀疏）
 ```
 
 ### metadata.json 结构
@@ -209,7 +217,10 @@ output/
     "max_x": 256.0,
     "min_y": 0.0,
     "max_y": 256.0
-  }
+  },
+  "soma_enabled": true,
+  "soma_path": "soma/experiment.soma",
+  "all_genes_queryable": true
 }
 ```
 

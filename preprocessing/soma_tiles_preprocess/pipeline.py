@@ -14,6 +14,7 @@ from .binning.quadtree import QuadtreeBinner
 from .binning.aggregator import ExpressionAggregator
 from .binning.normalizer import CoordinateNormalizer
 from .io.zarr_writer import ZarrBinWriter
+from .io.soma_writer import SomaWriter
 from .genes.selector import GeneSelector
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,11 @@ class PreprocessingPipeline:
         # Step 5: Build multi-resolution bins and write to Zarr
         self._build_and_write_bins()
 
-        # Step 6: Write metadata
+        # Step 6: Write SOMA store (if enabled)
+        if self.config.enable_soma:
+            self._write_soma_store()
+
+        # Step 7: Write metadata
         self._write_metadata()
 
         logger.info("Pipeline completed successfully")
@@ -205,6 +210,30 @@ class PreprocessingPipeline:
         writer.finalize()
         logger.info(f"Zarr data written to: {zarr_path}")
 
+    def _write_soma_store(self) -> None:
+        """Write complete expression data to SOMA store."""
+        logger.info("Writing TileDBSOMA store")
+
+        soma_path = self.config.output_dir / "soma" / "experiment.soma"
+
+        writer = SomaWriter(
+            path=soma_path,
+            zoom_levels=self.config.zoom_levels,
+            coordinate_range=self.config.coordinate_range,
+            compression=self.config.soma_compression,
+            compression_level=self.config.soma_compression_level,
+        )
+
+        writer.write_from_adata(
+            adata=self.adata,
+            normalized_coords=self.normalized_coords,
+            preaggregated_genes=self.selected_genes,
+            category_columns=list(self.category_mapping.keys()),
+        )
+
+        writer.finalize()
+        logger.info(f"SOMA store written to: {soma_path}")
+
     def _write_metadata(self) -> None:
         """Write metadata files."""
         logger.info("Writing metadata")
@@ -241,6 +270,9 @@ class PreprocessingPipeline:
                 "min_y": 0.0,
                 "max_y": float(self.config.coordinate_range),
             },
+            "soma_enabled": self.config.enable_soma,
+            "soma_path": "soma/experiment.soma" if self.config.enable_soma else None,
+            "all_genes_queryable": self.config.enable_soma,
         }
 
         with open(metadata_dir / "metadata.json", "w") as f:

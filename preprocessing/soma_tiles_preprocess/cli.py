@@ -94,6 +94,12 @@ def main():
     help="Batch size for processing cells",
 )
 @click.option(
+    "--no-soma",
+    is_flag=True,
+    default=False,
+    help="Disable TileDBSOMA storage (skip full expression matrix)",
+)
+@click.option(
     "--name",
     default=None,
     help="Dataset name for metadata",
@@ -114,6 +120,7 @@ def run(
     categories: tuple[str, ...],
     chunk_size: int,
     batch_size: int,
+    no_soma: bool,
     name: str | None,
     verbose: bool,
 ):
@@ -141,6 +148,7 @@ def run(
         category_columns=list(categories),
         chunk_size=chunk_size,
         batch_size=batch_size,
+        enable_soma=not no_soma,
         dataset_name=name,
     )
 

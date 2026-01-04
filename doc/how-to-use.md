@@ -20,6 +20,8 @@ data/
       bins.zarr/            # Zarr store（注意：是目录）
       metadata.json
       gene_index.json
+    soma/                   # TileDBSOMA 存储（可选，默认启用）
+      experiment.soma/      # 完整单细胞数据
 ```
 
 **重要**：后端读取 `data.zarr_path` 指向的 `bins.zarr` 目录，并且会在其**上一级目录**查找 `metadata.json` 与 `gene_index.json`（即 `.../zarr/metadata.json`）。
@@ -60,6 +62,7 @@ soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 8 -g 500
 - `--n-genes/-g`：预聚合基因数（默认 500）
 - `--all-expressed/-a`：使用所有表达的基因而非 top N 基因
 - `--min-cells`：基因至少在多少个细胞中表达（默认 3，仅与 `--all-expressed` 一起使用）
+- `--no-soma`：禁用 TileDBSOMA 存储（默认启用，存储完整表达矩阵供任意基因查询）
 
 如果需要指定 marker genes/更多高级参数：先生成配置文件再运行：
 

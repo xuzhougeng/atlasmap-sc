@@ -11,16 +11,17 @@ Detailed usage/deployment guide: `doc/how-to-use.md`.
 │                    Offline Preprocessing                        │
 │  (Run on machine with >16GB RAM)                                │
 │                                                                 │
-│  H5AD ──► TileDB-SOMA ──► Multi-resolution UMAP Bins           │
-│           (X, obs, var)   (Zarr, 8 zoom levels)                │
+│  H5AD ──► Multi-resolution UMAP Bins ──► TileDBSOMA Store      │
+│           (Zarr, 8 zoom levels)          (Full expression)      │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Online Service (<2GB RAM)                    │
 │                                                                 │
-│  Go Server ──► SOMA Column Slices ──► PNG Tile Rendering       │
-│            ──► Bin Aggregation       ──► Legend JSON            │
+│  Go Server ──► Zarr Column Slices ──► PNG Tile Rendering       │
+│            ──► Bin Aggregation      ──► Legend JSON             │
+│  (SOMA for arbitrary gene queries)                              │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -97,7 +98,7 @@ soma-tiles/
 │   ├── soma_tiles_preprocess/
 │   │   ├── pipeline.py     # Main pipeline
 │   │   ├── binning/        # Quadtree binning
-│   │   └── io/             # Zarr I/O
+│   │   └── io/             # Zarr & SOMA I/O
 │   └── pyproject.toml
 │
 ├── server/                 # Go backend
@@ -116,6 +117,9 @@ soma-tiles/
 │
 ├── config/                 # Configuration files
 ├── data/                   # Data directory (gitignored)
+│   └── preprocessed/
+│       ├── zarr/           # Bin aggregations
+│       └── soma/           # Full expression (TileDBSOMA)
 └── docker-compose.yml
 ```
 
