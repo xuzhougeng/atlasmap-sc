@@ -11,6 +11,7 @@ import { ColorScaleSelector } from './components/ColorScaleSelector';
 import { SidebarResizer } from './components/SidebarResizer';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
+import { downloadPngAtCurrentZoom } from './map/exportPng';
 
 // Initialize application
 async function init() {
@@ -260,6 +261,8 @@ function setupToolbar(
 ) {
     const lassoBtn = document.getElementById('btn-lasso');
     const resetBtn = document.getElementById('btn-reset');
+    const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
+    const downloadStatus = document.getElementById('download-status');
 
     if (lassoBtn) {
         lassoBtn.addEventListener('click', () => {
@@ -290,6 +293,52 @@ function setupToolbar(
                 selectedCategories: [],
                 selection: { id: null, type: null, polygon: null, cellCount: 0 },
             });
+        });
+    }
+
+    if (downloadBtn) {
+        let downloading = false;
+        downloadBtn.addEventListener('click', async () => {
+            if (downloading) return;
+            downloading = true;
+            downloadBtn.disabled = true;
+
+            const mapZoom = map.getZoom();
+            const exportZoom = Math.min(mapZoom, map.getMaxNativeZoom());
+            if (downloadStatus) {
+                downloadStatus.textContent =
+                    mapZoom === exportZoom
+                        ? `Preparing PNG (zoom ${exportZoom})...`
+                        : `Preparing PNG (zoom ${exportZoom}, clamped from ${mapZoom})...`;
+            }
+
+            try {
+                const result = await downloadPngAtCurrentZoom(map, {
+                    maxDim: 8192,
+                    concurrency: 12,
+                    onProgress: ({ done, total }) => {
+                        if (!downloadStatus) return;
+                        downloadStatus.textContent = `Downloading tiles: ${done}/${total}`;
+                    },
+                });
+
+                if (downloadStatus) {
+                    downloadStatus.textContent = `Saved ${result.filename} (${result.width}×${result.height})`;
+                    window.setTimeout(() => {
+                        if (downloadStatus.textContent?.startsWith('Saved ')) {
+                            downloadStatus.textContent = '';
+                        }
+                    }, 4000);
+                }
+            } catch (error) {
+                console.error('Failed to download PNG:', error);
+                if (downloadStatus) {
+                    downloadStatus.textContent = 'Download failed (see console)';
+                }
+            } finally {
+                downloading = false;
+                downloadBtn.disabled = false;
+            }
         });
     }
 }
