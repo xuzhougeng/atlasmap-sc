@@ -100,16 +100,8 @@ func (r *TileRenderer) RenderTile(bins []zarr.Bin, binsPerTileAxis int, tileX, t
 		c := r.colormaps["viridis"].At(intensity)
 		dc.SetColor(c)
 
-		// Draw point/circle
-		radius := binSize / 2
-		if radius < 2 {
-			radius = 2
-		}
-		if radius > 10 {
-			radius = 10
-		}
-
-		dc.DrawCircle(px+binSize/2, py+binSize/2, radius)
+		// Fill the entire bin area (tile-like rendering).
+		dc.DrawRectangle(px, py, binSize, binSize)
 		dc.Fill()
 	}
 
@@ -180,15 +172,8 @@ func (r *TileRenderer) RenderExpressionTile(
 		c := cmap.At(normalized)
 		dc.SetColor(c)
 
-		radius := binSize / 2
-		if radius < 2 {
-			radius = 2
-		}
-		if radius > 10 {
-			radius = 10
-		}
-
-		dc.DrawCircle(px+binSize/2, py+binSize/2, radius)
+		// Fill the entire bin area (tile-like rendering).
+		dc.DrawRectangle(px, py, binSize, binSize)
 		dc.Fill()
 	}
 
@@ -240,15 +225,8 @@ func (r *TileRenderer) RenderCategoryTile(
 		c := cmap.AtIndex(catIdx)
 		dc.SetColor(c)
 
-		radius := binSize / 2
-		if radius < 2 {
-			radius = 2
-		}
-		if radius > 10 {
-			radius = 10
-		}
-
-		dc.DrawCircle(px+binSize/2, py+binSize/2, radius)
+		// Fill the entire bin area (tile-like rendering).
+		dc.DrawRectangle(px, py, binSize, binSize)
 		dc.Fill()
 	}
 
