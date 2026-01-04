@@ -38,6 +38,35 @@ data/
 
 可选：用 `make install` 一次性安装依赖（会分别安装 Python/Go/前端依赖）。
 
+### 0.5) 查看 H5AD 信息（可选）
+
+在运行预处理前，可以先查看 `.h5ad` 的基本信息（细胞/基因数、layers、坐标键等）：
+
+```bash
+python scripts/h5ad_info.py -i data.h5ad
+```
+
+输出示例：
+
+```
+File: data.h5ad
+Cells (n_obs): 10,000
+Genes (n_vars): 2,000
+
+X matrix: [10000, 2000] (...)
+Layers: None
+
+Embeddings/Coordinates (obsm) [2]:
+  X_pca: [10000, 50]
+  X_umap: [10000, 2] <-- X_umap
+
+obs columns (5): cell_type, batch, ...
+var columns (2): gene_name, highly_variable
+...
+```
+
+如需 JSON 格式输出，可加 `--json`。
+
 ### 1) 预处理数据（Python）
 
 最简单（使用 Makefile）：
