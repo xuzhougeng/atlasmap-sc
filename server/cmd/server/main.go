@@ -15,6 +15,7 @@ import (
 	"github.com/soma-tiles/server/internal/api"
 	"github.com/soma-tiles/server/internal/cache"
 	"github.com/soma-tiles/server/internal/config"
+	"github.com/soma-tiles/server/internal/data/soma"
 	"github.com/soma-tiles/server/internal/data/zarr"
 	"github.com/soma-tiles/server/internal/render"
 	"github.com/soma-tiles/server/internal/service"
@@ -70,9 +71,21 @@ func main() {
 		log.Printf("  [%s] Loaded from: %s", datasetID, ds.ZarrPath)
 		log.Printf("    Zoom levels: %d, Genes: %d", zarrReader.Metadata().ZoomLevels, zarrReader.Metadata().NGenes)
 
+		var somaReader *soma.Reader
+		if ds.SomaPath != "" {
+			r, err := soma.NewReader(ds.SomaPath)
+			if err != nil {
+				log.Printf("  [%s] SOMA not initialized: %v", datasetID, err)
+			} else {
+				somaReader = r
+				log.Printf("  [%s] SOMA experiment: %s (supported=%v)", datasetID, somaReader.ExperimentURI(), somaReader.Supported())
+			}
+		}
+
 		tileService := service.NewTileService(service.TileServiceConfig{
 			DatasetID:  datasetID,
 			ZarrReader: zarrReader,
+			SomaReader: somaReader,
 			Cache:      cacheManager,
 			Renderer:   tileRenderer,
 		})

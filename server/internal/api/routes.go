@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/soma-tiles/server/internal/data/soma"
 	"github.com/soma-tiles/server/internal/service"
 )
 
@@ -74,6 +76,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.Get("/categories/{column}/colors", datasetCategoryColorsHandler)
 			r.Get("/categories/{column}/legend", datasetCategoryLegendHandler)
 			r.Get("/stats", datasetStatsHandler)
+			r.Get("/soma/expression", datasetSomaExpressionHandler)
 		})
 	})
 
@@ -613,4 +616,116 @@ func statsHandler(svc *service.TileService) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
+}
+
+type somaExprItem struct {
+	CellJoinID int64   `json:"cell_joinid"`
+	Value      float32 `json:"value"`
+}
+
+func datasetSomaExpressionHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not available", http.StatusInternalServerError)
+		return
+	}
+	sr := svc.Soma()
+	if sr == nil {
+		http.Error(w, "soma not configured for this dataset", http.StatusNotFound)
+		return
+	}
+	if !sr.Supported() {
+		http.Error(w, soma.ErrUnsupported.Error(), http.StatusNotImplemented)
+		return
+	}
+
+	gene := strings.TrimSpace(r.URL.Query().Get("gene"))
+	if gene == "" {
+		http.Error(w, "missing required query param: gene", http.StatusBadRequest)
+		return
+	}
+	cellsParam := strings.TrimSpace(r.URL.Query().Get("cells"))
+	if cellsParam == "" {
+		http.Error(w, "missing required query param: cells (comma-separated cell soma_joinid list)", http.StatusBadRequest)
+		return
+	}
+	cells, err := parseCSVInt64(cellsParam, 10000)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	mode := strings.TrimSpace(r.URL.Query().Get("mode"))
+	if mode == "" {
+		mode = "sparse"
+	}
+	if mode != "sparse" && mode != "dense" {
+		http.Error(w, "invalid mode (expected sparse or dense)", http.StatusBadRequest)
+		return
+	}
+
+	geneJoinID, vals, err := sr.ExpressionByCellJoinID(gene, cells)
+	if err != nil {
+		// Most common errors: gene not found, TileDB not available, dataset missing.
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if mode == "dense" {
+		out := make([]float32, len(cells))
+		nnz := 0
+		for i, cid := range cells {
+			if v, ok := vals[cid]; ok {
+				out[i] = v
+				nnz++
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"gene":        gene,
+			"gene_joinid": geneJoinID,
+			"mode":        "dense",
+			"cells":       cells,
+			"values":      out,
+			"nnz":         nnz,
+		})
+		return
+	}
+
+	// sparse: return only non-zeros
+	items := make([]somaExprItem, 0, len(vals))
+	for cid, v := range vals {
+		items = append(items, somaExprItem{CellJoinID: cid, Value: v})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].CellJoinID < items[j].CellJoinID })
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"gene":        gene,
+		"gene_joinid": geneJoinID,
+		"mode":        "sparse",
+		"items":       items,
+		"nnz":         len(items),
+	})
+}
+
+func parseCSVInt64(s string, maxItems int) ([]int64, error) {
+	parts := strings.Split(s, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if maxItems > 0 && len(out) >= maxItems {
+			return nil, errors.New("too many cells (increase limit or batch requests)")
+		}
+		v, err := strconv.ParseInt(p, 10, 64)
+		if err != nil {
+			return nil, errors.New("invalid cell joinid: " + p)
+		}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("empty cells list")
+	}
+	return out, nil
 }

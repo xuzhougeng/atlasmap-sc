@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/soma-tiles/server/internal/cache"
+	"github.com/soma-tiles/server/internal/data/soma"
 	"github.com/soma-tiles/server/internal/data/zarr"
 	"github.com/soma-tiles/server/internal/render"
 )
@@ -14,6 +15,7 @@ import (
 type TileServiceConfig struct {
 	DatasetID  string
 	ZarrReader *zarr.Reader
+	SomaReader *soma.Reader
 	Cache      *cache.Manager
 	Renderer   *render.TileRenderer
 }
@@ -22,6 +24,7 @@ type TileServiceConfig struct {
 type TileService struct {
 	datasetID string
 	zarr      *zarr.Reader
+	soma      *soma.Reader
 	cache     *cache.Manager
 	renderer  *render.TileRenderer
 
@@ -56,6 +59,7 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 	return &TileService{
 		datasetID:              datasetID,
 		zarr:                   cfg.ZarrReader,
+		soma:                   cfg.SomaReader,
 		cache:                  cfg.Cache,
 		renderer:               cfg.Renderer,
 		renderZoom:             renderZoom,
@@ -261,6 +265,10 @@ func (s *TileService) GetEmptyTile() ([]byte, error) {
 // Metadata returns dataset metadata.
 func (s *TileService) Metadata() *zarr.ZarrMetadata {
 	return s.zarr.Metadata()
+}
+
+func (s *TileService) Soma() *soma.Reader {
+	return s.soma
 }
 
 // GetCategoryTile returns a tile colored by category.
