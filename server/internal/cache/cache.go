@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/allegro/bigcache/v3"
@@ -101,8 +102,22 @@ func ExpressionTileKey(z, x, y int, gene, colormap string) string {
 }
 
 // CategoryTileKey generates a cache key for a category tile.
-func CategoryTileKey(z, x, y int, column string) string {
-	return fmt.Sprintf("cat:%d/%d/%d:%s", z, x, y, column)
+func CategoryTileKey(z, x, y int, column string, filters []string) string {
+	base := fmt.Sprintf("cat:%d/%d/%d:%s", z, x, y, column)
+	if len(filters) == 0 {
+		return base
+	}
+	// Sort filters for consistent cache keys
+	sortedFilters := make([]string, len(filters))
+	copy(sortedFilters, filters)
+	sort.Strings(sortedFilters)
+	// Hash filters for compact key
+	h := sha256.New()
+	h.Write([]byte(base))
+	for _, f := range sortedFilters {
+		h.Write([]byte(f))
+	}
+	return base + ":" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // Stats returns cache statistics.

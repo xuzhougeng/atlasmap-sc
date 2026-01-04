@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -57,6 +58,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		r.Get("/genes/{gene}", geneInfoHandler(cfg.TileService))
 		r.Get("/genes/{gene}/bins", geneBinsHandler(cfg.TileService))
 		r.Get("/genes/{gene}/stats", geneStatsHandler(cfg.TileService))
+		r.Get("/genes/{gene}/category/{column}/means", geneCategoryMeansHandler(cfg.TileService))
 		r.Get("/categories", categoriesHandler(cfg.TileService))
 		r.Get("/categories/{column}/colors", categoryColorsHandler(cfg.TileService))
 		r.Get("/categories/{column}/legend", categoryLegendHandler(cfg.TileService))
@@ -125,7 +127,13 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		y, _ := strconv.Atoi(chi.URLParam(r, "y"))
 		column := chi.URLParam(r, "column")
 
-		data, err := svc.GetCategoryTile(z, x, y, column)
+		// Parse optional category filter
+		var categoryFilter []string
+		if categoriesParam := r.URL.Query().Get("categories"); categoriesParam != "" {
+			categoryFilter = strings.Split(categoriesParam, ",")
+		}
+
+		data, err := svc.GetCategoryTile(z, x, y, column, categoryFilter)
 		if err != nil {
 			data, _ = svc.GetEmptyTile()
 		}
@@ -148,8 +156,8 @@ func genesHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := svc.Metadata()
 		response := map[string]interface{}{
-			"genes":              metadata.Genes,
-			"total":              len(metadata.Genes),
+			"genes":               metadata.Genes,
+			"total":               len(metadata.Genes),
 			"preaggregated_count": metadata.NGenes,
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -216,6 +224,30 @@ func geneStatsHandler(svc *service.TileService) http.HandlerFunc {
 	}
 }
 
+func geneCategoryMeansHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gene := chi.URLParam(r, "gene")
+		column := chi.URLParam(r, "column")
+
+		items, err := svc.GetGeneCategoryMeans(gene, column)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if strings.Contains(err.Error(), "not found") {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"gene":   gene,
+			"column": column,
+			"items":  items,
+		})
+	}
+}
+
 func categoriesHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := svc.Metadata()
@@ -258,10 +290,10 @@ func statsHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metadata := svc.Metadata()
 		response := map[string]interface{}{
-			"n_cells":       metadata.NCells,
-			"n_genes":       metadata.NGenes,
-			"zoom_levels":   metadata.ZoomLevels,
-			"dataset_name":  metadata.DatasetName,
+			"n_cells":      metadata.NCells,
+			"n_genes":      metadata.NGenes,
+			"zoom_levels":  metadata.ZoomLevels,
+			"dataset_name": metadata.DatasetName,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

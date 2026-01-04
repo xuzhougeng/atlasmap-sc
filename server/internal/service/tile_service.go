@@ -34,6 +34,9 @@ type TileService struct {
 
 	catMu    sync.Mutex
 	catCache map[string][]int
+
+	geneCategoryMeansMu    sync.Mutex
+	geneCategoryMeansCache map[string][]GeneCategoryMeanItem
 }
 
 // NewTileService creates a new tile service.
@@ -44,12 +47,13 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 	}
 
 	return &TileService{
-		zarr:       cfg.ZarrReader,
-		cache:      cfg.Cache,
-		renderer:   cfg.Renderer,
-		renderZoom: renderZoom,
-		exprCache:  make(map[string]expressionCacheEntry),
-		catCache:   make(map[string][]int),
+		zarr:                   cfg.ZarrReader,
+		cache:                  cfg.Cache,
+		renderer:               cfg.Renderer,
+		renderZoom:             renderZoom,
+		exprCache:              make(map[string]expressionCacheEntry),
+		catCache:               make(map[string][]int),
+		geneCategoryMeansCache: make(map[string][]GeneCategoryMeanItem),
 	}
 }
 
@@ -57,6 +61,14 @@ type expressionCacheEntry struct {
 	values []float32
 	min    float32
 	max    float32
+}
+
+type GeneCategoryMeanItem struct {
+	Value          string  `json:"value"`
+	Color          string  `json:"color"`
+	Index          int     `json:"index"`
+	BinCount       int     `json:"bin_count"`
+	MeanExpression float32 `json:"mean_expression"`
 }
 
 func (s *TileService) loadBins() error {
@@ -244,9 +256,9 @@ func (s *TileService) Metadata() *zarr.ZarrMetadata {
 }
 
 // GetCategoryTile returns a tile colored by category.
-func (s *TileService) GetCategoryTile(z, x, y int, column string) ([]byte, error) {
+func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter []string) ([]byte, error) {
 	// Check cache
-	cacheKey := cache.CategoryTileKey(z, x, y, column)
+	cacheKey := cache.CategoryTileKey(z, x, y, column, categoryFilter)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -263,10 +275,30 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string) ([]byte, error
 		return nil, fmt.Errorf("failed to load category data: %w", err)
 	}
 
+	// Build allowed category indices if filter is provided
+	var allowedIndices map[int]bool
+	if len(categoryFilter) > 0 {
+		catInfo, ok := s.zarr.Metadata().Categories[column]
+		if ok {
+			allowedIndices = make(map[int]bool)
+			for _, filterValue := range categoryFilter {
+				if idx, exists := catInfo.Mapping[filterValue]; exists {
+					allowedIndices[idx] = true
+				}
+			}
+		}
+	}
+
 	categoryTile := make([]int, len(indices))
 	for i, idx := range indices {
 		if idx >= 0 && idx < len(categoryAll) {
-			categoryTile[i] = categoryAll[idx]
+			catValue := categoryAll[idx]
+			// Apply filter: set to -1 if not in allowed list
+			if allowedIndices != nil && !allowedIndices[catValue] {
+				categoryTile[i] = -1
+			} else {
+				categoryTile[i] = catValue
+			}
 		}
 	}
 
@@ -316,6 +348,83 @@ func (s *TileService) GetCategoryLegend(column string) ([]CategoryLegendItem, er
 // GetCategoryColors returns the color mapping for a category column.
 func (s *TileService) GetCategoryColors(column string) (map[string]string, error) {
 	return s.zarr.GetCategoryColors(column)
+}
+
+// GetGeneCategoryMeans returns mean gene expression per category value.
+// Expression values are per-bin (from preprocessing) at the server's render zoom level.
+func (s *TileService) GetGeneCategoryMeans(gene, column string) ([]GeneCategoryMeanItem, error) {
+	cacheKey := gene + "\x00" + column
+
+	s.geneCategoryMeansMu.Lock()
+	if cached, ok := s.geneCategoryMeansCache[cacheKey]; ok {
+		s.geneCategoryMeansMu.Unlock()
+		return cached, nil
+	}
+	s.geneCategoryMeansMu.Unlock()
+
+	md := s.zarr.Metadata()
+	if md == nil {
+		return nil, fmt.Errorf("metadata not available")
+	}
+
+	catInfo, ok := md.Categories[column]
+	if !ok {
+		return nil, fmt.Errorf("category not found: %s", column)
+	}
+
+	exprAll, err := s.expressionForGene(gene)
+	if err != nil {
+		return nil, err
+	}
+
+	catAll, err := s.categoryForColumn(column)
+	if err != nil {
+		return nil, err
+	}
+
+	nCats := len(catInfo.Values)
+	sums := make([]float64, nCats)
+	counts := make([]int, nCats)
+
+	n := len(exprAll.values)
+	if len(catAll) < n {
+		n = len(catAll)
+	}
+
+	for i := 0; i < n; i++ {
+		catIdx := catAll[i]
+		if catIdx < 0 || catIdx >= nCats {
+			continue
+		}
+		sums[catIdx] += float64(exprAll.values[i])
+		counts[catIdx]++
+	}
+
+	colors, err := s.GetCategoryColors(column)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]GeneCategoryMeanItem, nCats)
+	for idx, value := range catInfo.Values {
+		mean := float32(0)
+		if counts[idx] > 0 {
+			mean = float32(sums[idx] / float64(counts[idx]))
+		}
+		out[idx] = GeneCategoryMeanItem{
+			Value:          value,
+			Color:          colors[value],
+			Index:          idx,
+			BinCount:       counts[idx],
+			MeanExpression: mean,
+		}
+	}
+
+	s.geneCategoryMeansMu.Lock()
+	s.geneCategoryMeansCache[cacheKey] = out
+	s.geneCategoryMeansMu.Unlock()
+
+	return out, nil
 }
 
 // QueryBinsExpressingGene returns bins where gene expression is above threshold.

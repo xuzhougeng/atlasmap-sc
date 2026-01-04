@@ -7,7 +7,14 @@ export type ColorMode = 'expression' | 'category' | 'default';
 export interface MapConfig {
     apiUrl: string;
     tileSize: number;
+    // Leaflet zoom range (allows extra "magnification" zooms beyond native data)
     maxZoom: number;
+    // Highest tile zoom the backend can serve; above this Leaflet scales tiles.
+    maxNativeZoom: number;
+    // Lowest Leaflet zoom level.
+    minZoom?: number;
+    // Initial Leaflet zoom level (defaults to fitBounds result).
+    initialZoom?: number;
     bounds: {
         min_x: number;
         max_x: number;
@@ -24,6 +31,7 @@ export class MapController {
     private bounds: L.LatLngBounds;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
+    private selectedCategories: string[] = [];
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.config = config;
@@ -42,7 +50,7 @@ export class MapController {
 
         this.map = L.map(container, {
             crs,
-            minZoom: 0,
+            minZoom: config.minZoom ?? 0,
             maxZoom: config.maxZoom,
             zoomSnap: 1,
             zoomDelta: 1,
@@ -52,6 +60,9 @@ export class MapController {
 
         // Set initial view
         this.map.fitBounds(this.bounds);
+        if (typeof config.initialZoom === 'number') {
+            this.map.setZoom(config.initialZoom);
+        }
         this.map.setMaxBounds(this.bounds.pad(0.1));
 
         // Note: No base tile layer is created here.
@@ -111,7 +122,8 @@ export class MapController {
                 noWrap: true,
                 bounds: this.bounds,
                 maxZoom: this.config.maxZoom,
-                minZoom: 0,
+                maxNativeZoom: this.config.maxNativeZoom,
+                minZoom: this.config.minZoom ?? 0,
             }
         ).addTo(this.map);
 
@@ -138,15 +150,23 @@ export class MapController {
         this.clearExpression();
         this.clearCategoryLayer();
 
+        // Build tile URL with optional category filter
+        let tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
+        if (this.selectedCategories.length > 0) {
+            const categories = encodeURIComponent(this.selectedCategories.join(','));
+            tileUrl += `?categories=${categories}`;
+        }
+
         // Add category-colored tile layer
         this.categoryLayer = L.tileLayer(
-            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`,
+            tileUrl,
             {
                 tileSize: this.config.tileSize,
                 noWrap: true,
                 bounds: this.bounds,
                 maxZoom: this.config.maxZoom,
-                minZoom: 0,
+                maxNativeZoom: this.config.maxNativeZoom,
+                minZoom: this.config.minZoom ?? 0,
             }
         ).addTo(this.map);
 
@@ -188,6 +208,9 @@ export class MapController {
         this.clearExpression();
         this.clearCategoryLayer();
         this.map.fitBounds(this.bounds);
+        if (typeof this.config.initialZoom === 'number') {
+            this.map.setZoom(this.config.initialZoom);
+        }
         this.currentColorMode = 'default';
     }
 
@@ -223,6 +246,18 @@ export class MapController {
         }
         if (this.categoryLayer) {
             this.categoryLayer.redraw();
+        }
+    }
+
+    /**
+     * Update category filter and refresh tiles
+     */
+    updateCategoryFilter(categories: string[]): void {
+        this.selectedCategories = categories;
+        // Only refresh if we're in category mode
+        if (this.currentColorMode === 'category' && this.currentCategory) {
+            // Re-create the layer with new filter
+            this.setCategoryColumn(this.currentCategory);
         }
     }
 

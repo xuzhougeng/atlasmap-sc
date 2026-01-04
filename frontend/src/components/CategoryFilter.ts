@@ -11,6 +11,10 @@ export class CategoryFilter {
     constructor(container: HTMLElement, categories: Record<string, CategoryInfo>) {
         this.container = container;
         this.categories = categories;
+        // Initialize selected with all category values (checkboxes start checked)
+        Object.values(categories).forEach(catInfo => {
+            catInfo.values.forEach(v => this.selected.add(v));
+        });
         this.render();
     }
 

@@ -222,6 +222,11 @@ func (r *TileRenderer) RenderCategoryTile(
 			catIdx = categoryIdx[i]
 		}
 
+		// Skip rendering if category is filtered out (-1)
+		if catIdx < 0 {
+			continue
+		}
+
 		c := cmap.AtIndex(catIdx)
 		dc.SetColor(c)
 

@@ -44,10 +44,16 @@ async function init() {
 
     // Initialize map
     const mapContainer = document.getElementById('map-container')!;
+    const maxNativeZoom = Math.max(0, metadata.zoom_levels - 1);
+    // Allow a few extra zoom levels to "magnify" the highest native tiles.
+    const maxZoom = maxNativeZoom + 4;
     const mapController = new MapController(mapContainer, {
         apiUrl: '',
         tileSize: 256,
-        maxZoom: metadata.zoom_levels - 1,
+        maxZoom,
+        maxNativeZoom,
+        // Start at an overview zoom so the full dataset is visible immediately.
+        initialZoom: 0,
         bounds: metadata.bounds,
     });
 
