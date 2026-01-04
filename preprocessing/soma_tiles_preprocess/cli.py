@@ -71,7 +71,7 @@ def main():
 )
 @click.option(
     "--min-cells",
-    default=1,
+    default=3,
     type=int,
     help="Minimum cells where gene must be expressed (only with --all-expressed)",
 )

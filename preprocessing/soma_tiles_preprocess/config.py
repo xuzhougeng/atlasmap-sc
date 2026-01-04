@@ -27,7 +27,7 @@ class PreprocessConfig:
     hvg_n_top: int = 300  # Top highly variable genes
     marker_genes: list[str] = field(default_factory=list)
     use_all_expressed: bool = False  # If True, use all genes with expression > 0
-    min_cells_expressed: int = 1  # Minimum cells where gene must be expressed
+    min_cells_expressed: int = 3  # Minimum cells where gene must be expressed
 
     # Category settings
     category_columns: list[str] = field(default_factory=list)  # obs columns to include

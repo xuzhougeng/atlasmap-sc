@@ -69,6 +69,8 @@ soma-preprocess from-config -c config.yaml
 | `--umap-key` | | `X_umap` | UMAP 坐标在 `adata.obsm` 中的键名 |
 | `--zoom-levels` | `-z` | `8` | 缩放级别数量（1-12） |
 | `--n-genes` | `-g` | `500` | 预聚合的基因数量 |
+| `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
+| `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
 | `--category` | `-c` | | 要包含的类别列（可多次指定） |
 | `--chunk-size` | | `256` | Zarr chunk 大小 |
 | `--batch-size` | | `100000` | 处理批次大小 |
@@ -98,6 +100,8 @@ marker_genes:
   - CD8A
   - MS4A1
   - CD14
+use_all_expressed: false  # 设为 true 使用所有表达的基因
+min_cells_expressed: 3    # 基因至少在多少个细胞中表达
 
 # 类别设置
 category_columns:
@@ -163,9 +167,8 @@ output/
 1. **加载数据**：读取 H5AD 文件
 2. **坐标处理**：从 `obsm` 提取 UMAP 坐标并归一化到 `[0, 256)` 范围
 3. **基因选择**：
-   - 高变异基因（HVG）
-   - 用户指定的标记基因
-   - 高表达基因补充
+   - 默认模式：选择 top N 基因（HVG + 标记基因 + 高表达基因）
+   - `--all-expressed` 模式：使用所有在至少 `--min-cells`（默认 3）个细胞中表达的基因
 4. **类别映射**：为指定的 obs 列构建类别到索引的映射
 5. **多分辨率分箱**：
    - 对每个缩放级别，使用四叉树算法分配 bin
