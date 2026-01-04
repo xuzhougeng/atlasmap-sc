@@ -76,3 +76,5 @@ temp/
 .gocache/
 .gopath/
 .gomodcache/
+.cache/
+TODO

@@ -1,0 +1,33 @@
+package cache
+
+import "testing"
+
+func TestCategoryTileKey(t *testing.T) {
+	base := "cat:0/1/2:cell_type"
+
+	t.Run("nilFilters", func(t *testing.T) {
+		got := CategoryTileKey(0, 1, 2, "cell_type", nil)
+		if got != base {
+			t.Fatalf("expected %q, got %q", base, got)
+		}
+	})
+
+	t.Run("emptyFilters", func(t *testing.T) {
+		got := CategoryTileKey(0, 1, 2, "cell_type", []string{})
+		want := base + ":none"
+		if got != want {
+			t.Fatalf("expected %q, got %q", want, got)
+		}
+	})
+
+	t.Run("sortedFilters", func(t *testing.T) {
+		key1 := CategoryTileKey(0, 1, 2, "cell_type", []string{"B", "A"})
+		key2 := CategoryTileKey(0, 1, 2, "cell_type", []string{"A", "B"})
+		if key1 != key2 {
+			t.Fatalf("expected stable key, got %q vs %q", key1, key2)
+		}
+		if key1 == base || key1 == base+":none" {
+			t.Fatalf("expected filtered key to differ from base, got %q", key1)
+		}
+	})
+}

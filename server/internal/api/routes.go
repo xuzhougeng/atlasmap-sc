@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -128,9 +129,9 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		column := chi.URLParam(r, "column")
 
 		// Parse optional category filter
-		var categoryFilter []string
-		if categoriesParam := r.URL.Query().Get("categories"); categoriesParam != "" {
-			categoryFilter = strings.Split(categoriesParam, ",")
+		categoryFilter, hasFilter := parseCategoryFilter(r.URL.Query())
+		if !hasFilter {
+			categoryFilter = nil
 		}
 
 		data, err := svc.GetCategoryTile(z, x, y, column, categoryFilter)
@@ -142,6 +143,55 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		w.Write(data)
 	}
+}
+
+func parseCategoryFilter(query url.Values) ([]string, bool) {
+	rawValues, present := query["categories"]
+	if !present {
+		return nil, false
+	}
+
+	// Support repeated query parameters:
+	//   ?categories=T&categories=B
+	if len(rawValues) > 1 {
+		out := make([]string, 0, len(rawValues))
+		for _, v := range rawValues {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				out = append(out, v)
+			}
+		}
+		return out, true
+	}
+
+	raw := strings.TrimSpace(rawValues[0])
+	if raw == "" {
+		// Explicit "filter to none".
+		return make([]string, 0), true
+	}
+
+	// Preferred format (frontend): JSON array, e.g. ["T","B"] (allows commas in values).
+	if strings.HasPrefix(raw, "[") {
+		var categories []string
+		if err := json.Unmarshal([]byte(raw), &categories); err == nil {
+			if categories == nil {
+				return make([]string, 0), true
+			}
+			return categories, true
+		}
+		// Fall through to comma-separated parsing for tolerance.
+	}
+
+	// Legacy format: comma-separated list, e.g. T,B
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out, true
 }
 
 func metadataHandler(svc *service.TileService) http.HandlerFunc {

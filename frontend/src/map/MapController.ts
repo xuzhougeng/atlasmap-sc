@@ -31,7 +31,8 @@ export class MapController {
     private bounds: L.LatLngBounds;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
-    private selectedCategories: string[] = [];
+    // null => no filter (show all); [] => filter to none (show none)
+    private selectedCategories: string[] | null = null;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.config = config;
@@ -145,18 +146,15 @@ export class MapController {
     /**
      * Set category column for coloring
      */
-    setCategoryColumn(column: string): void {
+    setCategoryColumn(column: string, categoryFilter?: string[] | null): void {
         // Clear other coloring layers
         this.clearExpression();
         this.clearCategoryLayer();
 
-        // Build tile URL with optional category filter
-        let tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
-        if (this.selectedCategories.length > 0) {
-            // Use JSON array to handle category values with commas
-            const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
-            tileUrl += `?categories=${categories}`;
+        if (typeof categoryFilter !== 'undefined') {
+            this.selectedCategories = categoryFilter;
         }
+        const tileUrl = this.buildCategoryTileUrl(column);
 
         // Add category-colored tile layer
         this.categoryLayer = L.tileLayer(
@@ -175,6 +173,16 @@ export class MapController {
         this.categoryLayer.bringToFront();
         this.currentCategory = column;
         this.currentColorMode = 'category';
+    }
+
+    private buildCategoryTileUrl(column: string): string {
+        let tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
+        if (this.selectedCategories !== null) {
+            // Use JSON array to handle category values with commas (and allow empty list)
+            const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
+            tileUrl += `?categories=${categories}`;
+        }
+        return tileUrl;
     }
 
     /**
@@ -253,11 +261,14 @@ export class MapController {
     /**
      * Update category filter and refresh tiles
      */
-    updateCategoryFilter(categories: string[]): void {
+    updateCategoryFilter(categories: string[] | null): void {
         this.selectedCategories = categories;
-        // Only refresh if we're in category mode
-        if (this.currentColorMode === 'category' && this.currentCategory) {
-            // Re-create the layer with new filter
+
+        if (this.currentColorMode !== 'category' || !this.currentCategory) return;
+        const tileUrl = this.buildCategoryTileUrl(this.currentCategory);
+        if (this.categoryLayer) {
+            this.categoryLayer.setUrl(tileUrl);
+        } else {
             this.setCategoryColumn(this.currentCategory);
         }
     }

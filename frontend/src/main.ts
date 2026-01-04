@@ -65,6 +65,8 @@ async function init() {
     const defaultCategory = availableCategories.includes('cell_type')
         ? 'cell_type'
         : availableCategories[0] || '';
+    let currentCategoryColumn = defaultCategory;
+    let categoryFilter: CategoryFilter | null = null;
 
     // Initialize TabPanel
     const tabPanel = new TabPanel(
@@ -76,7 +78,9 @@ async function init() {
 
                 if (tab === 'category') {
                     const column = categoryColumnSelector.getSelectedCategory();
-                    mapController.setCategoryColumn(column);
+                    currentCategoryColumn = column;
+                    const filter = categoryFilter?.getFilterForColumn(column) ?? null;
+                    mapController.setCategoryColumn(column, filter);
                     categoryLegend.loadLegend(column);
                     categoryLegend.show();
                 } else {
@@ -103,13 +107,19 @@ async function init() {
         {
             onCategoryChange: (column) => {
                 console.log('Category column changed:', column);
-                mapController.setCategoryColumn(column);
+                currentCategoryColumn = column;
+                const filter = categoryFilter?.getFilterForColumn(column) ?? null;
+                mapController.setCategoryColumn(column, filter);
                 categoryLegend.loadLegend(column);
                 cellQueryPanel?.setCategoryColumn(column);
             },
         }
     );
     categoryColumnSelector.setCategories(availableCategories);
+    if (defaultCategory) {
+        categoryColumnSelector.setSelectedCategory(defaultCategory);
+        currentCategoryColumn = defaultCategory;
+    }
 
     // Create category legend container
     const categoryLegendContainer = document.createElement('div');
@@ -133,13 +143,16 @@ async function init() {
 
     // Initialize category filter
     if (metadata.categories) {
-        const categoryFilter = new CategoryFilter(
+        categoryFilter = new CategoryFilter(
             categoryFiltersContainer,
             metadata.categories
         );
-        categoryFilter.onFilterChange((categories) => {
-            console.log('Categories filtered:', categories);
-            state.setState({ selectedCategories: categories });
+        categoryFilter.onFilterChange((column, filter) => {
+            console.log('Categories filtered:', column, filter);
+            if (column === currentCategoryColumn) {
+                mapController.updateCategoryFilter(filter);
+            }
+            state.setState({ selectedCategories: filter ?? [] });
         });
     }
 
@@ -222,7 +235,8 @@ async function init() {
 
     // Initialize with default category
     if (defaultCategory) {
-        mapController.setCategoryColumn(defaultCategory);
+        const filter = categoryFilter?.getFilterForColumn(defaultCategory) ?? null;
+        mapController.setCategoryColumn(defaultCategory, filter);
         categoryLegend.loadLegend(defaultCategory);
     }
 

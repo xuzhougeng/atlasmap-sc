@@ -5,16 +5,16 @@ import { CategoryInfo } from '../api/client';
 export class CategoryFilter {
     private container: HTMLElement;
     private categories: Record<string, CategoryInfo>;
-    private selected: Set<string> = new Set();
-    private filterCallback: ((categories: string[]) => void) | null = null;
+    private selectedByColumn: Map<string, Set<string>> = new Map();
+    private filterCallback: ((column: string, categories: string[] | null) => void) | null = null;
 
     constructor(container: HTMLElement, categories: Record<string, CategoryInfo>) {
         this.container = container;
         this.categories = categories;
-        // Initialize selected with all category values (checkboxes start checked)
-        Object.values(categories).forEach(catInfo => {
-            catInfo.values.forEach(v => this.selected.add(v));
-        });
+        // Initialize selected sets with all category values (checkboxes start checked)
+        for (const [column, catInfo] of Object.entries(categories)) {
+            this.selectedByColumn.set(column, new Set(catInfo.values));
+        }
         this.render();
     }
 
@@ -30,6 +30,7 @@ export class CategoryFilter {
         this.container.innerHTML = categoryNames
             .map(colName => {
                 const catInfo = this.categories[colName];
+                const selected = this.selectedByColumn.get(colName) ?? new Set<string>();
                 return `
                     <div class="category-group">
                         <h3 class="category-group-title">${colName}</h3>
@@ -39,7 +40,7 @@ export class CategoryFilter {
                                     <input type="checkbox"
                                            data-column="${colName}"
                                            data-value="${value}"
-                                           checked>
+                                           ${selected.has(value) ? 'checked' : ''}>
                                     <span class="category-color" style="background-color: ${this.getColor(idx)}"></span>
                                     <span class="category-label">${value}</span>
                                 </label>
@@ -62,15 +63,18 @@ export class CategoryFilter {
         this.container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
                 const target = e.target as HTMLInputElement;
+                const column = target.dataset.column!;
                 const value = target.dataset.value!;
+                const selected = this.selectedByColumn.get(column);
+                if (!selected) return;
 
                 if (target.checked) {
-                    this.selected.add(value);
+                    selected.add(value);
                 } else {
-                    this.selected.delete(value);
+                    selected.delete(value);
                 }
 
-                this.notifyChange();
+                this.notifyChange(column);
             });
         });
 
@@ -80,6 +84,8 @@ export class CategoryFilter {
                 const target = e.target as HTMLButtonElement;
                 const action = target.dataset.action;
                 const column = target.dataset.column!;
+                const selected = this.selectedByColumn.get(column);
+                if (!selected) return;
 
                 const checkboxes = this.container.querySelectorAll(
                     `input[data-column="${column}"]`
@@ -89,13 +95,13 @@ export class CategoryFilter {
                     cb.checked = action === 'select-all';
                     const value = cb.dataset.value!;
                     if (action === 'select-all') {
-                        this.selected.add(value);
+                        selected.add(value);
                     } else {
-                        this.selected.delete(value);
+                        selected.delete(value);
                     }
                 });
 
-                this.notifyChange();
+                this.notifyChange(column);
             });
         });
     }
@@ -111,43 +117,55 @@ export class CategoryFilter {
         return colors[index % colors.length];
     }
 
-    private notifyChange(): void {
-        if (this.filterCallback) {
-            this.filterCallback(Array.from(this.selected));
-        }
+    private notifyChange(column: string): void {
+        if (!this.filterCallback) return;
+        this.filterCallback(column, this.getFilterForColumn(column));
     }
 
     /**
      * Register callback for filter changes
      */
-    onFilterChange(callback: (categories: string[]) => void): void {
+    onFilterChange(callback: (column: string, categories: string[] | null) => void): void {
         this.filterCallback = callback;
     }
 
     /**
-     * Get selected categories
+     * Get column filter.
+     *
+     * Returns null when all values are selected (no filter).
+     * Returns an array (possibly empty) when a filter is active.
      */
-    getSelectedCategories(): string[] {
-        return Array.from(this.selected);
+    getFilterForColumn(column: string): string[] | null {
+        const catInfo = this.categories[column];
+        const selected = this.selectedByColumn.get(column);
+        if (!catInfo || !selected) return null;
+        if (selected.size === catInfo.values.length) return null;
+        return Array.from(selected);
     }
 
     /**
      * Select all categories
      */
     selectAll(): void {
-        Object.values(this.categories).forEach(catInfo => {
-            catInfo.values.forEach(v => this.selected.add(v));
-        });
+        for (const [column, catInfo] of Object.entries(this.categories)) {
+            this.selectedByColumn.set(column, new Set(catInfo.values));
+        }
         this.render();
-        this.notifyChange();
+        for (const column of Object.keys(this.categories)) {
+            this.notifyChange(column);
+        }
     }
 
     /**
      * Clear all selections
      */
     clearAll(): void {
-        this.selected.clear();
+        for (const column of Object.keys(this.categories)) {
+            this.selectedByColumn.set(column, new Set());
+        }
         this.render();
-        this.notifyChange();
+        for (const column of Object.keys(this.categories)) {
+            this.notifyChange(column);
+        }
     }
 }

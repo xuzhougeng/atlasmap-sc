@@ -104,8 +104,11 @@ func ExpressionTileKey(z, x, y int, gene, colormap string) string {
 // CategoryTileKey generates a cache key for a category tile.
 func CategoryTileKey(z, x, y int, column string, filters []string) string {
 	base := fmt.Sprintf("cat:%d/%d/%d:%s", z, x, y, column)
-	if len(filters) == 0 {
+	if filters == nil {
 		return base
+	}
+	if len(filters) == 0 {
+		return base + ":none"
 	}
 	// Sort filters for consistent cache keys
 	sortedFilters := make([]string, len(filters))
@@ -123,9 +126,9 @@ func CategoryTileKey(z, x, y int, column string, filters []string) string {
 // Stats returns cache statistics.
 func (m *Manager) Stats() map[string]interface{} {
 	return map[string]interface{}{
-		"tile_cache_len":     m.tileCache.Len(),
-		"tile_cache_cap":     m.tileCache.Capacity(),
-		"query_cache_len":    m.queryCache.Len(),
+		"tile_cache_len":  m.tileCache.Len(),
+		"tile_cache_cap":  m.tileCache.Capacity(),
+		"query_cache_len": m.queryCache.Len(),
 	}
 }
 

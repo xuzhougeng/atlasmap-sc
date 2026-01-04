@@ -277,10 +277,10 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 
 	// Build allowed category indices if filter is provided
 	var allowedIndices map[int]bool
-	if len(categoryFilter) > 0 {
+	if categoryFilter != nil {
+		allowedIndices = make(map[int]bool)
 		catInfo, ok := s.zarr.Metadata().Categories[column]
 		if ok {
-			allowedIndices = make(map[int]bool)
 			for _, filterValue := range categoryFilter {
 				if idx, exists := catInfo.Mapping[filterValue]; exists {
 					allowedIndices[idx] = true
