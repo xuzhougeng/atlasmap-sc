@@ -216,9 +216,17 @@ async function init() {
             },
         }
     );
+    // Set max native zoom so stats are fetched at correct zoom levels
+    cellQueryPanel.setMaxNativeZoom(maxNativeZoom);
     if (defaultCategory) {
         cellQueryPanel.setCategoryColumn(defaultCategory);
     }
+
+    // Listen for zoom changes to update stats panel
+    mapController.getMap().on('zoomend', () => {
+        const zoom = mapController.getZoom();
+        cellQueryPanel?.setZoom(zoom);
+    });
 
     // Gene selection handler
     geneSelector.onGeneSelect((gene) => {

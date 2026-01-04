@@ -20,6 +20,10 @@ export class CellQueryPanel {
     private categoryMeans: GeneCategoryMeanItem[] | null = null;
     private categoryMeansRequestId: number = 0;
 
+    private currentZoom: number = 0;
+    private maxNativeZoom: number = 0;
+    private zoomDebounceTimer: number | null = null;
+
     constructor(
         container: HTMLElement,
         api: ApiClient,
@@ -133,9 +137,53 @@ export class CellQueryPanel {
         const queryBtn = this.container.querySelector('#btn-query') as HTMLButtonElement;
         queryBtn.disabled = false;
 
-        // Load gene statistics
+        // Load gene statistics at current zoom level
+        await this.refreshStats();
+
+        await this.loadCategoryMeans();
+    }
+
+    /**
+     * Set the maximum native zoom level (from backend metadata)
+     */
+    setMaxNativeZoom(maxNativeZoom: number): void {
+        this.maxNativeZoom = maxNativeZoom;
+    }
+
+    /**
+     * Update the current zoom level and refresh stats
+     */
+    setZoom(zoom: number): void {
+        // Clamp to maxNativeZoom to avoid requesting non-existent zoom levels
+        const effectiveZoom = Math.min(Math.max(0, Math.floor(zoom)), this.maxNativeZoom);
+
+        if (this.currentZoom === effectiveZoom) {
+            return;
+        }
+
+        this.currentZoom = effectiveZoom;
+
+        // Clear previous debounce timer
+        if (this.zoomDebounceTimer !== null) {
+            clearTimeout(this.zoomDebounceTimer);
+        }
+
+        // Debounce 300ms to avoid excessive API requests during rapid zoom
+        this.zoomDebounceTimer = window.setTimeout(() => {
+            if (this.currentGene) {
+                void this.refreshStats();
+            }
+        }, 300);
+    }
+
+    /**
+     * Refresh gene stats at current zoom level
+     */
+    private async refreshStats(): Promise<void> {
+        if (!this.currentGene) return;
+
         try {
-            this.stats = await this.api.getGeneStats(gene);
+            this.stats = await this.api.getGeneStats(this.currentGene, this.currentZoom);
             this.showStats();
 
             // Adjust slider range based on max expression
@@ -144,8 +192,6 @@ export class CellQueryPanel {
         } catch (error) {
             console.error('Failed to load gene stats:', error);
         }
-
-        await this.loadCategoryMeans();
     }
 
     /**

@@ -204,11 +204,19 @@ export class ApiClient {
 
     /**
      * Get gene expression statistics
+     * @param gene Gene name
+     * @param zoom Optional zoom level (defaults to 0 if omitted)
      */
-    async getGeneStats(gene: string): Promise<GeneStats> {
-        const response = await fetch(
-            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/stats`
-        );
+    async getGeneStats(gene: string, zoom?: number): Promise<GeneStats> {
+        const query = new URLSearchParams();
+        if (zoom !== undefined) {
+            query.set('zoom', zoom.toString());
+        }
+
+        const queryStr = query.toString();
+        const url = `${this.baseUrl}/genes/${encodeURIComponent(gene)}/stats${queryStr ? '?' + queryStr : ''}`;
+
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to get gene stats: ${response.statusText}`);
         }
