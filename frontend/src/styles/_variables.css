@@ -1,0 +1,30 @@
+/* SOMA-Tiles CSS Variables */
+
+:root, [data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-map: #0d0d1a;
+    --text-primary: #eaeaea;
+    --text-secondary: #a0a0a0;
+    --accent-primary: #e94560;
+    --accent-secondary: #0f4c75;
+    --border-color: #2a2a4a;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --radius: 8px;
+    --header-height: 60px;
+    --sidebar-width: 300px;
+}
+
+[data-theme="light"] {
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e4e6eb;
+    --bg-map: #e8eaed;
+    --text-primary: #1a1a2e;
+    --text-secondary: #5a5a6e;
+    --accent-primary: #e94560;
+    --accent-secondary: #3a7bd5;
+    --border-color: #d1d5db;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

@@ -1,0 +1,128 @@
+/* Layout Styles */
+
+/* Header */
+.header {
+    height: var(--header-height);
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+}
+
+.header-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+}
+
+.info-item {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Dataset Selector */
+.dataset-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dataset-selector label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.dataset-select {
+    padding: 6px 10px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.dataset-select:hover,
+.dataset-select:focus {
+    border-color: var(--accent-primary);
+}
+
+.dataset-info-items {
+    display: flex;
+    gap: 16px;
+}
+
+/* Main Content */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Sidebar Resizer */
+.sidebar-resizer {
+    width: 4px;
+    cursor: col-resize;
+    background-color: var(--border-color);
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+    background-color: var(--accent-primary);
+}
+
+/* Map Container */
+.map-container {
+    flex: 1;
+    background-color: var(--bg-primary);
+    position: relative;
+    min-height: 0;
+}
+
+#map-container {
+    height: 100%;
+    width: 100%;
+}
+
+/* Leaflet Overrides */
+.leaflet-container {
+    background-color: var(--bg-map);
+    height: 100%;
+    width: 100%;
+}
+
+.zoom-info {
+    background-color: var(--bg-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    box-shadow: var(--shadow);
+}
+

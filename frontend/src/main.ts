@@ -13,6 +13,7 @@ import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
 import { ColorScaleSelector } from './components/ColorScaleSelector';
 import { SidebarResizer } from './components/SidebarResizer';
+import { ThemeManager } from './components/ThemeManager';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 import { downloadPngAtCurrentZoom } from './map/exportPng';
@@ -93,9 +94,33 @@ function createDatasetSelector(
     container.insertBefore(selectorContainer, container.firstChild);
 }
 
+// Initialize theme manager early to prevent flash
+const themeManager = new ThemeManager();
+
+function setupThemeToggle() {
+    const themeBtn = document.getElementById('btn-theme');
+    const iconSun = document.getElementById('icon-sun');
+    const iconMoon = document.getElementById('icon-moon');
+
+    const updateIcon = (theme: 'dark' | 'light') => {
+        if (iconSun && iconMoon) {
+            iconSun.style.display = theme === 'dark' ? 'block' : 'none';
+            iconMoon.style.display = theme === 'light' ? 'block' : 'none';
+        }
+    };
+
+    updateIcon(themeManager.getTheme());
+
+    themeBtn?.addEventListener('click', () => {
+        const newTheme = themeManager.toggle();
+        updateIcon(newTheme);
+    });
+}
+
 // Initialize application
 async function init() {
     console.log('Initializing SOMA-Tiles...');
+    setupThemeToggle();
 
     // Fetch available datasets
     let datasetsInfo: DatasetsResponse;
