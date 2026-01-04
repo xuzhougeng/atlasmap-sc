@@ -3,6 +3,8 @@ server:
   cors_origins:
     - "http://localhost:3000"
     - "http://localhost:5173"
+  # Custom title displayed in the header (optional, defaults to "SOMA-Tiles")
+  title: "Human Cell Atlas"
 
 # Single dataset (legacy format - still supported):
 # data:

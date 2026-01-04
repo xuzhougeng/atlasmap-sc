@@ -15,14 +15,16 @@ type DatasetRegistry struct {
 	services       map[string]*service.TileService
 	defaultDataset string
 	datasetOrder   []string
+	title          string
 }
 
 // NewDatasetRegistry creates a new dataset registry.
-func NewDatasetRegistry(defaultDataset string, order []string) *DatasetRegistry {
+func NewDatasetRegistry(defaultDataset string, order []string, title string) *DatasetRegistry {
 	return &DatasetRegistry{
 		services:       make(map[string]*service.TileService),
 		defaultDataset: defaultDataset,
 		datasetOrder:   order,
+		title:          title,
 	}
 }
 
@@ -51,6 +53,14 @@ func (r *DatasetRegistry) DatasetIDs() []string {
 	return r.datasetOrder
 }
 
+// Title returns the configured site title.
+func (r *DatasetRegistry) Title() string {
+	if r.title != "" {
+		return r.title
+	}
+	return "SOMA-Tiles"
+}
+
 // Datasets returns dataset info for all registered datasets.
 func (r *DatasetRegistry) Datasets() []DatasetInfo {
 	infos := make([]DatasetInfo, 0, len(r.datasetOrder))
@@ -63,4 +73,3 @@ func (r *DatasetRegistry) Datasets() []DatasetInfo {
 	}
 	return infos
 }
-

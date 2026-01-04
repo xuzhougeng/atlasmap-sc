@@ -25,6 +25,7 @@ interface DatasetInfo {
 interface DatasetsResponse {
     default: string;
     datasets: DatasetInfo[];
+    title: string;
 }
 
 // Get current dataset from URL query params
@@ -105,6 +106,15 @@ async function init() {
         console.error('Failed to fetch datasets:', error);
         showError('Failed to connect to server');
         return;
+    }
+
+    // Update page title from config
+    if (datasetsInfo.title) {
+        const titleEl = document.querySelector('.header-title');
+        if (titleEl) {
+            titleEl.textContent = datasetsInfo.title;
+        }
+        document.title = datasetsInfo.title;
     }
 
     // Determine which dataset to use

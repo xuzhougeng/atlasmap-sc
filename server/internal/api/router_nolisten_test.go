@@ -62,7 +62,7 @@ func TestGeneStatsEndpoint_NoListen(t *testing.T) {
 	})
 
 	// Create registry with single dataset
-	registry := NewDatasetRegistry("default", []string{"default"})
+	registry := NewDatasetRegistry("default", []string{"default"}, "")
 	registry.Register("default", tileService)
 
 	router := NewRouter(RouterConfig{

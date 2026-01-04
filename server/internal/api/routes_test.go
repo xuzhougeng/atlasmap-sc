@@ -68,7 +68,7 @@ func setupTestServer(t *testing.T) *testServer {
 	})
 
 	// Create registry with single dataset
-	registry := NewDatasetRegistry("default", []string{"default"})
+	registry := NewDatasetRegistry("default", []string{"default"}, "")
 	registry.Register("default", tileService)
 
 	// Create router

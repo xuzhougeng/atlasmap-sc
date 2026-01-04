@@ -143,6 +143,7 @@ func datasetsHandler(registry *DatasetRegistry) http.HandlerFunc {
 		response := map[string]interface{}{
 			"default":  registry.DefaultDatasetID(),
 			"datasets": registry.Datasets(),
+			"title":    registry.Title(),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

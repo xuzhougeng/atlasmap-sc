@@ -54,7 +54,7 @@ func main() {
 
 	// Initialize dataset registry
 	datasetIDs := cfg.Data.DatasetIDs()
-	registry := api.NewDatasetRegistry(cfg.Data.DefaultDataset, datasetIDs)
+	registry := api.NewDatasetRegistry(cfg.Data.DefaultDataset, datasetIDs, cfg.Server.Title)
 
 	log.Printf("Initializing %d dataset(s), default: %s", len(datasetIDs), cfg.Data.DefaultDataset)
 

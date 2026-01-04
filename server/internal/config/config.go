@@ -21,6 +21,7 @@ type Config struct {
 type ServerConfig struct {
 	Port        int      `yaml:"port"`
 	CORSOrigins []string `yaml:"cors_origins"`
+	Title       string   `yaml:"title"`
 }
 
 // DatasetConfig contains paths for a single dataset.
