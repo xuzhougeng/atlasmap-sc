@@ -23,7 +23,7 @@ bin/
 vendor/
 
 # Data files (large)
-data/
+/data
 *.h5ad
 *.zarr/
 *.soma/
