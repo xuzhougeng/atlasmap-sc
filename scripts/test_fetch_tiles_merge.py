@@ -3,12 +3,13 @@
 Test script: fetch server tiles at a given zoom and stitch into one image.
 
 Supports:
-  - category coloring (e.g. cell_type): /tiles/{z}/{x}/{y}/category/{column}.png
-  - expression coloring (random gene): /tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=viridis
+  - category coloring (e.g. cell_type): /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png
+  - expression coloring (random gene): /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=viridis
 
 Notes:
   - For large zoom/bounds, the stitched image can be huge. This script defaults to downsampling
     so the output's max dimension is <= --max-dim (default: 8192).
+  - Uses /api/datasets to auto-detect the default dataset if --dataset is not specified.
 """
 
 from __future__ import annotations
@@ -55,8 +56,21 @@ def http_get_json(url: str, timeout_s: float) -> Any:
     return json.loads(data.decode("utf-8"))
 
 
-def fetch_metadata(base_url: str, timeout_s: float) -> Meta:
-    md = http_get_json(f"{base_url}/api/metadata", timeout_s=timeout_s)
+def fetch_default_dataset(base_url: str, timeout_s: float) -> str:
+    """Fetch the default dataset ID from /api/datasets."""
+    resp = http_get_json(f"{base_url}/api/datasets", timeout_s=timeout_s)
+    default = resp.get("default")
+    if not default:
+        datasets = resp.get("datasets") or []
+        if datasets:
+            default = datasets[0].get("id") if isinstance(datasets[0], dict) else datasets[0]
+    if not default:
+        raise RuntimeError("No datasets available from /api/datasets")
+    return default
+
+
+def fetch_metadata(base_url: str, dataset: str, timeout_s: float) -> Meta:
+    md = http_get_json(f"{base_url}/d/{dataset}/api/metadata", timeout_s=timeout_s)
     tile_size = int(md.get("tile_size", 256))
     zoom_levels = int(md["zoom_levels"])
     bounds = md.get("bounds") or {}
@@ -64,13 +78,13 @@ def fetch_metadata(base_url: str, timeout_s: float) -> Meta:
     return Meta(tile_size=tile_size, zoom_levels=zoom_levels, bounds_max=bounds_max)
 
 
-def pick_gene(base_url: str, timeout_s: float, gene: Optional[str]) -> str:
+def pick_gene(base_url: str, dataset: str, timeout_s: float, gene: Optional[str]) -> str:
     if gene and gene != "random":
         return gene
-    genes_resp = http_get_json(f"{base_url}/api/genes", timeout_s=timeout_s)
+    genes_resp = http_get_json(f"{base_url}/d/{dataset}/api/genes", timeout_s=timeout_s)
     genes = genes_resp.get("genes") or []
     if not genes:
-        raise RuntimeError("No genes returned by /api/genes; cannot pick random gene.")
+        raise RuntimeError(f"No genes returned by /d/{dataset}/api/genes; cannot pick random gene.")
     return random.choice(list(genes))
 
 
@@ -83,6 +97,7 @@ def tiles_per_axis(bounds_max: float, tile_size: int, zoom: int) -> int:
 
 def build_tile_url(
     base_url: str,
+    dataset: str,
     zoom: int,
     x: int,
     y: int,
@@ -92,10 +107,10 @@ def build_tile_url(
     colormap: str,
 ) -> str:
     if mode == "category":
-        return f"{base_url}/tiles/{zoom}/{x}/{y}/category/{urllib.parse.quote(category)}.png"
+        return f"{base_url}/d/{dataset}/tiles/{zoom}/{x}/{y}/category/{urllib.parse.quote(category)}.png"
     if mode == "expression":
         qp = urllib.parse.urlencode({"colormap": colormap})
-        return f"{base_url}/tiles/{zoom}/{x}/{y}/expression/{urllib.parse.quote(gene)}.png?{qp}"
+        return f"{base_url}/d/{dataset}/tiles/{zoom}/{x}/{y}/expression/{urllib.parse.quote(gene)}.png?{qp}"
     raise ValueError(f"Unknown mode: {mode}")
 
 
@@ -115,6 +130,7 @@ def is_fully_transparent(img: Image.Image) -> bool:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--server", default="http://localhost:8080", help="Base URL of Go server")
+    p.add_argument("--dataset", default="", help="Dataset ID (auto-detect default if empty)")
     p.add_argument("--zoom", type=int, default=7, help="Zoom level to fetch (e.g. 7)")
     p.add_argument(
         "--mode",
@@ -159,13 +175,20 @@ def main() -> int:
     args = parse_args()
     base_url = args.server.rstrip("/")
 
-    meta = fetch_metadata(base_url, timeout_s=args.timeout)
+    # Resolve dataset ID
+    if args.dataset:
+        dataset = args.dataset
+    else:
+        dataset = fetch_default_dataset(base_url, timeout_s=args.timeout)
+    print(f"[info] dataset={dataset}")
+
+    meta = fetch_metadata(base_url, dataset, timeout_s=args.timeout)
     if args.zoom < 0 or args.zoom >= meta.zoom_levels:
         raise SystemExit(f"--zoom out of range: {args.zoom} (zoom_levels={meta.zoom_levels})")
 
     chosen_gene = ""
     if args.mode == "expression":
-        chosen_gene = pick_gene(base_url, timeout_s=args.timeout, gene=args.gene)
+        chosen_gene = pick_gene(base_url, dataset, timeout_s=args.timeout, gene=args.gene)
         print(f"[info] mode=expression gene={chosen_gene} colormap={args.colormap}")
     else:
         print(f"[info] mode=category column={args.category}")
@@ -209,6 +232,7 @@ def main() -> int:
     def fetch_one(x: int, y: int) -> Tuple[int, int, bytes]:
         url = build_tile_url(
             base_url=base_url,
+            dataset=dataset,
             zoom=args.zoom,
             x=x,
             y=y,

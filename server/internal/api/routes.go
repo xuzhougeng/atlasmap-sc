@@ -52,12 +52,6 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	// Global datasets endpoint (not dataset-scoped)
 	r.Get("/api/datasets", datasetsHandler(cfg.Registry))
 
-	// Default dataset routes (legacy compatibility)
-	defaultSvc := cfg.Registry.Default()
-	if defaultSvc != nil {
-		mountDatasetRoutes(r, defaultSvc)
-	}
-
 	// Dataset-scoped routes: /d/{dataset}/...
 	r.Route("/d/{dataset}", func(r chi.Router) {
 		r.Use(datasetMiddleware(cfg.Registry))
@@ -84,29 +78,6 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	})
 
 	return r
-}
-
-// mountDatasetRoutes mounts routes for a specific tile service (used for default dataset).
-func mountDatasetRoutes(r chi.Router, svc *service.TileService) {
-	// Tile endpoints
-	r.Get("/tiles/{z}/{x}/{y}.png", tileHandler(svc))
-	r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", expressionTileHandler(svc))
-	r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(svc))
-	r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(svc))
-
-	// API endpoints
-	r.Route("/api", func(r chi.Router) {
-		r.Get("/metadata", metadataHandler(svc))
-		r.Get("/genes", genesHandler(svc))
-		r.Get("/genes/{gene}", geneInfoHandler(svc))
-		r.Get("/genes/{gene}/bins", geneBinsHandler(svc))
-		r.Get("/genes/{gene}/stats", geneStatsHandler(svc))
-		r.Get("/genes/{gene}/category/{column}/means", geneCategoryMeansHandler(svc))
-		r.Get("/categories", categoriesHandler(svc))
-		r.Get("/categories/{column}/colors", categoryColorsHandler(svc))
-		r.Get("/categories/{column}/legend", categoryLegendHandler(svc))
-		r.Get("/stats", statsHandler(svc))
-	})
 }
 
 // Context key for dataset service

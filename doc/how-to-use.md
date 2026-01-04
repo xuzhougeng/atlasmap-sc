@@ -160,11 +160,12 @@ data:
 
 前端会显示数据集选择下拉框，API 可通过 `/d/{dataset}/api/...` 访问特定数据集。
 
-启动后自检：
+启动后自检（注意：需先通过 `/api/datasets` 获取数据集 ID）：
 
 ```bash
 curl http://localhost:8080/health
-curl http://localhost:8080/api/metadata
+curl http://localhost:8080/api/datasets
+curl http://localhost:8080/d/{dataset}/api/metadata  # 将 {dataset} 替换为实际 ID
 ```
 
 ### 3) 启动前端（Vite）
@@ -176,7 +177,7 @@ npm run dev
 ```
 
 默认打开：`http://localhost:3000`  
-本地开发时，Vite 会把 `/api` 与 `/tiles` 代理到 `http://localhost:8080`（见 `frontend/vite.config.ts`）。
+本地开发时，Vite 会把 `/api` 与 `/d` 代理到 `http://localhost:8080`（见 `frontend/vite.config.ts`）。
 
 ---
 
@@ -219,20 +220,6 @@ docker compose --profile tools run --rm preprocess run \
 
 ---
 
-## 常用接口（后端）
-
-代码位置：`server/internal/api/routes.go`
-
-- `GET /health`：健康检查
-- `GET /api/metadata`：数据集元数据（前端启动依赖）
-- `GET /api/genes`：预聚合基因列表
-- `GET /api/categories`：可用分类字段与取值
-- `GET /tiles/{z}/{x}/{y}.png`：基础 tile
-- `GET /tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=viridis`：基因表达着色
-- `GET /tiles/{z}/{x}/{y}/category/{column}.png`：分类着色
-
----
-
 ## 常见问题（Troubleshooting）
 
 ### 后端启动报错：`Failed to initialize Zarr reader`
@@ -248,4 +235,4 @@ docker compose --profile tools run --rm preprocess run \
 
 ### 基因表达 tile 一直空白/找不到 gene
 
-表达 tile 只能对**预聚合基因**渲染；请先从 `GET /api/genes` 查看可用基因，或在预处理时提高 `--n-genes`，必要时使用 `from-config` 加入 marker genes。
+表达 tile 只能对**预聚合基因**渲染；请先从 `GET /d/{dataset}/api/genes` 查看可用基因，或在预处理时提高 `--n-genes`，必要时使用 `from-config` 加入 marker genes。

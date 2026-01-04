@@ -185,31 +185,31 @@ func TestTileEndpoint(t *testing.T) {
 	}{
 		{
 			name:           "valid tile z0",
-			path:           "/tiles/0/0/0.png",
+			path:           "/d/default/tiles/0/0/0.png",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "valid tile z1",
-			path:           "/tiles/1/0/0.png",
+			path:           "/d/default/tiles/1/0/0.png",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "invalid z parameter",
-			path:           "/tiles/abc/0/0.png",
+			path:           "/d/default/tiles/abc/0/0.png",
 			expectedStatus: http.StatusBadRequest,
 			expectPNG:      false,
 		},
 		{
 			name:           "invalid x parameter",
-			path:           "/tiles/0/abc/0.png",
+			path:           "/d/default/tiles/0/abc/0.png",
 			expectedStatus: http.StatusBadRequest,
 			expectPNG:      false,
 		},
 		{
 			name:           "invalid y parameter",
-			path:           "/tiles/0/0/abc.png",
+			path:           "/d/default/tiles/0/0/abc.png",
 			expectedStatus: http.StatusBadRequest,
 			expectPNG:      false,
 		},
@@ -257,25 +257,25 @@ func TestExpressionTileEndpoint(t *testing.T) {
 	}{
 		{
 			name:           "valid expression tile with default colormap",
-			path:           "/tiles/0/0/0/expression/" + validGene + ".png",
+			path:           "/d/default/tiles/0/0/0/expression/" + validGene + ".png",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "expression tile with viridis colormap",
-			path:           "/tiles/0/0/0/expression/" + validGene + ".png?colormap=viridis",
+			path:           "/d/default/tiles/0/0/0/expression/" + validGene + ".png?colormap=viridis",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "expression tile with plasma colormap",
-			path:           "/tiles/0/0/0/expression/" + validGene + ".png?colormap=plasma",
+			path:           "/d/default/tiles/0/0/0/expression/" + validGene + ".png?colormap=plasma",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "unknown gene returns empty tile",
-			path:           "/tiles/0/0/0/expression/UNKNOWN_GENE_XYZ.png",
+			path:           "/d/default/tiles/0/0/0/expression/UNKNOWN_GENE_XYZ.png",
 			expectedStatus: http.StatusOK, // Returns empty tile, not error
 			expectPNG:      true,
 		},
@@ -327,13 +327,13 @@ func TestCategoryTileEndpoint(t *testing.T) {
 	}{
 		{
 			name:           "valid category tile",
-			path:           "/tiles/0/0/0/category/" + validCategory + ".png",
+			path:           "/d/default/tiles/0/0/0/category/" + validCategory + ".png",
 			expectedStatus: http.StatusOK,
 			expectPNG:      true,
 		},
 		{
 			name:           "unknown category returns empty tile",
-			path:           "/tiles/0/0/0/category/unknown_category_xyz.png",
+			path:           "/d/default/tiles/0/0/0/category/unknown_category_xyz.png",
 			expectedStatus: http.StatusOK, // Returns empty tile
 			expectPNG:      true,
 		},
@@ -366,7 +366,7 @@ func TestMetadataEndpoint(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.close()
 
-	resp, err := http.Get(ts.server.URL + "/api/metadata")
+	resp, err := http.Get(ts.server.URL + "/d/default/api/metadata")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestStatsEndpoint(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.close()
 
-	resp, err := http.Get(ts.server.URL + "/api/stats")
+	resp, err := http.Get(ts.server.URL + "/d/default/api/stats")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestGenesEndpoint(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.close()
 
-	resp, err := http.Get(ts.server.URL + "/api/genes")
+	resp, err := http.Get(ts.server.URL + "/d/default/api/genes")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestGeneInfoEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Get(ts.server.URL + "/api/genes/" + tt.gene)
+			resp, err := http.Get(ts.server.URL + "/d/default/api/genes/" + tt.gene)
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
@@ -518,7 +518,7 @@ func TestGeneStatsEndpoint(t *testing.T) {
 	validGene := metadata.Genes[0]
 
 	// First, check if expression data is available by making a probe request
-	probeResp, err := http.Get(ts.server.URL + "/api/genes/" + validGene + "/stats")
+	probeResp, err := http.Get(ts.server.URL + "/d/default/api/genes/" + validGene + "/stats")
 	if err != nil {
 		t.Fatalf("Failed to make probe request: %v", err)
 	}
@@ -554,7 +554,7 @@ func TestGeneStatsEndpoint(t *testing.T) {
 				t.Skip("Expression data not available (multi-chunk Zarr format not supported)")
 			}
 
-			resp, err := http.Get(ts.server.URL + "/api/genes/" + tt.gene + "/stats")
+			resp, err := http.Get(ts.server.URL + "/d/default/api/genes/" + tt.gene + "/stats")
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
@@ -587,7 +587,7 @@ func TestGeneBinsEndpoint(t *testing.T) {
 	validGene := metadata.Genes[0]
 
 	// Check if expression data is available by making a probe request
-	probeResp, err := http.Get(ts.server.URL + "/api/genes/" + validGene + "/bins?limit=1")
+	probeResp, err := http.Get(ts.server.URL + "/d/default/api/genes/" + validGene + "/bins?limit=1")
 	if err != nil {
 		t.Fatalf("Failed to make probe request: %v", err)
 	}
@@ -604,25 +604,25 @@ func TestGeneBinsEndpoint(t *testing.T) {
 	}{
 		{
 			name:           "bins with default params",
-			path:           "/api/genes/" + validGene + "/bins",
+			path:           "/d/default/api/genes/" + validGene + "/bins",
 			expectedStatus: http.StatusOK,
 			expectFields:   []string{"bins", "total_count", "offset", "limit", "gene", "threshold"},
 		},
 		{
 			name:           "bins with threshold",
-			path:           "/api/genes/" + validGene + "/bins?threshold=0.5",
+			path:           "/d/default/api/genes/" + validGene + "/bins?threshold=0.5",
 			expectedStatus: http.StatusOK,
 			expectFields:   []string{"bins", "total_count"},
 		},
 		{
 			name:           "bins with pagination",
-			path:           "/api/genes/" + validGene + "/bins?offset=0&limit=10",
+			path:           "/d/default/api/genes/" + validGene + "/bins?offset=0&limit=10",
 			expectedStatus: http.StatusOK,
 			expectFields:   []string{"bins", "total_count", "offset", "limit"},
 		},
 		{
 			name:           "bins with large limit (should be capped at 1000)",
-			path:           "/api/genes/" + validGene + "/bins?limit=5000",
+			path:           "/d/default/api/genes/" + validGene + "/bins?limit=5000",
 			expectedStatus: http.StatusOK,
 			expectFields:   []string{"bins"},
 		},
@@ -655,7 +655,7 @@ func TestCategoriesEndpoint(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.close()
 
-	resp, err := http.Get(ts.server.URL + "/api/categories")
+	resp, err := http.Get(ts.server.URL + "/d/default/api/categories")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -711,7 +711,7 @@ func TestCategoryColorsEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Get(ts.server.URL + "/api/categories/" + tt.column + "/colors")
+			resp, err := http.Get(ts.server.URL + "/d/default/api/categories/" + tt.column + "/colors")
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
@@ -774,7 +774,7 @@ func TestCategoryLegendEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Get(ts.server.URL + "/api/categories/" + tt.column + "/legend")
+			resp, err := http.Get(ts.server.URL + "/d/default/api/categories/" + tt.column + "/legend")
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
@@ -821,7 +821,7 @@ func TestCacheHeaders(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.close()
 
-	resp, err := http.Get(ts.server.URL + "/tiles/0/0/0.png")
+	resp, err := http.Get(ts.server.URL + "/d/default/tiles/0/0/0.png")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -871,7 +871,7 @@ func TestAllEndpointsReachable(t *testing.T) {
 	// Check if expression data is available
 	expressionDataAvailable := false
 	if len(metadata.Genes) > 0 {
-		probeResp, err := http.Get(ts.server.URL + "/api/genes/" + metadata.Genes[0] + "/stats")
+		probeResp, err := http.Get(ts.server.URL + "/d/default/api/genes/" + metadata.Genes[0] + "/stats")
 		if err == nil {
 			expressionDataAvailable = probeResp.StatusCode == http.StatusOK
 			probeResp.Body.Close()
@@ -886,11 +886,11 @@ func TestAllEndpointsReachable(t *testing.T) {
 
 	endpoints := []endpoint{
 		{"/health", http.StatusOK, false},
-		{"/tiles/0/0/0.png", http.StatusOK, false},
-		{"/api/metadata", http.StatusOK, false},
-		{"/api/stats", http.StatusOK, false},
-		{"/api/genes", http.StatusOK, false},
-		{"/api/categories", http.StatusOK, false},
+		{"/d/default/tiles/0/0/0.png", http.StatusOK, false},
+		{"/d/default/api/metadata", http.StatusOK, false},
+		{"/d/default/api/stats", http.StatusOK, false},
+		{"/d/default/api/genes", http.StatusOK, false},
+		{"/d/default/api/categories", http.StatusOK, false},
 		{"/api/datasets", http.StatusOK, false},
 	}
 
@@ -898,19 +898,19 @@ func TestAllEndpointsReachable(t *testing.T) {
 	if len(metadata.Genes) > 0 {
 		gene := metadata.Genes[0]
 		endpoints = append(endpoints,
-			endpoint{"/api/genes/" + gene, http.StatusOK, false},
-			endpoint{"/api/genes/" + gene + "/stats", http.StatusOK, true},
-			endpoint{"/api/genes/" + gene + "/bins", http.StatusOK, true},
-			endpoint{"/tiles/0/0/0/expression/" + gene + ".png", http.StatusOK, false}, // Returns empty tile on error
+			endpoint{"/d/default/api/genes/" + gene, http.StatusOK, false},
+			endpoint{"/d/default/api/genes/" + gene + "/stats", http.StatusOK, true},
+			endpoint{"/d/default/api/genes/" + gene + "/bins", http.StatusOK, true},
+			endpoint{"/d/default/tiles/0/0/0/expression/" + gene + ".png", http.StatusOK, false}, // Returns empty tile on error
 		)
 	}
 
 	// Add category-specific endpoints if categories exist
 	for cat := range metadata.Categories {
 		endpoints = append(endpoints,
-			endpoint{"/api/categories/" + cat + "/colors", http.StatusOK, false},
-			endpoint{"/api/categories/" + cat + "/legend", http.StatusOK, false},
-			endpoint{"/tiles/0/0/0/category/" + cat + ".png", http.StatusOK, false},
+			endpoint{"/d/default/api/categories/" + cat + "/colors", http.StatusOK, false},
+			endpoint{"/d/default/api/categories/" + cat + "/legend", http.StatusOK, false},
+			endpoint{"/d/default/tiles/0/0/0/category/" + cat + ".png", http.StatusOK, false},
 		)
 		break // Only test one category
 	}

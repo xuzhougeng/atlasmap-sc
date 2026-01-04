@@ -125,14 +125,17 @@ soma-tiles/
 
 ## API Endpoints
 
+All API and Tiles endpoints require a dataset prefix `/d/{dataset}`. Use `GET /api/datasets` to list available datasets.
+
 ### Tiles
-- `GET /tiles/{z}/{x}/{y}.png` - Base tile
-- `GET /tiles/{z}/{x}/{y}/expression/{gene}.png` - Expression colored tile
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}.png` - Base tile
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png` - Expression colored tile
 
 ### Metadata
-- `GET /api/metadata` - Dataset metadata
-- `GET /api/genes` - List of pre-aggregated genes
-- `GET /api/categories` - Category information
+- `GET /api/datasets` - List available datasets (global)
+- `GET /d/{dataset}/api/metadata` - Dataset metadata
+- `GET /d/{dataset}/api/genes` - List of pre-aggregated genes
+- `GET /d/{dataset}/api/categories` - Category information
 
 ## Configuration
 
@@ -189,7 +192,6 @@ render:
 When multiple datasets are configured:
 - The frontend displays a dataset selector dropdown
 - Each dataset is accessible via `/d/{dataset}/api/...` and `/d/{dataset}/tiles/...`
-- Legacy routes (`/api/...`, `/tiles/...`) point to the default dataset
 
 ## License
 

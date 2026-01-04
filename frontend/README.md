@@ -144,37 +144,45 @@ interface AppState {
 
 ## API 端点
 
+所有 API 和 Tiles 端点均需在路径前加 `/d/{dataset}`。可通过 `GET /api/datasets` 获取数据集列表。
+
+### 数据集（全局）
+
+| 方法 | 端点 | 返回类型 | 描述 |
+|------|------|----------|------|
+| GET | `/api/datasets` | `DatasetsResponse` | 获取可用数据集列表 |
+
 ### 元数据与统计
 
 | 方法 | 端点 | 返回类型 | 描述 |
 |------|------|----------|------|
-| GET | `/api/metadata` | `Metadata` | 获取数据集元信息 |
-| GET | `/api/stats` | `Record<string, any>` | 获取统计信息 |
+| GET | `/d/{dataset}/api/metadata` | `Metadata` | 获取数据集元信息 |
+| GET | `/d/{dataset}/api/stats` | `Record<string, any>` | 获取统计信息 |
 
 ### 基因相关
 
 | 方法 | 端点 | 返回类型 | 描述 |
 |------|------|----------|------|
-| GET | `/api/genes` | `{ genes: string[], total: number }` | 获取所有基因列表 |
-| GET | `/api/genes/{gene}` | `GeneInfo` | 获取基因详情 |
-| GET | `/api/genes/{gene}/stats` | `GeneStats` | 获取基因表达统计 |
-| GET | `/api/genes/{gene}/bins?threshold=X&offset=Y&limit=Z` | `BinQueryResult` | 查询表达 Bin |
+| GET | `/d/{dataset}/api/genes` | `{ genes: string[], total: number }` | 获取所有基因列表 |
+| GET | `/d/{dataset}/api/genes/{gene}` | `GeneInfo` | 获取基因详情 |
+| GET | `/d/{dataset}/api/genes/{gene}/stats` | `GeneStats` | 获取基因表达统计 |
+| GET | `/d/{dataset}/api/genes/{gene}/bins?threshold=X&offset=Y&limit=Z` | `BinQueryResult` | 查询表达 Bin |
 
 ### 分类相关
 
 | 方法 | 端点 | 返回类型 | 描述 |
 |------|------|----------|------|
-| GET | `/api/categories` | `Record<string, CategoryInfo>` | 获取所有分类 |
-| GET | `/api/categories/{column}/colors` | `Record<string, string>` | 获取颜色映射 |
-| GET | `/api/categories/{column}/legend` | `CategoryLegendItem[]` | 获取图例数据 |
+| GET | `/d/{dataset}/api/categories` | `Record<string, CategoryInfo>` | 获取所有分类 |
+| GET | `/d/{dataset}/api/categories/{column}/colors` | `Record<string, string>` | 获取颜色映射 |
+| GET | `/d/{dataset}/api/categories/{column}/legend` | `CategoryLegendItem[]` | 获取图例数据 |
 
 ### 瓦片端点
 
 | 端点 | 描述 |
 |------|------|
-| `/tiles/{z}/{x}/{y}.png` | 基础瓦片 |
-| `/tiles/{z}/{x}/{y}/category/{column}.png` | 分类着色瓦片 |
-| `/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={scale}` | 表达着色瓦片 |
+| `/d/{dataset}/tiles/{z}/{x}/{y}.png` | 基础瓦片 |
+| `/d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png` | 分类着色瓦片 |
+| `/d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={scale}` | 表达着色瓦片 |
 
 ## 组件说明
 
@@ -202,7 +210,7 @@ npm install
 npm run dev
 ```
 
-开发服务器运行在 http://localhost:3000，自动代理 `/api` 和 `/tiles` 请求到后端 (http://localhost:8080)。
+开发服务器运行在 http://localhost:3000，自动代理 `/api` 和 `/d` 请求到后端 (http://localhost:8080)。
 
 ### 构建生产版本
 

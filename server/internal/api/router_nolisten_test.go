@@ -79,7 +79,7 @@ func TestGeneStatsEndpoint_NoListen(t *testing.T) {
 		gene = "ENSG00000167286"
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/genes/"+gene+"/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/d/default/api/genes/"+gene+"/stats", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

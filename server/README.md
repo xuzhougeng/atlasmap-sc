@@ -98,34 +98,23 @@ render:
 
 ### Tiles（PNG）
 
-默认数据集（旧路由，向后兼容）：
-- `GET /tiles/{z}/{x}/{y}.png`
-- `GET /tiles/{z}/{x}/{y}/category/{column}.png`
-- `GET /tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
-
-按数据集访问（多数据集路由）：
+所有 Tiles 接口均需在路径前加 `/d/{dataset}`：
 - `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`
 - `GET /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png`
 - `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
 
 ### API（JSON）
 
-默认数据集（旧路由，向后兼容）：
-- `GET /api/metadata`
-- `GET /api/stats`
-- `GET /api/genes`
-- `GET /api/genes/{gene}`
-- `GET /api/genes/{gene}/stats`
-- `GET /api/genes/{gene}/bins?threshold=&offset=&limit=`
-- `GET /api/categories`
-- `GET /api/categories/{column}/colors`
-- `GET /api/categories/{column}/legend`
-
-按数据集访问（多数据集路由）：
+所有 API 接口均需在路径前加 `/d/{dataset}`：
 - `GET /d/{dataset}/api/metadata`
 - `GET /d/{dataset}/api/stats`
 - `GET /d/{dataset}/api/genes`
-- 等等...
+- `GET /d/{dataset}/api/genes/{gene}`
+- `GET /d/{dataset}/api/genes/{gene}/stats`
+- `GET /d/{dataset}/api/genes/{gene}/bins?threshold=&offset=&limit=`
+- `GET /d/{dataset}/api/categories`
+- `GET /d/{dataset}/api/categories/{column}/colors`
+- `GET /d/{dataset}/api/categories/{column}/legend`
 
 ## Health
 
@@ -146,43 +135,46 @@ OK
 ## Tiles（PNG）
 
 > `{z}/{x}/{y}` 使用 Leaflet 标准 tile 坐标：`z` 为缩放级别，`x/y` 为 tile 索引。
+> 所有 Tiles 接口均需在路径前加 `/d/{dataset}`。
 
-### `GET /tiles/{z}/{x}/{y}.png`
+### `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`
 
 基础 tile（当前按 bin 的 cell_count 强度渲染）。
 
 ```bash
-curl -sS -o tile.png "http://localhost:8080/tiles/0/0/0.png"
+curl -sS -o tile.png "http://localhost:8080/d/default/tiles/0/0/0.png"
 file tile.png
 ```
 
-### `GET /tiles/{z}/{x}/{y}/category/{column}.png`
+### `GET /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png`
 
-按分类字段着色（例如 `cell_type`）。`column` 来自 `/api/categories` 的 key。
+按分类字段着色（例如 `cell_type`）。`column` 来自 `/d/{dataset}/api/categories` 的 key。
 
 ```bash
-curl -sS -o cell_type.png "http://localhost:8080/tiles/0/0/0/category/cell_type.png"
+curl -sS -o cell_type.png "http://localhost:8080/d/default/tiles/0/0/0/category/cell_type.png"
 ```
 
-### `GET /tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
+### `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
 
 按基因表达着色。
 
-- `gene`：基因名（通常需要在预聚合基因列表内，见 `/api/genes`）
+- `gene`：基因名（通常需要在预聚合基因列表内，见 `/d/{dataset}/api/genes`）
 - `colormap`：可选，默认 `viridis`。支持：`viridis`、`plasma`、`inferno`、`magma`
 
 ```bash
-curl -sS -o expr.png "http://localhost:8080/tiles/0/0/0/expression/CD3D.png?colormap=viridis"
+curl -sS -o expr.png "http://localhost:8080/d/default/tiles/0/0/0/expression/CD3D.png?colormap=viridis"
 ```
 
 ## 元数据与统计（JSON）
 
-### `GET /api/metadata`
+> 所有 API 接口均需在路径前加 `/d/{dataset}`。
+
+### `GET /d/{dataset}/api/metadata`
 
 返回 Zarr 元数据（由 `metadata.json` 加载，字段名以 Go struct 的 json tag 为准）。
 
 ```bash
-curl -sS "http://localhost:8080/api/metadata"
+curl -sS "http://localhost:8080/d/default/api/metadata"
 ```
 
 代表性响应（示例）：
@@ -223,17 +215,17 @@ curl -sS "http://localhost:8080/api/metadata"
 }
 ```
 
-### `GET /api/stats`
+### `GET /d/{dataset}/api/stats`
 
 返回轻量统计信息：
 
 ```bash
-curl -sS "http://localhost:8080/api/stats"
+curl -sS "http://localhost:8080/d/default/api/stats"
 ```
 
 字段说明：
 
-- `n_genes`：**预聚合基因数**（与 `/api/metadata` 的 `n_genes_preaggregated` 一致）
+- `n_genes`：**预聚合基因数**（与 `/d/{dataset}/api/metadata` 的 `n_genes_preaggregated` 一致）
 
 代表性响应（示例）：
 
@@ -248,12 +240,12 @@ curl -sS "http://localhost:8080/api/stats"
 
 ## 基因相关（JSON）
 
-### `GET /api/genes`
+### `GET /d/{dataset}/api/genes`
 
 返回预聚合基因列表（用于表达渲染/查询）。
 
 ```bash
-curl -sS "http://localhost:8080/api/genes"
+curl -sS "http://localhost:8080/d/default/api/genes"
 ```
 
 代表性响应（示例）：
@@ -266,12 +258,12 @@ curl -sS "http://localhost:8080/api/genes"
 }
 ```
 
-### `GET /api/genes/{gene}`
+### `GET /d/{dataset}/api/genes/{gene}`
 
 查询单个基因的索引信息（仅对预聚合基因生效；不存在则 404）。
 
 ```bash
-curl -sS "http://localhost:8080/api/genes/CD3D"
+curl -sS "http://localhost:8080/d/default/api/genes/CD3D"
 ```
 
 代表性响应（示例）：
@@ -284,12 +276,12 @@ curl -sS "http://localhost:8080/api/genes/CD3D"
 }
 ```
 
-### `GET /api/genes/{gene}/stats`
+### `GET /d/{dataset}/api/genes/{gene}/stats`
 
 基因表达统计（使用 zoom=0 的表达数组计算）。
 
 ```bash
-curl -sS "http://localhost:8080/api/genes/CD3D/stats"
+curl -sS "http://localhost:8080/d/default/api/genes/CD3D/stats"
 ```
 
 代表性响应（示例）：
@@ -306,7 +298,7 @@ curl -sS "http://localhost:8080/api/genes/CD3D/stats"
 }
 ```
 
-### `GET /api/genes/{gene}/bins?threshold=&offset=&limit=`
+### `GET /d/{dataset}/api/genes/{gene}/bins?threshold=&offset=&limit=`
 
 查询表达量大于等于阈值的 bins（使用 zoom=0 的表达数组，返回分页结果）。
 
@@ -322,7 +314,7 @@ Query 参数：
 - `500`：后端查询失败（**当前实现里 gene 不存在也会走 500**，错误文本类似 `gene not found: XXX`）
 
 ```bash
-curl -sS "http://localhost:8080/api/genes/CD3D/bins?threshold=1.0&offset=0&limit=2"
+curl -sS "http://localhost:8080/d/default/api/genes/CD3D/bins?threshold=1.0&offset=0&limit=2"
 ```
 
 代表性响应（示例）：
@@ -361,12 +353,12 @@ curl -sS "http://localhost:8080/api/genes/CD3D/bins?threshold=1.0&offset=0&limit
 
 ## 分类相关（JSON）
 
-### `GET /api/categories`
+### `GET /d/{dataset}/api/categories`
 
 返回所有可用分类字段及其取值（来自 metadata）。
 
 ```bash
-curl -sS "http://localhost:8080/api/categories"
+curl -sS "http://localhost:8080/d/default/api/categories"
 ```
 
 代表性响应（示例）：
@@ -384,12 +376,12 @@ curl -sS "http://localhost:8080/api/categories"
 }
 ```
 
-### `GET /api/categories/{column}/colors`
+### `GET /d/{dataset}/api/categories/{column}/colors`
 
 返回该分类字段的颜色映射（value -> hex color）。
 
 ```bash
-curl -sS "http://localhost:8080/api/categories/cell_type/colors"
+curl -sS "http://localhost:8080/d/default/api/categories/cell_type/colors"
 ```
 
 代表性响应（示例）：
@@ -402,12 +394,12 @@ curl -sS "http://localhost:8080/api/categories/cell_type/colors"
 }
 ```
 
-### `GET /api/categories/{column}/legend`
+### `GET /d/{dataset}/api/categories/{column}/legend`
 
 返回 legend 数组（用于前端渲染图例）。
 
 ```bash
-curl -sS "http://localhost:8080/api/categories/cell_type/legend"
+curl -sS "http://localhost:8080/d/default/api/categories/cell_type/legend"
 ```
 
 代表性响应（示例）：

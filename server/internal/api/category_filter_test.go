@@ -81,7 +81,7 @@ func TestParseCategoryFilter(t *testing.T) {
 
 func TestParseCategoryFilterBody(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(""))
+		r := httptest.NewRequest(http.MethodPost, "/d/default/tiles/0/0/0/category/cell_type.png", strings.NewReader(""))
 		filter, ok, err := parseCategoryFilterBody(r)
 		if err != nil {
 			t.Fatalf("expected err=nil, got %v", err)
@@ -95,7 +95,7 @@ func TestParseCategoryFilterBody(t *testing.T) {
 	})
 
 	t.Run("jsonArray", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`["T","B"]`))
+		r := httptest.NewRequest(http.MethodPost, "/d/default/tiles/0/0/0/category/cell_type.png", strings.NewReader(`["T","B"]`))
 		filter, ok, err := parseCategoryFilterBody(r)
 		if err != nil {
 			t.Fatalf("expected err=nil, got %v", err)
@@ -110,7 +110,7 @@ func TestParseCategoryFilterBody(t *testing.T) {
 	})
 
 	t.Run("jsonObject", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`{"categories":["T","B"]}`))
+		r := httptest.NewRequest(http.MethodPost, "/d/default/tiles/0/0/0/category/cell_type.png", strings.NewReader(`{"categories":["T","B"]}`))
 		filter, ok, err := parseCategoryFilterBody(r)
 		if err != nil {
 			t.Fatalf("expected err=nil, got %v", err)
@@ -125,7 +125,7 @@ func TestParseCategoryFilterBody(t *testing.T) {
 	})
 
 	t.Run("formEncodedJson", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`categories=["T","B"]`))
+		r := httptest.NewRequest(http.MethodPost, "/d/default/tiles/0/0/0/category/cell_type.png", strings.NewReader(`categories=["T","B"]`))
 		filter, ok, err := parseCategoryFilterBody(r)
 		if err != nil {
 			t.Fatalf("expected err=nil, got %v", err)
