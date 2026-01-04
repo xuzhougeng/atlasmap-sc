@@ -19,7 +19,6 @@ export interface MapConfig {
 export class MapController {
     private map: L.Map;
     private config: MapConfig;
-    private tileLayer: L.TileLayer;
     private expressionLayer: L.TileLayer | null = null;
     private categoryLayer: L.TileLayer | null = null;
     private bounds: L.LatLngBounds;
@@ -55,17 +54,8 @@ export class MapController {
         this.map.fitBounds(this.bounds);
         this.map.setMaxBounds(this.bounds.pad(0.1));
 
-        // Create base tile layer
-        this.tileLayer = L.tileLayer(
-            `${config.apiUrl}/tiles/{z}/{x}/{y}.png`,
-            {
-                tileSize: config.tileSize,
-                noWrap: true,
-                bounds: this.bounds,
-                maxZoom: config.maxZoom,
-                minZoom: 0,
-            }
-        ).addTo(this.map);
+        // Note: No base tile layer is created here.
+        // Tiles are loaded on-demand via setCategoryColumn or setExpressionGene.
 
         // Add zoom info display
         this.addZoomDisplay();
@@ -228,7 +218,6 @@ export class MapController {
      * Refresh tiles (e.g., after filter change)
      */
     refreshTiles(): void {
-        this.tileLayer.redraw();
         if (this.expressionLayer) {
             this.expressionLayer.redraw();
         }
