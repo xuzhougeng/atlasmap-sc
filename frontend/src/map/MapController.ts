@@ -31,6 +31,8 @@ export class MapController {
     private bounds: L.LatLngBounds;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
+    private currentExpressionGene: string | null = null;
+    private currentExpressionColorScale: string | null = null;
     // null => no filter (show all); [] => filter to none (show none)
     private selectedCategories: string[] | null = null;
 
@@ -131,6 +133,8 @@ export class MapController {
         // Bring expression layer to front
         this.expressionLayer.bringToFront();
         this.currentColorMode = 'expression';
+        this.currentExpressionGene = gene;
+        this.currentExpressionColorScale = colorScale;
     }
 
     /**
@@ -141,6 +145,8 @@ export class MapController {
             this.map.removeLayer(this.expressionLayer);
             this.expressionLayer = null;
         }
+        this.currentExpressionGene = null;
+        this.currentExpressionColorScale = null;
     }
 
     /**
@@ -208,6 +214,66 @@ export class MapController {
      */
     getCurrentCategory(): string | null {
         return this.currentCategory;
+    }
+
+    /**
+     * Get current expression gene (if in expression mode)
+     */
+    getCurrentExpressionGene(): string | null {
+        return this.currentExpressionGene;
+    }
+
+    /**
+     * Get current expression colormap (if in expression mode)
+     */
+    getCurrentExpressionColorScale(): string | null {
+        return this.currentExpressionColorScale;
+    }
+
+    /**
+     * Get configured tile size
+     */
+    getTileSize(): number {
+        return this.config.tileSize;
+    }
+
+    /**
+     * Get max native zoom supported by backend tiles
+     */
+    getMaxNativeZoom(): number {
+        return this.config.maxNativeZoom;
+    }
+
+    /**
+     * Get configured data bounds (numeric)
+     */
+    getDataBounds(): MapConfig['bounds'] {
+        return this.config.bounds;
+    }
+
+    /**
+     * Build a concrete tile URL for the current display mode.
+     * Returns null when no tile layer is active (e.g., after resetView()).
+     */
+    getTileUrl(z: number, x: number, y: number): string | null {
+        const apiUrl = this.config.apiUrl.replace(/\/$/, '');
+        if (this.currentColorMode === 'expression' && this.currentExpressionGene) {
+            const gene = encodeURIComponent(this.currentExpressionGene);
+            const colormap = encodeURIComponent(this.currentExpressionColorScale ?? 'viridis');
+            return `${apiUrl}/tiles/${z}/${x}/${y}/expression/${gene}.png?colormap=${colormap}`;
+        }
+
+        if (this.currentColorMode === 'category' && this.currentCategory) {
+            const column = encodeURIComponent(this.currentCategory);
+            let url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png`;
+            if (this.selectedCategories !== null) {
+                const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
+                url += `?categories=${categories}`;
+            }
+            return url;
+        }
+
+        return null;
     }
 
     /**
