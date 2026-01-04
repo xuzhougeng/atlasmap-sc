@@ -21,6 +21,12 @@ uv venv
 source .venv/bin/activate
 uv pip install -e .
 
+# 如果出现硬链接警告（跨文件系统时），使用：
+uv pip install -e . --link-mode=copy
+
+# 重新安装（强制重装）
+uv pip install -e . --reinstall
+
 # 或使用 pip
 pip install -e .
 ```
@@ -30,6 +36,9 @@ pip install -e .
 ### 命令行使用
 
 ```bash
+# 下载示例数据
+wget -O data.h5ad https://datasets.cellxgene.cziscience.com/c3d1a5e6-780b-4fe9-a39b-1864f927e87b.h5ad
+
 # 基本用法
 soma-preprocess run -i data.h5ad -o ./output
 
@@ -214,6 +223,7 @@ output/
 - scipy >= 1.11.0
 - pandas >= 2.0.0
 - click >= 8.1.0
+- scikit-misc >= 0.1.4（HVG 计算需要）
 
 ## 许可证
 

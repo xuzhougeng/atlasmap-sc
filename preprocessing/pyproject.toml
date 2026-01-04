@@ -35,6 +35,7 @@ dependencies = [
     "tqdm>=4.65.0",
     "pyyaml>=6.0",
     "blosc2>=2.3.0",
+    "scikit-misc>=0.1.4",
 ]
 
 [project.optional-dependencies]
