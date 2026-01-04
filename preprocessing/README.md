@@ -92,9 +92,16 @@ soma-preprocess from-config -c config.yaml
 
 验证预处理输出，生成静态可视化图片。
 
+> 提示：这里的 `zoom` 表示“分箱分辨率”（越大越细）。以默认 `--zoom-levels 8` 为例：
+> - `zoom=0`：1×1 个 bin，通常只会看到 1 个点/块（非常粗）
+> - `zoom=7`：128×128 个 bin，能看到完整的 UMAP 结构（建议作为默认检查/展示层）
+
 ```bash
-# 基本用法（随机选择 3 个基因）
+# 基本用法（默认会画 3,5,7 三个 zoom，便于对比；随机选择 3 个基因）
 soma-preprocess visualize -i ./output/zarr -o ./figures
+
+# 推荐：只看最高分辨率（最接近前端打开时的全局效果）
+soma-preprocess visualize -i ./output/zarr -o ./figures -z 7
 
 # 指定 zoom 级别和基因
 soma-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
@@ -107,7 +114,7 @@ soma-preprocess visualize -i ./output/zarr -o ./figures -f svg --dpi 300
 |------|------|--------|------|
 | `--input` | `-i` | 必填 | Zarr 输出目录路径 |
 | `--output` | `-o` | 必填 | 图片输出目录 |
-| `--zoom-levels` | `-z` | `3,5,7` | 要可视化的 zoom 级别（逗号分隔） |
+| `--zoom-levels` | `-z` | `3,5,7` | 要可视化的 zoom 级别（逗号分隔）；建议至少包含最高 zoom（如 zoom_levels=8 则为 7） |
 | `--category` | `-c` | 全部 | 要可视化的类别列 |
 | `--gene` | `-g` | 随机选择 | 要可视化的基因（可多次指定） |
 | `--n-genes` | | `3` | 随机选择的基因数量 |

@@ -51,14 +51,14 @@ make preprocess INPUT=path/to/input.h5ad
 ```bash
 cd preprocessing
 pip install -e .
-soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 8 -g 500
+soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 10 -g 500
 ```
 
 常用参数（与代码一致，见 `preprocessing/soma_tiles_preprocess/cli.py`）：
 
 - `--umap-key`：`.h5ad` 里 `adata.obsm[...]` 的坐标键（默认 `X_umap`）
 - `--category/-c`：要写入的分类字段（来自 `adata.obs`，可多次指定）
-- `--zoom-levels/-z`：缩放层级数（默认 8，范围 1–12）
+- `--zoom-levels/-z`：缩放层级数（默认 8，从0开始, 一直到设置的参数为止)
 - `--n-genes/-g`：预聚合基因数（默认 500）
 - `--all-expressed/-a`：使用所有表达的基因而非 top N 基因
 - `--min-cells`：基因至少在多少个细胞中表达（默认 3，仅与 `--all-expressed` 一起使用）
@@ -77,9 +77,16 @@ soma-preprocess from-config -c config.yaml
 
 使用 `visualize` 命令生成静态图片，验证预处理输出是否正确：
 
+> 提示：这里的 `zoom` 表示“分箱分辨率”（越大越细）。以默认 `--zoom-levels 8` 为例：
+> - `zoom=0`：1×1 个 bin，画出来通常只有 1 个点/块（非常粗）
+> - `zoom=7`：128×128 个 bin，能看到完整的 UMAP 结构（建议作为默认检查/展示层）
+
 ```bash
-# 基本用法（随机选择 3 个基因）
+# 基本用法（默认会画 3,5,7 三个 zoom，便于对比；随机选择 3 个基因）
 soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures
+
+# 推荐：只看最高分辨率（最接近前端打开时的全局效果）
+soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 7
 
 # 指定 zoom 级别和基因
 soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 3,5,7 -g CD3D -g CD8A
@@ -89,10 +96,10 @@ soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 3,5
 ```
 figures/
 ├── category/          # 按类别着色
-│   ├── cell_type_zoom_3.png
+│   ├── cell_type_zoom_7.png
 │   └── cell_type_multi_zoom.png
 └── expression/        # 按基因表达着色
-    ├── GENE1_zoom_3.png
+    ├── GENE1_zoom_7.png
     └── GENE1_multi_zoom.png
 ```
 
