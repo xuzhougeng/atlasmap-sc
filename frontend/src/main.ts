@@ -1,5 +1,9 @@
 // SOMA-Tiles Frontend Entry Point
 
+// Import CSS (Leaflet must come first so app styles can override)
+import 'leaflet/dist/leaflet.css';
+import './styles/main.css';
+
 import { MapController } from './map/MapController';
 import { GeneSelector } from './components/GeneSelector';
 import { CategoryFilter } from './components/CategoryFilter';
