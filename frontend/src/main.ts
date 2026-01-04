@@ -8,6 +8,7 @@ import { CategoryColumnSelector } from './components/CategoryColumnSelector';
 import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
 import { ColorScaleSelector } from './components/ColorScaleSelector';
+import { SidebarResizer } from './components/SidebarResizer';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 
@@ -227,6 +228,13 @@ async function init() {
 
     // Set up toolbar buttons
     setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel!, defaultCategory);
+
+    // Initialize sidebar resizer
+    const sidebarResizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.querySelector('.sidebar') as HTMLElement;
+    if (sidebarResizer && sidebar) {
+        new SidebarResizer(sidebarResizer, sidebar);
+    }
 
     console.log('SOMA-Tiles initialized successfully');
 }

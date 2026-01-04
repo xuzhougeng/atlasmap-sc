@@ -32,6 +32,7 @@ export interface CategoryLegendItem {
     value: string;
     color: string;
     index: number;
+    cell_count: number;
 }
 
 export interface BinExpressionInfo {

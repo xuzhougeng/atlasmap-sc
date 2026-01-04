@@ -469,6 +469,13 @@ body {
     color: var(--text-primary);
 }
 
+.legend-count {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 /* Cell Query Panel */
 .cell-query-panel {
     display: flex;
@@ -848,4 +855,18 @@ body {
 
 .tab-section-title:first-child {
     margin-top: 0;
+}
+
+/* Sidebar Resizer */
+.sidebar-resizer {
+    width: 4px;
+    cursor: col-resize;
+    background-color: var(--border-color);
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+    background-color: var(--accent-primary);
 }

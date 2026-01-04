@@ -47,6 +47,7 @@ export class CategoryLegend {
                         <div class="legend-item" data-value="${item.value}" data-index="${item.index}">
                             <span class="legend-color" style="background-color: ${item.color}"></span>
                             <span class="legend-label" title="${item.value}">${item.value}</span>
+                            <span class="legend-count">${item.cell_count.toLocaleString()}</span>
                         </div>
                     `).join('')}
                 </div>

@@ -316,9 +316,10 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 
 // CategoryLegendItem represents a legend item for a category.
 type CategoryLegendItem struct {
-	Value string `json:"value"`
-	Color string `json:"color"`
-	Index int    `json:"index"`
+	Value     string `json:"value"`
+	Color     string `json:"color"`
+	Index     int    `json:"index"`
+	CellCount int    `json:"cell_count"`
 }
 
 // GetCategoryLegend returns legend data for a category column.
@@ -333,12 +334,37 @@ func (s *TileService) GetCategoryLegend(column string) ([]CategoryLegendItem, er
 		return nil, err
 	}
 
+	// Load bins and category data to calculate cell counts
+	if err := s.loadBins(); err != nil {
+		return nil, err
+	}
+
+	catAll, err := s.categoryForColumn(column)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate cell counts per category
+	nCats := len(catInfo.Values)
+	cellCounts := make([]int, nCats)
+	n := len(s.bins)
+	if len(catAll) < n {
+		n = len(catAll)
+	}
+	for i := 0; i < n; i++ {
+		catIdx := catAll[i]
+		if catIdx >= 0 && catIdx < nCats {
+			cellCounts[catIdx] += int(s.bins[i].CellCount)
+		}
+	}
+
 	legend := make([]CategoryLegendItem, len(catInfo.Values))
 	for i, value := range catInfo.Values {
 		legend[i] = CategoryLegendItem{
-			Value: value,
-			Color: colors[value],
-			Index: i,
+			Value:     value,
+			Color:     colors[value],
+			Index:     i,
+			CellCount: cellCounts[i],
 		}
 	}
 
