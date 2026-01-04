@@ -58,6 +58,8 @@ soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 8 -g 500
 - `--category/-c`：要写入的分类字段（来自 `adata.obs`，可多次指定）
 - `--zoom-levels/-z`：缩放层级数（默认 8，范围 1–12）
 - `--n-genes/-g`：预聚合基因数（默认 500）
+- `--all-expressed/-a`：使用所有表达的基因而非 top N 基因
+- `--min-cells`：基因至少在多少个细胞中表达（默认 3，仅与 `--all-expressed` 一起使用）
 
 如果需要指定 marker genes/更多高级参数：先生成配置文件再运行：
 
@@ -66,6 +68,29 @@ cd preprocessing
 soma-preprocess init-config -o config.yaml
 # 编辑 config.yaml（如 marker_genes / category_columns 等）
 soma-preprocess from-config -c config.yaml
+```
+
+### 1.5) 验证预处理结果（可选）
+
+使用 `visualize` 命令生成静态图片，验证预处理输出是否正确：
+
+```bash
+# 基本用法（随机选择 3 个基因）
+soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures
+
+# 指定 zoom 级别和基因
+soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 3,5,7 -g CD3D -g CD8A
+```
+
+输出结构：
+```
+figures/
+├── category/          # 按类别着色
+│   ├── cell_type_zoom_3.png
+│   └── cell_type_multi_zoom.png
+└── expression/        # 按基因表达着色
+    ├── GENE1_zoom_3.png
+    └── GENE1_multi_zoom.png
 ```
 
 ### 2) 启动后端（Go）

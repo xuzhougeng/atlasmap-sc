@@ -86,6 +86,48 @@ soma-preprocess from-config -c config.yaml
 | `--name` | | | 数据集名称 |
 | `--verbose` | `-v` | | 启用详细日志 |
 
+### `soma-preprocess visualize`
+
+验证预处理输出，生成静态可视化图片。
+
+```bash
+# 基本用法（随机选择 3 个基因）
+soma-preprocess visualize -i ./output/zarr -o ./figures
+
+# 指定 zoom 级别和基因
+soma-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
+
+# 指定格式和分辨率
+soma-preprocess visualize -i ./output/zarr -o ./figures -f svg --dpi 300
+```
+
+| 参数 | 简写 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--input` | `-i` | 必填 | Zarr 输出目录路径 |
+| `--output` | `-o` | 必填 | 图片输出目录 |
+| `--zoom-levels` | `-z` | `3,5,7` | 要可视化的 zoom 级别（逗号分隔） |
+| `--category` | `-c` | 全部 | 要可视化的类别列 |
+| `--gene` | `-g` | 随机选择 | 要可视化的基因（可多次指定） |
+| `--n-genes` | | `3` | 随机选择的基因数量 |
+| `--format` | `-f` | `png` | 输出格式（png/svg/pdf） |
+| `--dpi` | | `150` | 图片分辨率 |
+| `--verbose` | `-v` | | 启用详细日志 |
+
+输出结构：
+```
+figures/
+├── category/
+│   ├── cell_type_zoom_3.png
+│   ├── cell_type_zoom_5.png
+│   ├── cell_type_zoom_7.png
+│   └── cell_type_multi_zoom.png
+└── expression/
+    ├── GENE1_zoom_3.png
+    ├── GENE1_zoom_5.png
+    ├── GENE1_zoom_7.png
+    └── GENE1_multi_zoom.png
+```
+
 ## 配置文件格式
 
 ```yaml

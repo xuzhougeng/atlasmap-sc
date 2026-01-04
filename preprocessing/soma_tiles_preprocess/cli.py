@@ -230,5 +230,124 @@ def init_config(output_path: Path):
     click.echo(f"Configuration saved to: {output_path}")
 
 
+@main.command()
+@click.option(
+    "--input", "-i",
+    "input_dir",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to Zarr output directory (contains bins.zarr, metadata.json)",
+)
+@click.option(
+    "--output", "-o",
+    "output_dir",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory for figures",
+)
+@click.option(
+    "--zoom-levels", "-z",
+    "zoom_levels_str",
+    default="3,5,7",
+    help="Comma-separated zoom levels to visualize (default: 3,5,7)",
+)
+@click.option(
+    "--category", "-c",
+    "categories",
+    multiple=True,
+    help="Category columns to visualize (default: all)",
+)
+@click.option(
+    "--gene", "-g",
+    "genes",
+    multiple=True,
+    help="Genes to visualize (default: random selection)",
+)
+@click.option(
+    "--n-genes",
+    default=3,
+    type=int,
+    help="Number of random genes to visualize if --gene not specified",
+)
+@click.option(
+    "--format", "-f",
+    "fmt",
+    default="png",
+    type=click.Choice(["png", "svg", "pdf"]),
+    help="Output format (default: png)",
+)
+@click.option(
+    "--dpi",
+    default=150,
+    type=int,
+    help="Figure resolution (default: 150)",
+)
+@click.option(
+    "--verbose", "-v",
+    is_flag=True,
+    help="Enable verbose logging",
+)
+def visualize(
+    input_dir: Path,
+    output_dir: Path,
+    zoom_levels_str: str,
+    categories: tuple[str, ...],
+    genes: tuple[str, ...],
+    n_genes: int,
+    fmt: str,
+    dpi: int,
+    verbose: bool,
+):
+    """Visualize preprocessed Zarr output for validation.
+
+    Generate static images showing category distributions and gene expression
+    across multiple zoom levels.
+
+    Example:
+        soma-preprocess visualize -i ./output/zarr -o ./figures
+        soma-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
+    """
+    setup_logging(verbose)
+    logger = logging.getLogger(__name__)
+
+    from .visualization import ZarrVisualizer
+
+    # Parse zoom levels
+    try:
+        zoom_levels = [int(z.strip()) for z in zoom_levels_str.split(",")]
+    except ValueError:
+        raise click.ClickException(f"Invalid zoom levels: {zoom_levels_str}")
+
+    logger.info(f"Visualizing Zarr data from: {input_dir}")
+    logger.info(f"Output directory: {output_dir}")
+    logger.info(f"Zoom levels: {zoom_levels}")
+
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize visualizer
+    try:
+        visualizer = ZarrVisualizer(input_dir)
+    except Exception as e:
+        logger.error(f"Failed to load Zarr data: {e}")
+        raise click.ClickException(str(e))
+
+    # Generate report
+    try:
+        visualizer.generate_report(
+            output_dir=output_dir,
+            zoom_levels=zoom_levels,
+            categories=list(categories) if categories else None,
+            genes=list(genes) if genes else None,
+            n_random_genes=n_genes,
+            fmt=fmt,
+            dpi=dpi,
+        )
+        logger.info("Visualization completed successfully!")
+    except Exception as e:
+        logger.error(f"Visualization failed: {e}")
+        raise click.ClickException(str(e))
+
+
 if __name__ == "__main__":
     main()
