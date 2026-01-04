@@ -2,7 +2,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -10,7 +12,7 @@ import (
 // Config represents the server configuration.
 type Config struct {
 	Server ServerConfig `yaml:"server"`
-	Data   DataConfig   `yaml:"data"`
+	Data   DataConfig   `yaml:"-"` // Custom unmarshal
 	Cache  CacheConfig  `yaml:"cache"`
 	Render RenderConfig `yaml:"render"`
 }
@@ -21,10 +23,17 @@ type ServerConfig struct {
 	CORSOrigins []string `yaml:"cors_origins"`
 }
 
-// DataConfig contains data source settings.
-type DataConfig struct {
+// DatasetConfig contains paths for a single dataset.
+type DatasetConfig struct {
 	ZarrPath string `yaml:"zarr_path"`
 	SomaPath string `yaml:"soma_path"`
+}
+
+// DataConfig contains data source settings (supports legacy single or multi-dataset).
+type DataConfig struct {
+	Datasets       map[string]DatasetConfig
+	DefaultDataset string
+	DatasetOrder   []string // preserves YAML key order
 }
 
 // CacheConfig contains caching settings.
@@ -39,6 +48,14 @@ type RenderConfig struct {
 	DefaultColormap string `yaml:"default_colormap"`
 }
 
+// rawConfig is used for initial YAML parsing.
+type rawConfig struct {
+	Server ServerConfig   `yaml:"server"`
+	Data   yaml.Node      `yaml:"data"`
+	Cache  CacheConfig    `yaml:"cache"`
+	Render RenderConfig   `yaml:"render"`
+}
+
 // Load reads configuration from a YAML file.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -47,15 +64,100 @@ func Load(path string) (*Config, error) {
 		return DefaultConfig(), nil
 	}
 
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	var raw rawConfig
+	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
-	// Apply defaults for missing values
-	applyDefaults(&cfg)
+	dataConfig, err := parseDataConfig(&raw.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse data config: %w", err)
+	}
 
-	return &cfg, nil
+	cfg := &Config{
+		Server: raw.Server,
+		Data:   *dataConfig,
+		Cache:  raw.Cache,
+		Render: raw.Render,
+	}
+
+	applyDefaults(cfg)
+	return cfg, nil
+}
+
+// parseDataConfig handles both legacy (zarr_path/soma_path) and multi-dataset formats.
+func parseDataConfig(node *yaml.Node) (*DataConfig, error) {
+	if node == nil || node.Kind == 0 {
+		// No data section; return default single dataset
+		return &DataConfig{
+			Datasets: map[string]DatasetConfig{
+				"default": {
+					ZarrPath: "./data/preprocessed/zarr/bins.zarr",
+					SomaPath: "./data/soma",
+				},
+			},
+			DefaultDataset: "default",
+			DatasetOrder:   []string{"default"},
+		}, nil
+	}
+
+	if node.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("data section must be a mapping")
+	}
+
+	// Check if this is legacy format (has zarr_path or soma_path as direct keys)
+	isLegacy := false
+	for i := 0; i < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		if key == "zarr_path" || key == "soma_path" {
+			isLegacy = true
+			break
+		}
+	}
+
+	if isLegacy {
+		var ds DatasetConfig
+		if err := node.Decode(&ds); err != nil {
+			return nil, fmt.Errorf("failed to parse legacy data config: %w", err)
+		}
+		return &DataConfig{
+			Datasets:       map[string]DatasetConfig{"default": ds},
+			DefaultDataset: "default",
+			DatasetOrder:   []string{"default"},
+		}, nil
+	}
+
+	// Multi-dataset format: each key is a dataset ID
+	datasets := make(map[string]DatasetConfig)
+	var order []string
+
+	for i := 0; i < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+
+		datasetID := keyNode.Value
+		if datasetID == "" {
+			continue
+		}
+
+		var ds DatasetConfig
+		if err := valNode.Decode(&ds); err != nil {
+			return nil, fmt.Errorf("failed to parse dataset %q: %w", datasetID, err)
+		}
+
+		datasets[datasetID] = ds
+		order = append(order, datasetID)
+	}
+
+	if len(datasets) == 0 {
+		return nil, fmt.Errorf("no datasets defined in data section")
+	}
+
+	return &DataConfig{
+		Datasets:       datasets,
+		DefaultDataset: order[0], // First dataset in YAML order is default
+		DatasetOrder:   order,
+	}, nil
 }
 
 // DefaultConfig returns the default configuration.
@@ -66,8 +168,14 @@ func DefaultConfig() *Config {
 			CORSOrigins: []string{"http://localhost:3000", "http://localhost:5173"},
 		},
 		Data: DataConfig{
-			ZarrPath: "./data/preprocessed/zarr/bins.zarr",
-			SomaPath: "./data/soma",
+			Datasets: map[string]DatasetConfig{
+				"default": {
+					ZarrPath: "./data/preprocessed/zarr/bins.zarr",
+					SomaPath: "./data/soma",
+				},
+			},
+			DefaultDataset: "default",
+			DatasetOrder:   []string{"default"},
 		},
 		Cache: CacheConfig{
 			TileSizeMB:     512,
@@ -89,9 +197,6 @@ func applyDefaults(cfg *Config) {
 	if len(cfg.Server.CORSOrigins) == 0 {
 		cfg.Server.CORSOrigins = defaults.Server.CORSOrigins
 	}
-	if cfg.Data.ZarrPath == "" {
-		cfg.Data.ZarrPath = defaults.Data.ZarrPath
-	}
 	if cfg.Cache.TileSizeMB == 0 {
 		cfg.Cache.TileSizeMB = defaults.Cache.TileSizeMB
 	}
@@ -104,4 +209,26 @@ func applyDefaults(cfg *Config) {
 	if cfg.Render.DefaultColormap == "" {
 		cfg.Render.DefaultColormap = defaults.Render.DefaultColormap
 	}
+
+	// Apply defaults to datasets with missing paths
+	for id, ds := range cfg.Data.Datasets {
+		if ds.ZarrPath == "" {
+			ds.ZarrPath = defaults.Data.Datasets["default"].ZarrPath
+			cfg.Data.Datasets[id] = ds
+		}
+	}
+}
+
+// DatasetIDs returns dataset IDs in config order.
+func (c *DataConfig) DatasetIDs() []string {
+	if len(c.DatasetOrder) > 0 {
+		return c.DatasetOrder
+	}
+	// Fallback: sorted keys
+	ids := make([]string, 0, len(c.Datasets))
+	for id := range c.Datasets {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }

@@ -12,6 +12,7 @@ import (
 
 // TileServiceConfig contains tile service configuration.
 type TileServiceConfig struct {
+	DatasetID  string
 	ZarrReader *zarr.Reader
 	Cache      *cache.Manager
 	Renderer   *render.TileRenderer
@@ -19,9 +20,10 @@ type TileServiceConfig struct {
 
 // TileService handles tile rendering and serving.
 type TileService struct {
-	zarr     *zarr.Reader
-	cache    *cache.Manager
-	renderer *render.TileRenderer
+	datasetID string
+	zarr      *zarr.Reader
+	cache     *cache.Manager
+	renderer  *render.TileRenderer
 
 	renderZoom int
 
@@ -46,7 +48,13 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 		renderZoom = md.ZoomLevels - 1
 	}
 
+	datasetID := cfg.DatasetID
+	if datasetID == "" {
+		datasetID = "default"
+	}
+
 	return &TileService{
+		datasetID:              datasetID,
 		zarr:                   cfg.ZarrReader,
 		cache:                  cfg.Cache,
 		renderer:               cfg.Renderer,
@@ -175,8 +183,8 @@ func (s *TileService) categoryForColumn(column string) ([]int, error) {
 
 // GetTile returns a rendered tile PNG.
 func (s *TileService) GetTile(z, x, y int) ([]byte, error) {
-	// Check cache
-	cacheKey := cache.TileKey(z, x, y, nil)
+	// Check cache (prefix with dataset ID)
+	cacheKey := s.datasetID + ":" + cache.TileKey(z, x, y, nil)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -201,8 +209,8 @@ func (s *TileService) GetTile(z, x, y int) ([]byte, error) {
 
 // GetExpressionTile returns a tile colored by gene expression.
 func (s *TileService) GetExpressionTile(z, x, y int, gene string, colormap string) ([]byte, error) {
-	// Check cache
-	cacheKey := cache.ExpressionTileKey(z, x, y, gene, colormap)
+	// Check cache (prefix with dataset ID)
+	cacheKey := s.datasetID + ":" + cache.ExpressionTileKey(z, x, y, gene, colormap)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -257,8 +265,8 @@ func (s *TileService) Metadata() *zarr.ZarrMetadata {
 
 // GetCategoryTile returns a tile colored by category.
 func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter []string) ([]byte, error) {
-	// Check cache
-	cacheKey := cache.CategoryTileKey(z, x, y, column, categoryFilter)
+	// Check cache (prefix with dataset ID)
+	cacheKey := s.datasetID + ":" + cache.CategoryTileKey(z, x, y, column, categoryFilter)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}

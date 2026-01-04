@@ -3,6 +3,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,14 +15,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/soma-tiles/server/internal/data/zarr"
 	"github.com/soma-tiles/server/internal/service"
 )
 
 // RouterConfig contains router configuration.
 type RouterConfig struct {
-	TileService *service.TileService
-	ZarrReader  *zarr.Reader
+	Registry    *DatasetRegistry
 	CORSOrigins []string
 }
 
@@ -50,29 +49,225 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		w.Write([]byte("OK"))
 	})
 
-	// Tile endpoints
-	r.Get("/tiles/{z}/{x}/{y}.png", tileHandler(cfg.TileService))
-	r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", expressionTileHandler(cfg.TileService))
-	r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(cfg.TileService))
-	r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(cfg.TileService))
+	// Global datasets endpoint (not dataset-scoped)
+	r.Get("/api/datasets", datasetsHandler(cfg.Registry))
 
-	// API endpoints
-	r.Route("/api", func(r chi.Router) {
-		r.Get("/metadata", metadataHandler(cfg.TileService))
-		r.Get("/genes", genesHandler(cfg.TileService))
-		r.Get("/genes/{gene}", geneInfoHandler(cfg.TileService))
-		r.Get("/genes/{gene}/bins", geneBinsHandler(cfg.TileService))
-		r.Get("/genes/{gene}/stats", geneStatsHandler(cfg.TileService))
-		r.Get("/genes/{gene}/category/{column}/means", geneCategoryMeansHandler(cfg.TileService))
-		r.Get("/categories", categoriesHandler(cfg.TileService))
-		r.Get("/categories/{column}/colors", categoryColorsHandler(cfg.TileService))
-		r.Get("/categories/{column}/legend", categoryLegendHandler(cfg.TileService))
-		r.Get("/stats", statsHandler(cfg.TileService))
+	// Default dataset routes (legacy compatibility)
+	defaultSvc := cfg.Registry.Default()
+	if defaultSvc != nil {
+		mountDatasetRoutes(r, defaultSvc)
+	}
+
+	// Dataset-scoped routes: /d/{dataset}/...
+	r.Route("/d/{dataset}", func(r chi.Router) {
+		r.Use(datasetMiddleware(cfg.Registry))
+
+		// Tile endpoints
+		r.Get("/tiles/{z}/{x}/{y}.png", datasetTileHandler)
+		r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", datasetExpressionTileHandler)
+		r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", datasetCategoryTileHandler)
+		r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", datasetCategoryTileHandler)
+
+		// API endpoints
+		r.Route("/api", func(r chi.Router) {
+			r.Get("/metadata", datasetMetadataHandler)
+			r.Get("/genes", datasetGenesHandler)
+			r.Get("/genes/{gene}", datasetGeneInfoHandler)
+			r.Get("/genes/{gene}/bins", datasetGeneBinsHandler)
+			r.Get("/genes/{gene}/stats", datasetGeneStatsHandler)
+			r.Get("/genes/{gene}/category/{column}/means", datasetGeneCategoryMeansHandler)
+			r.Get("/categories", datasetCategoriesHandler)
+			r.Get("/categories/{column}/colors", datasetCategoryColorsHandler)
+			r.Get("/categories/{column}/legend", datasetCategoryLegendHandler)
+			r.Get("/stats", datasetStatsHandler)
+		})
 	})
 
 	return r
 }
 
+// mountDatasetRoutes mounts routes for a specific tile service (used for default dataset).
+func mountDatasetRoutes(r chi.Router, svc *service.TileService) {
+	// Tile endpoints
+	r.Get("/tiles/{z}/{x}/{y}.png", tileHandler(svc))
+	r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", expressionTileHandler(svc))
+	r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(svc))
+	r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(svc))
+
+	// API endpoints
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/metadata", metadataHandler(svc))
+		r.Get("/genes", genesHandler(svc))
+		r.Get("/genes/{gene}", geneInfoHandler(svc))
+		r.Get("/genes/{gene}/bins", geneBinsHandler(svc))
+		r.Get("/genes/{gene}/stats", geneStatsHandler(svc))
+		r.Get("/genes/{gene}/category/{column}/means", geneCategoryMeansHandler(svc))
+		r.Get("/categories", categoriesHandler(svc))
+		r.Get("/categories/{column}/colors", categoryColorsHandler(svc))
+		r.Get("/categories/{column}/legend", categoryLegendHandler(svc))
+		r.Get("/stats", statsHandler(svc))
+	})
+}
+
+// Context key for dataset service
+type ctxKey string
+
+const datasetServiceKey ctxKey = "datasetService"
+
+// datasetMiddleware resolves the dataset from URL and injects the tile service into context.
+func datasetMiddleware(registry *DatasetRegistry) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			datasetID := chi.URLParam(r, "dataset")
+			svc := registry.Get(datasetID)
+			if svc == nil {
+				http.Error(w, "dataset not found: "+datasetID, http.StatusNotFound)
+				return
+			}
+			ctx := context.WithValue(r.Context(), datasetServiceKey, svc)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func getDatasetService(r *http.Request) *service.TileService {
+	if svc, ok := r.Context().Value(datasetServiceKey).(*service.TileService); ok {
+		return svc
+	}
+	return nil
+}
+
+// datasetsHandler returns the list of available datasets.
+func datasetsHandler(registry *DatasetRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"default":  registry.DefaultDatasetID(),
+			"datasets": registry.Datasets(),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// Dataset-scoped handlers (get service from context)
+func datasetTileHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	tileHandler(svc)(w, r)
+}
+
+func datasetExpressionTileHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	expressionTileHandler(svc)(w, r)
+}
+
+func datasetCategoryTileHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	categoryTileHandler(svc)(w, r)
+}
+
+func datasetMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	metadataHandler(svc)(w, r)
+}
+
+func datasetGenesHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	genesHandler(svc)(w, r)
+}
+
+func datasetGeneInfoHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	geneInfoHandler(svc)(w, r)
+}
+
+func datasetGeneBinsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	geneBinsHandler(svc)(w, r)
+}
+
+func datasetGeneStatsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	geneStatsHandler(svc)(w, r)
+}
+
+func datasetGeneCategoryMeansHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	geneCategoryMeansHandler(svc)(w, r)
+}
+
+func datasetCategoriesHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	categoriesHandler(svc)(w, r)
+}
+
+func datasetCategoryColorsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	categoryColorsHandler(svc)(w, r)
+}
+
+func datasetCategoryLegendHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	categoryLegendHandler(svc)(w, r)
+}
+
+func datasetStatsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	statsHandler(svc)(w, r)
+}
+
+// Original handlers (take service as parameter)
 func tileHandler(svc *service.TileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		z, err := strconv.Atoi(chi.URLParam(r, "z"))

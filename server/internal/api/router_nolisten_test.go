@@ -55,14 +55,18 @@ func TestGeneStatsEndpoint_NoListen(t *testing.T) {
 	})
 
 	tileService := service.NewTileService(service.TileServiceConfig{
+		DatasetID:  "default",
 		ZarrReader: zarrReader,
 		Cache:      cacheManager,
 		Renderer:   tileRenderer,
 	})
 
+	// Create registry with single dataset
+	registry := NewDatasetRegistry("default", []string{"default"})
+	registry.Register("default", tileService)
+
 	router := NewRouter(RouterConfig{
-		TileService: tileService,
-		ZarrReader:  zarrReader,
+		Registry:    registry,
 		CORSOrigins: []string{"http://localhost:3000"},
 	})
 
@@ -91,4 +95,3 @@ func TestGeneStatsEndpoint_NoListen(t *testing.T) {
 		t.Fatalf("unexpected gene: got %q want %q", got, gene)
 	}
 }
-

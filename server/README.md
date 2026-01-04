@@ -19,12 +19,12 @@ curl -sS http://localhost:8080/health
 
 ## 配置文件（`config/server.yaml`）
 
-后端启动时会读取 YAML 配置（见 `../config/server.yaml`）。最关键的是 Zarr 路径：
+后端启动时会读取 YAML 配置（见 `../config/server.yaml`）。
+
+### 单数据集配置（旧格式，仍然支持）
 
 - `data.zarr_path`: 指向预处理输出的 `bins.zarr` **目录**
 - 注意：服务会在 `bins.zarr` 的**上一级目录**读取 `metadata.json` 与 `gene_index.json`
-
-示例（节选）：
 
 ```yaml
 server:
@@ -34,6 +34,7 @@ server:
 
 data:
   zarr_path: "/abs/path/to/data/preprocessed/zarr/bins.zarr"
+  soma_path: "/abs/path/to/data/preprocessed/soma"
 
 cache:
   tile_size_mb: 512
@@ -43,6 +44,35 @@ render:
   tile_size: 256
   default_colormap: viridis
 ```
+
+### 多数据集配置（新格式）
+
+可以在 `data` 下定义多个数据集，每个数据集有自己的 `zarr_path` 和 `soma_path`。**第一个数据集会作为默认数据集**。
+
+```yaml
+server:
+  port: 8080
+  cors_origins:
+    - "http://localhost:3000"
+
+data:
+  pbmc:
+    zarr_path: "/data/pbmc/zarr/bins.zarr"
+    soma_path: "/data/pbmc/soma"
+  liver:
+    zarr_path: "/data/liver/zarr/bins.zarr"
+    soma_path: "/data/liver/soma"
+
+cache:
+  tile_size_mb: 512
+  tile_ttl_minutes: 10
+
+render:
+  tile_size: 256
+  default_colormap: viridis
+```
+
+多数据集时，前端会显示数据集选择下拉框，用户可以切换不同的数据集。
 
 ## 通用约定
 
@@ -62,14 +92,25 @@ render:
 
 - `GET /health`
 
+### 数据集列表（全局）
+
+- `GET /api/datasets` — 返回可用数据集列表及默认数据集
+
 ### Tiles（PNG）
 
+默认数据集（旧路由，向后兼容）：
 - `GET /tiles/{z}/{x}/{y}.png`
 - `GET /tiles/{z}/{x}/{y}/category/{column}.png`
 - `GET /tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
 
+按数据集访问（多数据集路由）：
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png`
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={name}`
+
 ### API（JSON）
 
+默认数据集（旧路由，向后兼容）：
 - `GET /api/metadata`
 - `GET /api/stats`
 - `GET /api/genes`
@@ -79,6 +120,12 @@ render:
 - `GET /api/categories`
 - `GET /api/categories/{column}/colors`
 - `GET /api/categories/{column}/legend`
+
+按数据集访问（多数据集路由）：
+- `GET /d/{dataset}/api/metadata`
+- `GET /d/{dataset}/api/stats`
+- `GET /d/{dataset}/api/genes`
+- 等等...
 
 ## Health
 

@@ -39,9 +39,9 @@ func TestReader_GetGeneStats_Zoom0(t *testing.T) {
 		gene = "ENSG00000167286"
 	}
 
-	stats, err := r.GetGeneStats(gene)
+	stats, err := r.GetGeneStats(gene, 0)
 	if err != nil {
-		t.Fatalf("GetGeneStats(%q) error: %v", gene, err)
+		t.Fatalf("GetGeneStats(%q, 0) error: %v", gene, err)
 	}
 	if stats.Gene != gene {
 		t.Fatalf("unexpected gene: got %q want %q", stats.Gene, gene)

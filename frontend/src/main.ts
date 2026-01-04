@@ -17,12 +17,120 @@ import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 import { downloadPngAtCurrentZoom } from './map/exportPng';
 
+interface DatasetInfo {
+    id: string;
+    name: string;
+}
+
+interface DatasetsResponse {
+    default: string;
+    datasets: DatasetInfo[];
+}
+
+// Get current dataset from URL query params
+function getCurrentDatasetFromUrl(): string | null {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('dataset');
+}
+
+// Set dataset in URL and reload
+function setDatasetAndReload(datasetId: string): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set('dataset', datasetId);
+    window.location.href = url.toString();
+}
+
+// Fetch available datasets from server
+async function fetchDatasets(): Promise<DatasetsResponse> {
+    const response = await fetch('/api/datasets');
+    if (!response.ok) {
+        throw new Error(`Failed to fetch datasets: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+// Create dataset selector dropdown
+function createDatasetSelector(
+    container: HTMLElement,
+    datasets: DatasetInfo[],
+    currentDataset: string
+): void {
+    if (datasets.length <= 1) {
+        // Only one dataset, no need for selector
+        return;
+    }
+
+    const selectorContainer = document.createElement('div');
+    selectorContainer.className = 'dataset-selector';
+
+    const label = document.createElement('label');
+    label.textContent = 'Dataset: ';
+    label.htmlFor = 'dataset-select';
+
+    const select = document.createElement('select');
+    select.id = 'dataset-select';
+    select.className = 'dataset-select';
+
+    for (const ds of datasets) {
+        const option = document.createElement('option');
+        option.value = ds.id;
+        option.textContent = ds.name;
+        if (ds.id === currentDataset) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    }
+
+    select.addEventListener('change', () => {
+        setDatasetAndReload(select.value);
+    });
+
+    selectorContainer.appendChild(label);
+    selectorContainer.appendChild(select);
+
+    // Insert before the existing dataset-info content
+    container.insertBefore(selectorContainer, container.firstChild);
+}
+
 // Initialize application
 async function init() {
     console.log('Initializing SOMA-Tiles...');
 
+    // Fetch available datasets
+    let datasetsInfo: DatasetsResponse;
+    try {
+        datasetsInfo = await fetchDatasets();
+        console.log('Available datasets:', datasetsInfo);
+    } catch (error) {
+        console.error('Failed to fetch datasets:', error);
+        showError('Failed to connect to server');
+        return;
+    }
+
+    // Determine which dataset to use
+    const urlDataset = getCurrentDatasetFromUrl();
+    const validDatasetIds = datasetsInfo.datasets.map(d => d.id);
+    let currentDataset: string;
+
+    if (urlDataset && validDatasetIds.includes(urlDataset)) {
+        currentDataset = urlDataset;
+    } else {
+        currentDataset = datasetsInfo.default;
+        // If URL had an invalid dataset, redirect to the default
+        if (urlDataset && urlDataset !== currentDataset) {
+            setDatasetAndReload(currentDataset);
+            return;
+        }
+    }
+
+    console.log('Using dataset:', currentDataset);
+
+    // Compute API base URL for the selected dataset
+    const apiBaseUrl = `/d/${encodeURIComponent(currentDataset)}/api`;
+    const tilesBaseUrl = `/d/${encodeURIComponent(currentDataset)}`;
+
     // Create API client
-    const api = new ApiClient('/api');
+    const api = new ApiClient(apiBaseUrl);
     let cellQueryPanel: CellQueryPanel | null = null;
 
     // Load metadata
@@ -35,6 +143,12 @@ async function init() {
         console.error('Failed to load metadata:', error);
         showError('Failed to connect to server');
         return;
+    }
+
+    // Create dataset selector in header
+    const datasetInfoContainer = document.getElementById('dataset-info');
+    if (datasetInfoContainer) {
+        createDatasetSelector(datasetInfoContainer, datasetsInfo.datasets, currentDataset);
     }
 
     // Initialize state manager
@@ -55,7 +169,7 @@ async function init() {
     // Allow a few extra zoom levels to "magnify" the highest native tiles.
     const maxZoom = maxNativeZoom + 4;
     const mapController = new MapController(mapContainer, {
-        apiUrl: '',
+        apiUrl: tilesBaseUrl,
         tileSize: 256,
         maxZoom,
         maxNativeZoom,
@@ -268,11 +382,22 @@ async function init() {
 function updateDatasetInfo(metadata: any) {
     const infoEl = document.getElementById('dataset-info');
     if (infoEl) {
-        infoEl.innerHTML = `
+        // Preserve any existing content (like dataset selector) and append info
+        const existingContent = infoEl.querySelector('.dataset-selector');
+        const infoSpans = `
             <span class="info-item">${metadata.dataset_name || 'Dataset'}</span>
             <span class="info-item">${formatNumber(metadata.n_cells)} cells</span>
             <span class="info-item">${metadata.n_genes_preaggregated} genes</span>
         `;
+        if (existingContent) {
+            // Dataset selector exists, append after it
+            const infoContainer = document.createElement('span');
+            infoContainer.className = 'dataset-info-items';
+            infoContainer.innerHTML = infoSpans;
+            infoEl.appendChild(infoContainer);
+        } else {
+            infoEl.innerHTML = infoSpans;
+        }
     }
 }
 

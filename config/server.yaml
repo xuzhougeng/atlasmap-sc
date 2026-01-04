@@ -4,9 +4,24 @@ server:
     - "http://localhost:3000"
     - "http://localhost:5173"
 
+# Single dataset (legacy format - still supported):
+# data:
+#   zarr_path: "/path/to/zarr/bins.zarr"
+#   soma_path: "/path/to/soma"
+
+# Multi-dataset format:
 data:
-  zarr_path: "/data/xzg_data/software/soma-tiles/data/preprocessed/zarr/bins.zarr"
-  soma_path: "/data/xzg_data/software/soma-tiles/data/soma"
+  pbmc:
+    zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc/zarr/bins.zarr"
+    soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc/soma"
+  pbmc2:
+    zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc2/zarr/bins.zarr"
+    soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc2/soma"
+# The first dataset in the list becomes the default.
+
+# data:
+#   zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc/zarr/bins.zarr"
+#   soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc/soma"
 
 cache:
   tile_size_mb: 512

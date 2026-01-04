@@ -61,15 +61,19 @@ func setupTestServer(t *testing.T) *testServer {
 
 	// Initialize tile service
 	tileService := service.NewTileService(service.TileServiceConfig{
+		DatasetID:  "default",
 		ZarrReader: zarrReader,
 		Cache:      cacheManager,
 		Renderer:   tileRenderer,
 	})
 
+	// Create registry with single dataset
+	registry := NewDatasetRegistry("default", []string{"default"})
+	registry.Register("default", tileService)
+
 	// Create router
 	router := NewRouter(RouterConfig{
-		TileService: tileService,
-		ZarrReader:  zarrReader,
+		Registry:    registry,
 		CORSOrigins: []string{"http://localhost:3000"},
 	})
 
@@ -378,6 +382,29 @@ func TestMetadataEndpoint(t *testing.T) {
 
 	// Verify expected fields
 	assertJSONFields(t, body, []string{"zoom_levels", "n_genes_preaggregated", "n_cells"})
+}
+
+// TestDatasetsEndpoint tests the datasets list API endpoint
+func TestDatasetsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.close()
+
+	resp, err := http.Get(ts.server.URL + "/api/datasets")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	assertStatusCode(t, resp, http.StatusOK)
+	assertContentType(t, resp, "application/json")
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	// Verify expected fields
+	assertJSONFields(t, body, []string{"default", "datasets"})
 }
 
 // TestStatsEndpoint tests the stats API endpoint
@@ -864,6 +891,7 @@ func TestAllEndpointsReachable(t *testing.T) {
 		{"/api/stats", http.StatusOK, false},
 		{"/api/genes", http.StatusOK, false},
 		{"/api/categories", http.StatusOK, false},
+		{"/api/datasets", http.StatusOK, false},
 	}
 
 	// Add gene-specific endpoints if genes exist

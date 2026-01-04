@@ -136,7 +136,9 @@ soma-tiles/
 
 ## Configuration
 
-See `config/server.yaml` for server configuration options:
+See `config/server.yaml` for server configuration options.
+
+### Single Dataset (Legacy Format)
 
 ```yaml
 server:
@@ -146,6 +148,7 @@ server:
 
 data:
   zarr_path: "/data/preprocessed/zarr/bins.zarr"
+  soma_path: "/data/preprocessed/soma"
 
 cache:
   tile_size_mb: 512
@@ -155,6 +158,38 @@ render:
   tile_size: 256
   default_colormap: viridis
 ```
+
+### Multiple Datasets
+
+You can configure multiple datasets. The first dataset becomes the default:
+
+```yaml
+server:
+  port: 8080
+  cors_origins:
+    - "http://localhost:3000"
+
+data:
+  pbmc:
+    zarr_path: "/data/pbmc/zarr/bins.zarr"
+    soma_path: "/data/pbmc/soma"
+  liver:
+    zarr_path: "/data/liver/zarr/bins.zarr"
+    soma_path: "/data/liver/soma"
+
+cache:
+  tile_size_mb: 512
+  tile_ttl_minutes: 10
+
+render:
+  tile_size: 256
+  default_colormap: viridis
+```
+
+When multiple datasets are configured:
+- The frontend displays a dataset selector dropdown
+- Each dataset is accessible via `/d/{dataset}/api/...` and `/d/{dataset}/tiles/...`
+- Legacy routes (`/api/...`, `/tiles/...`) point to the default dataset
 
 ## License
 

@@ -36,16 +36,7 @@ func main() {
 	// Initialize components
 	ctx := context.Background()
 
-	// Initialize Zarr reader
-	zarrReader, err := zarr.NewReader(cfg.Data.ZarrPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize Zarr reader: %v", err)
-	}
-	log.Printf("Loaded Zarr data from: %s", cfg.Data.ZarrPath)
-	log.Printf("  Zoom levels: %d", zarrReader.Metadata().ZoomLevels)
-	log.Printf("  Genes: %d", zarrReader.Metadata().NGenes)
-
-	// Initialize cache manager
+	// Initialize cache manager (shared across all datasets)
 	cacheManager, err := cache.NewManager(cache.Config{
 		TileCacheSizeMB: cfg.Cache.TileSizeMB,
 		TileTTL:         time.Duration(cfg.Cache.TileTTLMinutes) * time.Minute,
@@ -55,24 +46,44 @@ func main() {
 		log.Fatalf("Failed to initialize cache: %v", err)
 	}
 
-	// Initialize tile renderer
+	// Initialize tile renderer (shared across all datasets)
 	tileRenderer := render.NewTileRenderer(render.Config{
 		TileSize:        cfg.Render.TileSize,
 		DefaultColormap: cfg.Render.DefaultColormap,
 	})
 
-	// Initialize tile service
-	tileService := service.NewTileService(service.TileServiceConfig{
-		ZarrReader:   zarrReader,
-		Cache:        cacheManager,
-		Renderer:     tileRenderer,
-	})
+	// Initialize dataset registry
+	datasetIDs := cfg.Data.DatasetIDs()
+	registry := api.NewDatasetRegistry(cfg.Data.DefaultDataset, datasetIDs)
+
+	log.Printf("Initializing %d dataset(s), default: %s", len(datasetIDs), cfg.Data.DefaultDataset)
+
+	// Initialize each dataset
+	for _, datasetID := range datasetIDs {
+		ds := cfg.Data.Datasets[datasetID]
+
+		zarrReader, err := zarr.NewReader(ds.ZarrPath)
+		if err != nil {
+			log.Fatalf("Failed to initialize Zarr reader for dataset %q: %v", datasetID, err)
+		}
+
+		log.Printf("  [%s] Loaded from: %s", datasetID, ds.ZarrPath)
+		log.Printf("    Zoom levels: %d, Genes: %d", zarrReader.Metadata().ZoomLevels, zarrReader.Metadata().NGenes)
+
+		tileService := service.NewTileService(service.TileServiceConfig{
+			DatasetID:  datasetID,
+			ZarrReader: zarrReader,
+			Cache:      cacheManager,
+			Renderer:   tileRenderer,
+		})
+
+		registry.Register(datasetID, tileService)
+	}
 
 	// Set up HTTP router
 	router := api.NewRouter(api.RouterConfig{
-		TileService:   tileService,
-		ZarrReader:    zarrReader,
-		CORSOrigins:   cfg.Server.CORSOrigins,
+		Registry:    registry,
+		CORSOrigins: cfg.Server.CORSOrigins,
 	})
 
 	// Create HTTP server

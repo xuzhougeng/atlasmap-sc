@@ -146,6 +146,20 @@ go run ./cmd/server -config ../config/server.yaml
 - `server.port`：默认 `8080`
 - `data.zarr_path`：指向 `.../zarr/bins.zarr`（本地建议用相对路径或绝对路径）
 
+**多数据集配置**：可以在 `data` 下定义多个数据集，第一个为默认数据集：
+
+```yaml
+data:
+  pbmc:
+    zarr_path: "/data/pbmc/zarr/bins.zarr"
+    soma_path: "/data/pbmc/soma"
+  liver:
+    zarr_path: "/data/liver/zarr/bins.zarr"
+    soma_path: "/data/liver/soma"
+```
+
+前端会显示数据集选择下拉框，API 可通过 `/d/{dataset}/api/...` 访问特定数据集。
+
 启动后自检：
 
 ```bash
