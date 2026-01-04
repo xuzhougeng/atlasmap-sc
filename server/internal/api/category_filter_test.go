@@ -1,8 +1,11 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +69,67 @@ func TestParseCategoryFilter(t *testing.T) {
 	t.Run("repeatedParams", func(t *testing.T) {
 		q := url.Values{"categories": {"T", "B"}}
 		filter, ok := parseCategoryFilter(q)
+		if !ok {
+			t.Fatalf("expected ok=true, got false")
+		}
+		want := []string{"T", "B"}
+		if !reflect.DeepEqual(filter, want) {
+			t.Fatalf("expected %#v, got %#v", want, filter)
+		}
+	})
+}
+
+func TestParseCategoryFilterBody(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(""))
+		filter, ok, err := parseCategoryFilterBody(r)
+		if err != nil {
+			t.Fatalf("expected err=nil, got %v", err)
+		}
+		if ok {
+			t.Fatalf("expected ok=false, got true")
+		}
+		if filter != nil {
+			t.Fatalf("expected nil filter, got %#v", filter)
+		}
+	})
+
+	t.Run("jsonArray", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`["T","B"]`))
+		filter, ok, err := parseCategoryFilterBody(r)
+		if err != nil {
+			t.Fatalf("expected err=nil, got %v", err)
+		}
+		if !ok {
+			t.Fatalf("expected ok=true, got false")
+		}
+		want := []string{"T", "B"}
+		if !reflect.DeepEqual(filter, want) {
+			t.Fatalf("expected %#v, got %#v", want, filter)
+		}
+	})
+
+	t.Run("jsonObject", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`{"categories":["T","B"]}`))
+		filter, ok, err := parseCategoryFilterBody(r)
+		if err != nil {
+			t.Fatalf("expected err=nil, got %v", err)
+		}
+		if !ok {
+			t.Fatalf("expected ok=true, got false")
+		}
+		want := []string{"T", "B"}
+		if !reflect.DeepEqual(filter, want) {
+			t.Fatalf("expected %#v, got %#v", want, filter)
+		}
+	})
+
+	t.Run("formEncodedJson", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/tiles/0/0/0/category/cell_type.png", strings.NewReader(`categories=["T","B"]`))
+		filter, ok, err := parseCategoryFilterBody(r)
+		if err != nil {
+			t.Fatalf("expected err=nil, got %v", err)
+		}
 		if !ok {
 			t.Fatalf("expected ok=true, got false")
 		}

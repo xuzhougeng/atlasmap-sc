@@ -1,6 +1,7 @@
 // Map Controller - Wraps Leaflet for UMAP visualization
 
 import L from 'leaflet';
+import { CategoryPostTileLayer } from './CategoryPostTileLayer';
 
 export type ColorMode = 'expression' | 'category' | 'default';
 
@@ -21,6 +22,11 @@ export interface MapConfig {
         min_y: number;
         max_y: number;
     };
+}
+
+export interface TileRequest {
+    url: string;
+    init?: RequestInit;
 }
 
 export class MapController {
@@ -160,35 +166,31 @@ export class MapController {
         if (typeof categoryFilter !== 'undefined') {
             this.selectedCategories = categoryFilter;
         }
-        const tileUrl = this.buildCategoryTileUrl(column);
+        const tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
 
         // Add category-colored tile layer
-        this.categoryLayer = L.tileLayer(
-            tileUrl,
-            {
-                tileSize: this.config.tileSize,
-                noWrap: true,
-                bounds: this.bounds,
-                maxZoom: this.config.maxZoom,
-                maxNativeZoom: this.config.maxNativeZoom,
-                minZoom: this.config.minZoom ?? 0,
-            }
-        ).addTo(this.map);
+        const layerOptions: L.TileLayerOptions = {
+            tileSize: this.config.tileSize,
+            noWrap: true,
+            bounds: this.bounds,
+            maxZoom: this.config.maxZoom,
+            maxNativeZoom: this.config.maxNativeZoom,
+            minZoom: this.config.minZoom ?? 0,
+        };
+
+        this.categoryLayer =
+            this.selectedCategories === null
+                ? L.tileLayer(tileUrl, layerOptions)
+                : new CategoryPostTileLayer(tileUrl, {
+                      ...layerOptions,
+                      categories: this.selectedCategories,
+                  });
+        this.categoryLayer.addTo(this.map);
 
         // Bring category layer to front
         this.categoryLayer.bringToFront();
         this.currentCategory = column;
         this.currentColorMode = 'category';
-    }
-
-    private buildCategoryTileUrl(column: string): string {
-        let tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
-        if (this.selectedCategories !== null) {
-            // Use JSON array to handle category values with commas (and allow empty list)
-            const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
-            tileUrl += `?categories=${categories}`;
-        }
-        return tileUrl;
     }
 
     /**
@@ -252,28 +254,46 @@ export class MapController {
     }
 
     /**
-     * Build a concrete tile URL for the current display mode.
+     * Build a request for a concrete tile for the current display mode.
+     *
+     * Note: when category filtering is active, category tiles are fetched via POST and
+     * the filter is sent in the request body (not in the URL).
      * Returns null when no tile layer is active (e.g., after resetView()).
      */
-    getTileUrl(z: number, x: number, y: number): string | null {
+    getTileRequest(z: number, x: number, y: number): TileRequest | null {
         const apiUrl = this.config.apiUrl.replace(/\/$/, '');
         if (this.currentColorMode === 'expression' && this.currentExpressionGene) {
             const gene = encodeURIComponent(this.currentExpressionGene);
             const colormap = encodeURIComponent(this.currentExpressionColorScale ?? 'viridis');
-            return `${apiUrl}/tiles/${z}/${x}/${y}/expression/${gene}.png?colormap=${colormap}`;
+            return {
+                url: `${apiUrl}/tiles/${z}/${x}/${y}/expression/${gene}.png?colormap=${colormap}`,
+            };
         }
 
         if (this.currentColorMode === 'category' && this.currentCategory) {
             const column = encodeURIComponent(this.currentCategory);
-            let url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png`;
+            const url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png`;
             if (this.selectedCategories !== null) {
-                const categories = encodeURIComponent(JSON.stringify(this.selectedCategories));
-                url += `?categories=${categories}`;
+                return {
+                    url,
+                    init: {
+                        method: 'POST',
+                        body: JSON.stringify(this.selectedCategories),
+                    },
+                };
             }
-            return url;
+            return { url };
         }
 
         return null;
+    }
+
+    /**
+     * Build a concrete tile URL for the current display mode.
+     * Returns null when no tile layer is active (e.g., after resetView()).
+     */
+    getTileUrl(z: number, x: number, y: number): string | null {
+        return this.getTileRequest(z, x, y)?.url ?? null;
     }
 
     /**
@@ -331,11 +351,27 @@ export class MapController {
         this.selectedCategories = categories;
 
         if (this.currentColorMode !== 'category' || !this.currentCategory) return;
-        const tileUrl = this.buildCategoryTileUrl(this.currentCategory);
-        if (this.categoryLayer) {
-            this.categoryLayer.setUrl(tileUrl);
-        } else {
+        if (!this.categoryLayer) {
             this.setCategoryColumn(this.currentCategory);
+            return;
+        }
+
+        const isPostLayer = this.categoryLayer instanceof CategoryPostTileLayer;
+        const needsPostLayer = categories !== null;
+
+        if (needsPostLayer) {
+            if (isPostLayer) {
+                (this.categoryLayer as CategoryPostTileLayer).setCategories(categories);
+            } else {
+                this.setCategoryColumn(this.currentCategory, categories);
+            }
+            return;
+        }
+
+        if (isPostLayer) {
+            this.setCategoryColumn(this.currentCategory, null);
+        } else {
+            this.categoryLayer.redraw();
         }
     }
 

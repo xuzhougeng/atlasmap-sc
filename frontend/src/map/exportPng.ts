@@ -131,8 +131,8 @@ export async function downloadPngAtCurrentZoom(
     const requestedZoom = map.getZoom();
     const zoom = Math.min(requestedZoom, maxNativeZoom);
 
-    const sampleUrl = mapController.getTileUrl(zoom, 0, 0);
-    if (!sampleUrl) {
+    const sampleReq = mapController.getTileRequest(zoom, 0, 0);
+    if (!sampleReq) {
         throw new Error('No active tile layer to export');
     }
 
@@ -188,10 +188,10 @@ export async function downloadPngAtCurrentZoom(
     const drawSize = Math.max(1, Math.round(tileSize * scale));
 
     await runWithConcurrency(tiles, concurrency, async ({ x, y }) => {
-        const url = mapController.getTileUrl(zoom, x, y);
-        if (!url) return;
+        const req = mapController.getTileRequest(zoom, x, y);
+        if (!req) return;
 
-        const resp = await fetch(url);
+        const resp = await fetch(req.url, req.init);
         if (!resp.ok) {
             throw new Error(`Failed to fetch tile: ${resp.status} ${resp.statusText}`);
         }
@@ -225,4 +225,3 @@ export async function downloadPngAtCurrentZoom(
         scale,
     };
 }
-

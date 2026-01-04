@@ -2,7 +2,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -51,6 +54,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	r.Get("/tiles/{z}/{x}/{y}.png", tileHandler(cfg.TileService))
 	r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", expressionTileHandler(cfg.TileService))
 	r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(cfg.TileService))
+	r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", categoryTileHandler(cfg.TileService))
 
 	// API endpoints
 	r.Route("/api", func(r chi.Router) {
@@ -129,7 +133,20 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		column := chi.URLParam(r, "column")
 
 		// Parse optional category filter
-		categoryFilter, hasFilter := parseCategoryFilter(r.URL.Query())
+		var (
+			categoryFilter []string
+			hasFilter      bool
+			err            error
+		)
+		if r.Method == http.MethodPost {
+			categoryFilter, hasFilter, err = parseCategoryFilterBody(r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		} else {
+			categoryFilter, hasFilter = parseCategoryFilter(r.URL.Query())
+		}
 		if !hasFilter {
 			categoryFilter = nil
 		}
@@ -192,6 +209,72 @@ func parseCategoryFilter(query url.Values) ([]string, bool) {
 		}
 	}
 	return out, true
+}
+
+const maxCategoryFilterBodyBytes = 10 << 20 // 10 MiB
+
+func parseCategoryFilterBody(r *http.Request) ([]string, bool, error) {
+	if r.Body == nil {
+		return nil, false, nil
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxCategoryFilterBodyBytes+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if len(body) > maxCategoryFilterBodyBytes {
+		return nil, false, errors.New("category filter body too large")
+	}
+
+	raw := bytes.TrimSpace(body)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+
+	// Preferred POST payload: a JSON array, e.g. ["T","B"].
+	// Also supports an object payload: {"categories":[...]}.
+	if len(raw) > 0 && raw[0] == '{' {
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &payload); err == nil {
+			rawCategories, ok := payload["categories"]
+			if !ok {
+				return nil, false, nil
+			}
+
+			rawCategories = bytes.TrimSpace(rawCategories)
+			if len(rawCategories) == 0 || bytes.Equal(rawCategories, []byte("null")) {
+				return nil, false, nil
+			}
+
+			var categories []string
+			if err := json.Unmarshal(rawCategories, &categories); err == nil {
+				if categories == nil {
+					return make([]string, 0), true, nil
+				}
+				return categories, true, nil
+			}
+
+			var categoriesString string
+			if err := json.Unmarshal(rawCategories, &categoriesString); err == nil {
+				filter, ok := parseCategoryFilter(url.Values{"categories": {categoriesString}})
+				return filter, ok, nil
+			}
+		}
+		// Fall through to tolerant parsing of the raw body.
+	}
+
+	// Support form-encoded bodies:
+	//   categories=T&categories=B
+	//   categories=["T","B"]
+	if bytes.Contains(raw, []byte("=")) && raw[0] != '[' {
+		if q, err := url.ParseQuery(string(raw)); err == nil {
+			filter, ok := parseCategoryFilter(q)
+			return filter, ok, nil
+		}
+	}
+
+	filter, ok := parseCategoryFilter(url.Values{"categories": {string(raw)}})
+	return filter, ok, nil
 }
 
 func metadataHandler(svc *service.TileService) http.HandlerFunc {
