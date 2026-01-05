@@ -232,6 +232,7 @@ async function init() {
                 if (tab === 'category') {
                     const column = categoryColumnSelector.getSelectedCategory();
                     currentCategoryColumn = column;
+                    categoryFilter?.setActiveColumn(column);
                     const filter = categoryFilter?.getFilterForColumn(column) ?? null;
                     mapController.setCategoryColumn(column, filter);
                     categoryLegend.loadLegend(column);
@@ -261,6 +262,7 @@ async function init() {
             onCategoryChange: (column) => {
                 console.log('Category column changed:', column);
                 currentCategoryColumn = column;
+                categoryFilter?.setActiveColumn(column);
                 const filter = categoryFilter?.getFilterForColumn(column) ?? null;
                 mapController.setCategoryColumn(column, filter);
                 categoryLegend.loadLegend(column);
@@ -298,14 +300,17 @@ async function init() {
     if (metadata.categories) {
         categoryFilter = new CategoryFilter(
             categoryFiltersContainer,
-            metadata.categories
+            metadata.categories,
+            currentCategoryColumn
         );
         categoryFilter.onFilterChange((column, filter) => {
             console.log('Categories filtered:', column, filter);
             if (column === currentCategoryColumn) {
                 mapController.updateCategoryFilter(filter);
             }
-            state.setState({ selectedCategories: filter ?? [] });
+            if (column === currentCategoryColumn) {
+                state.setState({ selectedCategories: filter ?? [] });
+            }
         });
     }
 

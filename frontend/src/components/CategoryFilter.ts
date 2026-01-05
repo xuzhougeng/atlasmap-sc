@@ -7,10 +7,19 @@ export class CategoryFilter {
     private categories: Record<string, CategoryInfo>;
     private selectedByColumn: Map<string, Set<string>> = new Map();
     private filterCallback: ((column: string, categories: string[] | null) => void) | null = null;
+    private activeColumn: string | null = null;
 
-    constructor(container: HTMLElement, categories: Record<string, CategoryInfo>) {
+    constructor(
+        container: HTMLElement,
+        categories: Record<string, CategoryInfo>,
+        activeColumn?: string
+    ) {
         this.container = container;
         this.categories = categories;
+        this.activeColumn =
+            activeColumn && Object.prototype.hasOwnProperty.call(categories, activeColumn)
+                ? activeColumn
+                : null;
         // Initialize selected sets with all category values (checkboxes start checked)
         for (const [column, catInfo] of Object.entries(categories)) {
             this.selectedByColumn.set(column, new Set(catInfo.values));
@@ -19,15 +28,25 @@ export class CategoryFilter {
     }
 
     private render(): void {
-        const categoryNames = Object.keys(this.categories);
+        const allColumns = Object.keys(this.categories);
+        const columnsToRender = this.activeColumn ? [this.activeColumn] : allColumns;
 
-        if (categoryNames.length === 0) {
+        if (columnsToRender.length === 0) {
             this.container.innerHTML = '<p class="placeholder">No categories available</p>';
             return;
         }
 
-        // For each category column
-        this.container.innerHTML = categoryNames
+        const validColumns = columnsToRender.filter(colName =>
+            Object.prototype.hasOwnProperty.call(this.categories, colName)
+        );
+
+        if (validColumns.length === 0) {
+            this.container.innerHTML = '<p class="placeholder">Select a category to filter</p>';
+            return;
+        }
+
+        // For each (visible) category column
+        this.container.innerHTML = validColumns
             .map(colName => {
                 const catInfo = this.categories[colName];
                 const selected = this.selectedByColumn.get(colName) ?? new Set<string>();
@@ -56,6 +75,14 @@ export class CategoryFilter {
             .join('');
 
         this.setupEvents();
+    }
+
+    setActiveColumn(column: string): void {
+        const next =
+            column && Object.prototype.hasOwnProperty.call(this.categories, column) ? column : null;
+        if (this.activeColumn === next) return;
+        this.activeColumn = next;
+        this.render();
     }
 
     private setupEvents(): void {
