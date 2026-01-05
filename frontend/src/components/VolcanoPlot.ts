@@ -151,52 +151,61 @@ export class VolcanoPlot {
         }
         this.overlay = overlay;
 
-        const vsSource = `
-            attribute vec2 a_xy;
+	        const vsSource = `
+	            attribute vec2 a_xy;
 
-            uniform vec2 u_min;
-            uniform vec2 u_max;
-            uniform float u_pointSize;
+	            uniform vec2 u_min;
+	            uniform vec2 u_max;
+	            uniform float u_pointSize;
 
-            uniform float u_fcThreshold;
-            uniform float u_sigThreshold;
-            uniform vec3 u_colorNeutral;
-            uniform vec3 u_colorUp;
-            uniform vec3 u_colorDown;
+	            uniform float u_fcThreshold;
+	            uniform float u_sigThreshold;
+	            uniform vec3 u_colorNeutral;
+	            uniform vec3 u_colorUp;
+	            uniform vec3 u_colorDown;
 
-            varying vec3 v_color;
+	            varying vec3 v_color;
+	            varying float v_alpha;
 
-            void main() {
-                vec2 range = u_max - u_min;
-                range = max(range, vec2(1e-6, 1e-6));
-                vec2 norm = (a_xy - u_min) / range;   // 0..1
-                vec2 clip = norm * 2.0 - 1.0;         // -1..1
-                gl_Position = vec4(clip, 0.0, 1.0);
-                gl_PointSize = u_pointSize;
+	            void main() {
+	                vec2 range = u_max - u_min;
+	                range = max(range, vec2(1e-6, 1e-6));
+	                vec2 norm = (a_xy - u_min) / range;   // 0..1
+	                vec2 clip = norm * 2.0 - 1.0;         // -1..1
+	                gl_Position = vec4(clip, 0.0, 1.0);
+	                gl_PointSize = u_pointSize;
 
-                float x = a_xy.x;
-                float y = a_xy.y;
-                if (y >= u_sigThreshold && x >= u_fcThreshold) {
-                    v_color = u_colorUp;
-                } else if (y >= u_sigThreshold && x <= -u_fcThreshold) {
-                    v_color = u_colorDown;
-                } else {
-                    v_color = u_colorNeutral;
-                }
-            }
-        `;
+	                float x = a_xy.x;
+	                float y = a_xy.y;
+	                bool sig = y >= u_sigThreshold;
+	                bool up = sig && x >= u_fcThreshold;
+	                bool down = sig && x <= -u_fcThreshold;
 
-        const fsSource = `
-            precision mediump float;
-            varying vec3 v_color;
+	                if (up) {
+	                    v_color = u_colorUp;
+	                    v_alpha = 0.95;
+	                } else if (down) {
+	                    v_color = u_colorDown;
+	                    v_alpha = 0.95;
+	                } else {
+	                    v_color = u_colorNeutral;
+	                    v_alpha = 0.14;
+	                }
+	            }
+	        `;
 
-            void main() {
-                vec2 c = gl_PointCoord - vec2(0.5);
-                float d = dot(c, c);
-                if (d > 0.25) discard;
-                gl_FragColor = vec4(v_color, 1.0);
-            }
-        `;
+	        const fsSource = `
+	            precision mediump float;
+	            varying vec3 v_color;
+	            varying float v_alpha;
+
+	            void main() {
+	                vec2 c = gl_PointCoord - vec2(0.5);
+	                float d = dot(c, c);
+	                if (d > 0.25) discard;
+	                gl_FragColor = vec4(v_color, v_alpha);
+	            }
+	        `;
 
         this.program = createProgram(gl, vsSource, fsSource);
 
@@ -250,19 +259,19 @@ export class VolcanoPlot {
         this.draw();
     }
 
-    setThresholds(fcThreshold: number, sigThreshold: number): void {
-        this.fcThreshold = Math.max(0, fcThreshold);
-        this.sigThreshold = Math.max(0, sigThreshold);
-        this.ensureRangesContainThresholds();
-        this.draw();
-    }
+	    setThresholds(fcThreshold: number, sigThreshold: number): void {
+	        this.fcThreshold = Math.max(0, fcThreshold);
+	        this.sigThreshold = Math.max(0, sigThreshold);
+	        this.ensureRangesContainThresholds();
+	        this.draw();
+	    }
 
     setPointSize(size: number): void {
         this.pointSize = Math.max(1, size);
         this.draw();
     }
 
-    setData(points: VolcanoPlotPoint[]): void {
+	    setData(points: VolcanoPlotPoint[]): void {
         const xs: number[] = [];
         const ys: number[] = [];
         for (const p of points) {
@@ -299,23 +308,23 @@ export class VolcanoPlot {
         }
         this.points = data;
 
-        // Volcano plot conventions: symmetric x-range around 0, y starts at 0.
-        const maxAbsX = Math.max(Math.abs(minX), Math.abs(maxX), this.fcThreshold * 1.2, 1e-6);
-        this.minX = -maxAbsX;
-        this.maxX = maxAbsX;
-        this.minY = 0;
-        this.maxY = Math.max(maxY, this.sigThreshold * 1.2, 1);
+	        // Volcano plot conventions: symmetric x-range around 0, y starts at 0.
+	        const maxAbsX = Math.max(Math.abs(minX), Math.abs(maxX), this.fcThreshold * 1.2, 1e-6);
+	        this.minX = -maxAbsX;
+	        this.maxX = maxAbsX;
+	        this.minY = 0;
+	        const yMaxData = Math.max(0, maxY);
+	        this.maxY = Math.max(yMaxData * 1.05, 1e-3);
 
-        this.upload();
-        this.draw();
-    }
+	        this.upload();
+	        this.draw();
+	    }
 
-    private ensureRangesContainThresholds(): void {
-        const maxAbsX = Math.max(Math.abs(this.minX), Math.abs(this.maxX), this.fcThreshold * 1.2, 1e-6);
-        this.minX = -maxAbsX;
-        this.maxX = maxAbsX;
-        this.maxY = Math.max(this.maxY, this.sigThreshold * 1.2, 1);
-    }
+	    private ensureRangesContainThresholds(): void {
+	        const maxAbsX = Math.max(Math.abs(this.minX), Math.abs(this.maxX), this.fcThreshold * 1.2, 1e-6);
+	        this.minX = -maxAbsX;
+	        this.maxX = maxAbsX;
+	    }
 
     private upload(): void {
         if (!this.points) return;
@@ -377,9 +386,11 @@ export class VolcanoPlot {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
 
-        const styles = getComputedStyle(document.documentElement);
-        const borderColor = styles.getPropertyValue('--border-color').trim() || '#2a2a4a';
-        const textSecondary = styles.getPropertyValue('--text-secondary').trim() || '#a0a0a0';
+	        const styles = getComputedStyle(document.documentElement);
+	        const borderColor = styles.getPropertyValue('--border-color').trim() || '#2a2a4a';
+	        const textSecondary = styles.getPropertyValue('--text-secondary').trim() || '#a0a0a0';
+	        const accentPrimary = styles.getPropertyValue('--accent-primary').trim() || '#e94560';
+	        const accentSecondary = styles.getPropertyValue('--accent-secondary').trim() || '#0f4c75';
 
         const padL = 48;
         const padR = 16;
@@ -403,45 +414,77 @@ export class VolcanoPlot {
             return bottom - t * height;
         };
 
-        ctx.save();
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(left, top, width, height);
+	        ctx.save();
+	        ctx.strokeStyle = borderColor;
+	        ctx.lineWidth = 1;
+	        ctx.strokeRect(left, top, width, height);
 
-        // Axes at x=0 and y=0 when within range.
-        ctx.setLineDash([4, 4]);
-        if (this.minX <= 0 && this.maxX >= 0) {
-            const x0 = xToPx(0);
-            ctx.beginPath();
-            ctx.moveTo(x0, top);
-            ctx.lineTo(x0, bottom);
-            ctx.stroke();
-        }
-        if (this.minY <= 0 && this.maxY >= 0) {
-            const y0 = yToPx(0);
-            ctx.beginPath();
-            ctx.moveTo(left, y0);
-            ctx.lineTo(right, y0);
-            ctx.stroke();
-        }
+	        // Subtle grid for context.
+	        ctx.globalAlpha = 0.22;
+	        const gridCount = 10;
+	        for (let i = 1; i < gridCount; i++) {
+	            const x = left + (i / gridCount) * width;
+	            ctx.beginPath();
+	            ctx.moveTo(x, top);
+	            ctx.lineTo(x, bottom);
+	            ctx.stroke();
+	        }
+	        for (let i = 1; i < gridCount; i++) {
+	            const y = top + (i / gridCount) * height;
+	            ctx.beginPath();
+	            ctx.moveTo(left, y);
+	            ctx.lineTo(right, y);
+	            ctx.stroke();
+	        }
+	        ctx.globalAlpha = 1;
 
-        // Threshold lines.
-        ctx.setLineDash([6, 4]);
-        const xPos = xToPx(this.fcThreshold);
-        const xNeg = xToPx(-this.fcThreshold);
-        ctx.beginPath();
-        ctx.moveTo(xPos, top);
-        ctx.lineTo(xPos, bottom);
-        ctx.moveTo(xNeg, top);
-        ctx.lineTo(xNeg, bottom);
-        ctx.stroke();
+	        // Axes at x=0 and y=0 when within range.
+	        ctx.setLineDash([4, 4]);
+	        ctx.globalAlpha = 0.6;
+	        if (this.minX <= 0 && this.maxX >= 0) {
+	            const x0 = xToPx(0);
+	            ctx.beginPath();
+	            ctx.moveTo(x0, top);
+	            ctx.lineTo(x0, bottom);
+	            ctx.stroke();
+	        }
+	        if (this.minY <= 0 && this.maxY >= 0) {
+	            const y0 = yToPx(0);
+	            ctx.beginPath();
+	            ctx.moveTo(left, y0);
+	            ctx.lineTo(right, y0);
+	            ctx.stroke();
+	        }
+	        ctx.globalAlpha = 1;
 
-        const ySig = yToPx(this.sigThreshold);
-        ctx.beginPath();
-        ctx.moveTo(left, ySig);
-        ctx.lineTo(right, ySig);
-        ctx.stroke();
-        ctx.setLineDash([]);
+	        // Threshold lines.
+	        ctx.setLineDash([6, 4]);
+	        ctx.strokeStyle = accentSecondary;
+	        const xPos = Math.min(right, Math.max(left, xToPx(this.fcThreshold)));
+	        const xNeg = Math.min(right, Math.max(left, xToPx(-this.fcThreshold)));
+	        ctx.beginPath();
+	        ctx.moveTo(xPos, top);
+	        ctx.lineTo(xPos, bottom);
+	        ctx.moveTo(xNeg, top);
+	        ctx.lineTo(xNeg, bottom);
+	        ctx.stroke();
+
+	        ctx.strokeStyle = accentPrimary;
+	        const ySigRaw = yToPx(this.sigThreshold);
+	        const ySig = Math.min(bottom, Math.max(top, ySigRaw));
+	        ctx.beginPath();
+	        ctx.moveTo(left, ySig);
+	        ctx.lineTo(right, ySig);
+	        ctx.stroke();
+	        ctx.setLineDash([]);
+	        ctx.strokeStyle = borderColor;
+
+	        if (this.sigThreshold > this.maxY) {
+	            ctx.fillStyle = textSecondary;
+	            ctx.font = '11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif';
+	            ctx.textAlign = 'right';
+	            ctx.fillText('cutoff above range', right, top + 12);
+	        }
 
         // Labels
         ctx.fillStyle = textSecondary;
@@ -480,10 +523,13 @@ export class VolcanoPlot {
             return;
         }
 
-        const gl = this.gl;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+	        const gl = this.gl;
+	        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	        gl.clearColor(0, 0, 0, 0);
+	        gl.clear(gl.COLOR_BUFFER_BIT);
+	        gl.disable(gl.DEPTH_TEST);
+	        gl.enable(gl.BLEND);
+	        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         if (!this.points || this.pointCount === 0) {
             this.drawOverlay();
@@ -514,4 +560,3 @@ export class VolcanoPlot {
         this.drawOverlay();
     }
 }
-

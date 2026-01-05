@@ -1045,6 +1045,40 @@
     font-weight: 500;
 }
 
+.de-result-control-group input[type="checkbox"] {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 1px solid rgba(60, 90, 130, 0.5);
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+}
+
+.de-result-control-group input[type="checkbox"]:checked {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.de-result-control-group input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 3px;
+    height: 7px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.de-result-control-group input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(64, 192, 255, 0.18);
+}
+
 .de-result-select {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.75rem;

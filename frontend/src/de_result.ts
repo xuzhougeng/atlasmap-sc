@@ -252,14 +252,18 @@ function renderBase(root: HTMLElement, jobId: string) {
                             <span class="label">|log2FC| ≥</span>
                             <input id="plot-fc" class="de-result-input" type="number" step="0.1" value="1" />
                         </div>
-                        <div class="de-result-control-group">
-                            <span class="label">Sig ≤</span>
-                            <input id="plot-sig" class="de-result-input" type="number" step="0.001" min="0" max="1" value="0.05" />
-                        </div>
-                        <button class="de-result-btn-sm primary" id="btn-load-plot" type="button">Load Plot</button>
-                        <span id="plot-status" class="de-result-panel-status"></span>
-                    </div>
-                </div>
+	                        <div class="de-result-control-group">
+	                            <span class="label">Sig ≤</span>
+	                            <input id="plot-sig" class="de-result-input" type="number" step="0.001" min="0" max="1" value="0.05" />
+	                        </div>
+	                        <div class="de-result-control-group">
+	                            <input id="plot-exclude-zero" type="checkbox" checked />
+	                            <span class="label">Hide pct1=pct2=0</span>
+	                        </div>
+	                        <button class="de-result-btn-sm primary" id="btn-load-plot" type="button">Load Plot</button>
+	                        <span id="plot-status" class="de-result-panel-status"></span>
+	                    </div>
+	                </div>
                 <div class="de-result-volcano-body">
                     <canvas id="volcano-gl"></canvas>
                     <canvas id="volcano-overlay"></canvas>
@@ -413,6 +417,7 @@ async function init() {
     const plotMetricEl = root.querySelector('#plot-metric') as HTMLSelectElement;
     const plotFcEl = root.querySelector('#plot-fc') as HTMLInputElement;
     const plotSigEl = root.querySelector('#plot-sig') as HTMLInputElement;
+    const plotExcludeZeroEl = root.querySelector('#plot-exclude-zero') as HTMLInputElement;
     const plotBtn = root.querySelector('#btn-load-plot') as HTMLButtonElement;
     const plotStatusEl = root.querySelector('#plot-status') as HTMLSpanElement;
     const plotPlaceholderEl = root.querySelector('#volcano-placeholder') as HTMLDivElement;
@@ -474,10 +479,15 @@ async function init() {
         if (!plotItems) return;
         if (!ensurePlotInstance() || !volcanoPlot) return;
 
+        const excludeZero = plotExcludeZeroEl.checked;
+        const filtered = excludeZero
+            ? plotItems.filter(it => it.pct1 > 0 || it.pct2 > 0)
+            : plotItems;
+
         const metric = plotMetricEl.value as VolcanoMetric;
         volcanoPlot.setLabels('log2FC', `-log10(${metric})`);
 
-        const points = plotItems.map(it => ({
+        const points = filtered.map(it => ({
             x: it.log2fc,
             y: negLog10(getMetricValue(it, metric)),
         }));
@@ -485,6 +495,7 @@ async function init() {
         updatePlotThresholds();
 
         plotPlaceholderEl.style.display = 'none';
+        plotStatusEl.textContent = `Loaded ${plotItems.length.toLocaleString()} genes (plotted ${filtered.length.toLocaleString()})`;
     };
 
     const getQueryState = () => {
@@ -524,10 +535,15 @@ async function init() {
         lastStatus = info;
 
         plotBtn.disabled = !plotSupported || plotLoading || info.status !== 'completed';
+        const plottedCount = plotItems
+            ? (plotExcludeZeroEl.checked
+                ? plotItems.filter(it => it.pct1 > 0 || it.pct2 > 0).length
+                : plotItems.length)
+            : 0;
         plotStatusEl.textContent = !plotSupported
             ? 'WebGL unavailable'
             : info.status === 'completed'
-                ? (plotItems ? `Loaded ${plotItems.length.toLocaleString()} genes` : 'Ready to load')
+                ? (plotItems ? `Loaded ${plotItems.length.toLocaleString()} genes (plotted ${plottedCount.toLocaleString()})` : 'Ready to load')
                 : `Waiting (status: ${info.status})`;
 
         return info;
@@ -636,6 +652,10 @@ async function init() {
     plotSigEl.addEventListener('change', () => {
         renderPlotError(null);
         updatePlotThresholds();
+    });
+    plotExcludeZeroEl.addEventListener('change', () => {
+        renderPlotError(null);
+        updatePlotData();
     });
 
     applyBtn.addEventListener('click', () => {
