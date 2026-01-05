@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOMA-Tiles - DE Result</title>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <a class="header-title" href="/">SOMA-Tiles</a>
+            <div class="header-info" id="dataset-info"></div>
+        </header>
+
+        <main class="page-main">
+            <div class="page-card">
+                <div class="page-card-header">
+                    <div>
+                        <h2 class="page-title">DE 结果</h2>
+                        <div class="page-subtitle">任务完成后可在此查看结果表格（top genes）。</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <a class="btn-secondary" id="btn-job" href="#">任务进度</a>
+                        <a class="btn-secondary" id="btn-back" href="/">返回地图</a>
+                    </div>
+                </div>
+                <div id="de-result-root"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/src/de_result.ts"></script>
+</body>
+</html>
+

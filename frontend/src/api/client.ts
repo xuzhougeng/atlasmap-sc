@@ -85,6 +85,7 @@ export interface BinQueryParams {
 
 export type SomaDeTest = 'ttest' | 'ranksum';
 export type SomaDeJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type SomaDeResultOrderBy = 'fdr_ranksum' | 'fdr_ttest' | 'p_ranksum' | 'p_ttest' | 'abs_log2fc';
 
 export interface SomaDeJobCreateRequest {
     groupby: string;
@@ -112,6 +113,8 @@ export interface SomaDeJobStatusResponse {
         done?: number;
         total?: number;
     };
+    n1?: number;
+    n2?: number;
     error?: string;
 }
 
@@ -122,6 +125,42 @@ interface SomaObsColumnsResponse {
 interface SomaObsValuesResponse {
     column: string;
     values: string[];
+}
+
+export interface SomaDeJobParams {
+    dataset_id: string;
+    groupby: string;
+    group1: string[];
+    group2: string[];
+    tests: string[];
+    max_cells_per_group: number;
+    seed: number;
+    limit: number;
+}
+
+export interface SomaDeResultItem {
+    gene: string;
+    gene_joinid: number;
+    mean1: number;
+    mean2: number;
+    pct1: number;
+    pct2: number;
+    log2fc: number;
+    p_ttest: number;
+    fdr_ttest: number;
+    p_ranksum: number;
+    fdr_ranksum: number;
+}
+
+export interface SomaDeJobResultResponse {
+    params: SomaDeJobParams;
+    n1: number;
+    n2: number;
+    total: number;
+    offset: number;
+    limit: number;
+    order_by: SomaDeResultOrderBy;
+    items: SomaDeResultItem[];
 }
 
 export class ApiClient {
@@ -272,6 +311,18 @@ export class ApiClient {
 
     async getSomaDeJob(jobId: string): Promise<SomaDeJobStatusResponse> {
         return this.fetchJson(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}`);
+    }
+
+    async getSomaDeJobResult(
+        jobId: string,
+        params: { offset?: number; limit?: number; order_by?: SomaDeResultOrderBy } = {}
+    ): Promise<SomaDeJobResultResponse> {
+        const query = new URLSearchParams();
+        if (params.offset !== undefined) query.set('offset', params.offset.toString());
+        if (params.limit !== undefined) query.set('limit', params.limit.toString());
+        if (params.order_by !== undefined) query.set('order_by', params.order_by);
+        const suffix = query.toString() ? `?${query}` : '';
+        return this.fetchJson(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}/result${suffix}`);
     }
 
     async cancelSomaDeJob(jobId: string): Promise<void> {

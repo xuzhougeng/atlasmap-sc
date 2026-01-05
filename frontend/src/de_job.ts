@@ -83,9 +83,9 @@ function renderStatus(root: HTMLElement, info: SomaDeJobStatusResponse, currentU
         ? `${progress.phase ? progress.phase + ': ' : ''}${progress.done}/${progress.total}`
         : (progress?.phase || '—');
 
-    root.innerHTML = `
-        <div class="de-job-status">
-            <div class="status-grid">
+	    root.innerHTML = `
+	        <div class="de-job-status">
+	            <div class="status-grid">
                 <div class="status-section">
                     <div class="status-section-title">Job Identifier</div>
                     <div class="job-id">${escapeHtml(info.job_id)}</div>
@@ -123,30 +123,39 @@ function renderStatus(root: HTMLElement, info: SomaDeJobStatusResponse, currentU
                     </div>
                 </div>
 
-                <div class="actions">
-                    <button class="btn-action primary" id="btn-refresh" type="button">
+	                <div class="actions">
+	                    <button class="btn-action primary" id="btn-refresh" type="button">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M23 4v6h-6M1 20v-6h6"/>
                             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                         </svg>
-                        Refresh
-                    </button>
-                    <button class="btn-action" id="btn-copy" type="button">
+	                        Refresh
+	                    </button>
+	                    <button class="btn-action" id="btn-copy" type="button">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                         </svg>
-                        Copy URL
-                    </button>
-                </div>
+	                        Copy URL
+	                    </button>
+                        ${info.status === 'completed' ? `
+                            <button class="btn-action" id="btn-results" type="button">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 3v18h18"/>
+                                    <path d="M7 13l3 3 7-7"/>
+                                </svg>
+                                View Results
+                            </button>
+                        ` : ''}
+	                </div>
 
-                <div class="url-notice">
-                    <div class="url-notice-title">Bookmark this URL</div>
-                    <div class="url-notice-url">${escapeHtml(currentUrl)}</div>
-                </div>
-            </div>
-        </div>
-    `;
+	                <div class="url-notice">
+	                    <div class="url-notice-title">Bookmark this URL</div>
+	                    <div class="url-notice-url">${escapeHtml(currentUrl)}</div>
+	                </div>
+	            </div>
+	        </div>
+	    `;
 }
 
 async function init() {
@@ -187,12 +196,13 @@ async function init() {
         backBtn.href = `/?dataset=${encodeURIComponent(dataset)}`;
     }
 
-    const api = new ApiClient(`/d/${encodeURIComponent(dataset)}/api`);
+	const api = new ApiClient(`/d/${encodeURIComponent(dataset)}/api`);
 
-    let pollTimer: number | null = null;
-    let inFlight = false;
+	let pollTimer: number | null = null;
+	let inFlight = false;
+        let redirected = false;
 
-    const refresh = async () => {
+	const refresh = async () => {
         if (inFlight) return;
         inFlight = true;
         try {
@@ -202,8 +212,8 @@ async function init() {
             const refreshBtn = root.querySelector('#btn-refresh') as HTMLButtonElement | null;
             refreshBtn?.addEventListener('click', () => void refresh());
 
-            const copyBtn = root.querySelector('#btn-copy') as HTMLButtonElement | null;
-            copyBtn?.addEventListener('click', async () => {
+	            const copyBtn = root.querySelector('#btn-copy') as HTMLButtonElement | null;
+	            copyBtn?.addEventListener('click', async () => {
                 try {
                     await navigator.clipboard.writeText(window.location.href);
                     if (copyBtn) {
@@ -226,17 +236,37 @@ async function init() {
                 } catch {
                     if (copyBtn) copyBtn.textContent = 'Copy failed';
                 }
-            });
+	            });
 
-            if (info.status === 'completed' || info.status === 'failed' || info.status === 'cancelled') {
-                if (pollTimer !== null) {
-                    clearInterval(pollTimer);
-                    pollTimer = null;
+                const resultsBtn = root.querySelector('#btn-results') as HTMLButtonElement | null;
+                resultsBtn?.addEventListener('click', () => {
+                    const resultUrl = new URL(window.location.href);
+                    resultUrl.pathname = '/de_result.html';
+                    resultUrl.searchParams.set('dataset', dataset);
+                    resultUrl.searchParams.set('job_id', jobId);
+                    window.location.href = resultUrl.toString();
+                });
+
+	            if (info.status === 'completed' || info.status === 'failed' || info.status === 'cancelled') {
+	                if (pollTimer !== null) {
+	                    clearInterval(pollTimer);
+	                    pollTimer = null;
+	                }
+	            }
+
+                if (info.status === 'completed' && !redirected) {
+                    redirected = true;
+                    window.setTimeout(() => {
+                        const resultUrl = new URL(window.location.href);
+                        resultUrl.pathname = '/de_result.html';
+                        resultUrl.searchParams.set('dataset', dataset);
+                        resultUrl.searchParams.set('job_id', jobId);
+                        window.location.href = resultUrl.toString();
+                    }, 1200);
                 }
-            }
-        } catch (e: any) {
-            root.innerHTML = `<div class="error-box">Failed to fetch status: ${escapeHtml(e?.message || String(e))}</div>`;
-        } finally {
+	        } catch (e: any) {
+	            root.innerHTML = `<div class="error-box">Failed to fetch status: ${escapeHtml(e?.message || String(e))}</div>`;
+	        } finally {
             inFlight = false;
         }
     };

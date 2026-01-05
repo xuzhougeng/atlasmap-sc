@@ -13,6 +13,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         de: resolve(__dirname, 'de.html'),
         deJob: resolve(__dirname, 'de_job.html'),
+        deResult: resolve(__dirname, 'de_result.html'),
       },
     },
   },
