@@ -33,6 +33,10 @@ class PreprocessConfig:
     category_columns: list[str] = field(default_factory=list)  # obs columns to include
     default_category: str = "cell_type"
 
+    # Numeric column settings
+    numeric_columns: list[str] = field(default_factory=list)  # 显式指定的数值列
+    exclude_numeric_columns: list[str] = field(default_factory=list)  # 排除自动检测的列
+
     # Zarr settings
     zarr_compressor: str = "zstd"
     zarr_compression_level: int = 3
@@ -80,6 +84,8 @@ class PreprocessConfig:
             "min_cells_expressed": self.min_cells_expressed,
             "category_columns": self.category_columns,
             "default_category": self.default_category,
+            "numeric_columns": self.numeric_columns,
+            "exclude_numeric_columns": self.exclude_numeric_columns,
             "zarr_compressor": self.zarr_compressor,
             "zarr_compression_level": self.zarr_compression_level,
             "chunk_size": self.chunk_size,

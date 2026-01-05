@@ -6,6 +6,7 @@ from typing import Optional
 import json
 
 import numpy as np
+import pandas as pd
 import scanpy as sc
 from tqdm import tqdm
 
@@ -34,6 +35,7 @@ class PreprocessingPipeline:
         self.normalized_coords: Optional[np.ndarray] = None
         self.selected_genes: Optional[list[str]] = None
         self.category_mapping: dict[str, dict[str, int]] = {}
+        self.numeric_columns: list[str] = []  # 存储检测到的数值列
 
     def run(self) -> None:
         """Execute the full preprocessing pipeline."""
@@ -106,6 +108,24 @@ class PreprocessingPipeline:
 
         logger.info(f"Selected {len(self.selected_genes)} genes for pre-aggregation")
 
+    def _is_numeric_column(self, col: str) -> bool:
+        """判断列是否为数值型。
+
+        Args:
+            col: obs 列名
+
+        Returns:
+            True 如果是数值型列
+        """
+        # 显式排除
+        if col in self.config.exclude_numeric_columns:
+            return False
+        # 显式指定
+        if col in self.config.numeric_columns:
+            return True
+        # 自动检测
+        return pd.api.types.is_numeric_dtype(self.adata.obs[col])
+
     def _build_category_mappings(self) -> None:
         """Build mappings from category names to integer indices."""
         logger.info("Building category mappings")
@@ -120,9 +140,15 @@ class PreprocessingPipeline:
                 logger.warning(f"Category column '{col}' not found in obs, skipping")
                 continue
 
-            categories = self.adata.obs[col].astype(str).unique()
-            self.category_mapping[col] = {cat: idx for idx, cat in enumerate(sorted(categories))}
-            logger.info(f"  {col}: {len(categories)} categories")
+            if self._is_numeric_column(col):
+                # 数值列：跳过分类映射
+                self.numeric_columns.append(col)
+                logger.info(f"  {col}: numeric (will aggregate with median)")
+            else:
+                # 分类列：原有逻辑
+                categories = self.adata.obs[col].astype(str).unique()
+                self.category_mapping[col] = {cat: idx for idx, cat in enumerate(sorted(categories))}
+                logger.info(f"  {col}: {len(categories)} categories")
 
     def _build_and_write_bins(self) -> None:
         """Build multi-resolution bins and write to Zarr."""
@@ -139,6 +165,7 @@ class PreprocessingPipeline:
             tile_size=self.config.tile_size,
             n_genes=len(self.selected_genes),
             n_categories={col: len(cats) for col, cats in self.category_mapping.items()},
+            numeric_columns=self.numeric_columns,
             compressor=self.config.zarr_compressor,
             compression_level=self.config.zarr_compression_level,
         )
@@ -194,6 +221,12 @@ class PreprocessingPipeline:
                         counts[idx] = (cats == cat).sum()
                     category_counts[col] = counts
 
+                # Aggregate numeric columns (median)
+                numeric_medians = {}
+                for col in self.numeric_columns:
+                    values = self.adata.obs[col].iloc[cell_indices].values
+                    numeric_medians[col] = float(np.median(values))
+
                 bins_data.append({
                     "bin_x": int(bin_x),
                     "bin_y": int(bin_y),
@@ -202,6 +235,7 @@ class PreprocessingPipeline:
                     "expression_mean": expr_mean,
                     "expression_max": expr_max,
                     "category_counts": category_counts,
+                    "numeric_medians": numeric_medians,
                 })
 
             # Write bins for this zoom level
@@ -229,6 +263,7 @@ class PreprocessingPipeline:
             normalized_coords=self.normalized_coords,
             preaggregated_genes=self.selected_genes,
             category_columns=list(self.category_mapping.keys()),
+            numeric_columns=self.numeric_columns,
         )
 
         writer.finalize()
@@ -263,6 +298,7 @@ class PreprocessingPipeline:
                 }
                 for col, mapping in self.category_mapping.items()
             },
+            "numeric_columns": self.numeric_columns,
             "umap_key": self.config.umap_key,
             "bounds": {
                 "min_x": 0.0,

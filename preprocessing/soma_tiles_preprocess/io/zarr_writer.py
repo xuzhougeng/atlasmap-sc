@@ -20,6 +20,7 @@ class ZarrBinWriter:
         tile_size: int,
         n_genes: int,
         n_categories: dict[str, int],
+        numeric_columns: list[str] | None = None,
         compressor: str = "zstd",
         compression_level: int = 3,
     ):
@@ -31,6 +32,7 @@ class ZarrBinWriter:
             tile_size: Tile size in pixels
             n_genes: Number of pre-aggregated genes
             n_categories: Dict mapping category column names to number of categories
+            numeric_columns: List of numeric column names
             compressor: Compression algorithm ("zstd" or "blosc")
             compression_level: Compression level
         """
@@ -39,6 +41,7 @@ class ZarrBinWriter:
         self.tile_size = tile_size
         self.n_genes = n_genes
         self.n_categories = n_categories
+        self.numeric_columns = numeric_columns or []
         self.compression_level = compression_level
 
         # Create root directory
@@ -52,6 +55,7 @@ class ZarrBinWriter:
         self.root.attrs["tile_size"] = tile_size
         self.root.attrs["n_genes"] = n_genes
         self.root.attrs["n_categories"] = dict(n_categories)
+        self.root.attrs["numeric_columns"] = self.numeric_columns
         self.root.attrs["format_version"] = "1.0"
 
         # Create groups for each zoom level
@@ -71,6 +75,7 @@ class ZarrBinWriter:
                 - expression_mean: np.ndarray of float32
                 - expression_max: np.ndarray of float32
                 - category_counts: dict[str, np.ndarray]
+                - numeric_medians: dict[str, float] (optional)
         """
         if not bins_data:
             logger.warning(f"No bins for zoom level {zoom}")
@@ -134,6 +139,21 @@ class ZarrBinWriter:
                 data=cat_data,
                 chunks=(min(1000, n_bins), n_cats),
             )
+
+        # Write numeric medians
+        if self.numeric_columns:
+            num_group = group.create_group("numeric_medians")
+            for col_name in self.numeric_columns:
+                num_data = np.array(
+                    [b.get("numeric_medians", {}).get(col_name, np.nan)
+                     for b in bins_data],
+                    dtype=np.float32,
+                )
+                num_group.create_array(
+                    col_name,
+                    data=num_data,
+                    chunks=(min(1000, n_bins),),
+                )
 
         # Write cell IDs as variable-length data
         # Store as object array with ragged arrays

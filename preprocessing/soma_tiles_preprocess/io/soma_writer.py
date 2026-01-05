@@ -49,6 +49,7 @@ class SomaWriter:
         normalized_coords: np.ndarray,
         preaggregated_genes: list[str],
         category_columns: list[str],
+        numeric_columns: list[str] | None = None,
     ) -> None:
         """Write complete AnnData to SOMA Experiment.
 
@@ -57,6 +58,7 @@ class SomaWriter:
             normalized_coords: Normalized 2D coordinates [n_cells, 2]
             preaggregated_genes: List of genes in the Zarr pre-aggregation
             category_columns: Category columns to include in obs
+            numeric_columns: Numeric columns to include in obs (will preserve original type)
         """
         logger.info(f"Writing SOMA Experiment to: {self.path}")
 
@@ -64,7 +66,9 @@ class SomaWriter:
         bin_coords = self._compute_bin_coordinates(normalized_coords)
 
         # Build DataFrames
-        obs_df = self._build_obs_dataframe(adata, normalized_coords, bin_coords, category_columns)
+        obs_df = self._build_obs_dataframe(
+            adata, normalized_coords, bin_coords, category_columns, numeric_columns or []
+        )
         var_df = self._build_var_dataframe(adata, preaggregated_genes)
 
         # Get expression matrix
@@ -166,6 +170,7 @@ class SomaWriter:
         normalized_coords: np.ndarray,
         bin_coords: dict[int, np.ndarray],
         category_columns: list[str],
+        numeric_columns: list[str],
     ) -> pd.DataFrame:
         """Build obs DataFrame with spatial indices.
 
@@ -174,6 +179,7 @@ class SomaWriter:
             normalized_coords: Normalized coordinates
             bin_coords: Bin coordinates per zoom level
             category_columns: Category columns to include
+            numeric_columns: Numeric columns to include (preserves original type)
 
         Returns:
             DataFrame with cell metadata and spatial indices
@@ -194,10 +200,15 @@ class SomaWriter:
             obs_data[f"bin_z{zoom}_x"] = coords[:, 0]
             obs_data[f"bin_z{zoom}_y"] = coords[:, 1]
 
-        # Add category columns from original obs
+        # Add category columns from original obs (as string)
         for col in category_columns:
             if col in adata.obs.columns:
                 obs_data[col] = adata.obs[col].astype(str).values
+
+        # Add numeric columns from original obs (preserve type)
+        for col in numeric_columns:
+            if col in adata.obs.columns:
+                obs_data[col] = adata.obs[col].values.astype(np.float32)
 
         return pd.DataFrame(obs_data)
 
