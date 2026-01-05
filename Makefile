@@ -1,4 +1,4 @@
-.PHONY: all build run dev test clean preprocess
+.PHONY: all build run dev dev-soma test clean preprocess
 
 # Variables
 GO_SERVER_DIR := server
@@ -27,6 +27,17 @@ dev:
 
 dev-server:
 	cd $(GO_SERVER_DIR) && go run ./cmd/server -config ../config/server.yaml
+
+dev-soma:
+	@echo "Starting SOMA-enabled development servers..."
+	@make -j2 dev-soma-server dev-frontend
+
+dev-soma-server:
+	cd $(GO_SERVER_DIR) && \
+		CGO_ENABLED=1 \
+		CGO_CFLAGS="-I$$CONDA_PREFIX/include" \
+		CGO_LDFLAGS="-L$$CONDA_PREFIX/lib -ltiledb -Wl,-rpath,$$CONDA_PREFIX/lib" \
+		go run -tags soma ./cmd/server -config ../config/server.yaml
 
 dev-frontend:
 	cd $(FRONTEND_DIR) && npm run dev
@@ -107,6 +118,7 @@ help:
 	@echo "Usage:"
 	@echo "  make build          - Build all components"
 	@echo "  make dev            - Start development servers"
+	@echo "  make dev-soma       - Start SOMA-enabled dev server (requires conda TileDB)"
 	@echo "  make test           - Run all tests"
 	@echo "  make install        - Install all dependencies"
 	@echo "  make preprocess INPUT=file.h5ad - Run preprocessing"

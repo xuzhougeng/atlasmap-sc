@@ -6,31 +6,69 @@ Detailed usage/deployment guide: `doc/how-to-use.md`.
 
 ## Architecture
 
+SOMA-Tiles is a two-stage pipeline: **offline preprocessing** turns an `.h5ad` into a tile-friendly,
+multi-zoom bin store, and an **online Go server** renders Leaflet-compatible PNG tiles on demand.
+A static TypeScript frontend consumes the JSON + tile endpoints.
+
+```text
+┌──────────────────────────────────────────────┐
+│               Offline (Python)               │
+│  preprocessing/ (soma-preprocess CLI)        │
+│  - normalize UMAP coords to [0,256)          │
+│  - select preaggregated genes                │
+│  - quadtree binning for zoom=0..Z-1          │
+│  - per-bin aggregation (sparse non-empty)    │
+└───────────────────────────┬──────────────────┘
+                            │ writes
+                            ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Data artifacts (per dataset)                                            │
+│                                                                        │
+│  zarr/metadata.json + zarr/gene_index.json                              │
+│  zarr/bins.zarr  (Zarr v3, zstd chunks)                                 │
+│    zoom_{z}/bin_coords        int32  [N,2]   (bin_x,bin_y)              │
+│    zoom_{z}/cell_count        uint32 [N]                                  │
+│    zoom_{z}/expression_mean   float32 [N,G] (preaggregated genes)       │
+│    zoom_{z}/expression_max    float32 [N,G]                              │
+│    zoom_{z}/category_counts/* uint32 [N,C] (per column)                 │
+│    zoom_{z}/cell_ids/*        ragged cell indices (optional)            │
+│                                                                        │
+│  soma/experiment.soma (optional; TileDB-SOMA full matrix + obs/var)     │
+└───────────────────────────┬────────────────────────────────────────────┘
+                            │ read
+                            ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Online (Go)                                                           │
+│  server/ (chi router)                                                 │
+│  - multi-dataset registry (/api/datasets, /d/{dataset}/...)            │
+│  - Zarr reader (loads sparse bins + per-gene/category vectors)         │
+│  - tile service: render from highest zoom and slice per {z,x,y}        │
+│  - PNG renderer (256x256; base/category/expression)                    │
+│  - in-memory tile cache (BigCache; dataset-aware keys)                 │
+│  - (optional, -tags soma) SOMA endpoints + DE job runner (SQLite)      │
+└───────────────────────────┬────────────────────────────────────────────┘
+                            │ HTTP (PNG tiles + JSON)
+                            ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Web Frontend (TS + Vite + Leaflet)                                     │
+│  frontend/                                                            │
+│  - dataset selector + metadata bootstrap                               │
+│  - Leaflet tile layers: base/category/expression                        │
+│  - gene/category controls + filters + (optional) DE UI                 │
+└────────────────────────────────────────────────────────────────────────┘
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Offline Preprocessing                        │
-│  (Run on machine with >16GB RAM)                                │
-│                                                                 │
-│  H5AD ──► Multi-resolution UMAP Bins ──► TileDBSOMA Store      │
-│           (Zarr, 8 zoom levels)          (Full expression)      │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Online Service (<2GB RAM)                    │
-│                                                                 │
-│  Go Server ──► Zarr Column Slices ──► PNG Tile Rendering       │
-│            ──► Bin Aggregation      ──► Legend JSON             │
-│  (SOMA for arbitrary gene queries)                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Web Frontend                                 │
-│                                                                 │
-│  Leaflet Tiles + Annotation/Gene Controls + Filter UI          │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+### Runtime flow (happy path)
+
+1. Frontend calls `GET /api/datasets` to get the dataset list and default.
+2. Frontend bootstraps the selected dataset via `GET /d/{dataset}/api/metadata` (bounds/zoom/genes/categories).
+3. Leaflet requests PNG tiles at native zooms `z=0..zoom_levels-1`:
+   - base: `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`
+   - category: `GET|POST /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png` (optional filter)
+   - expression: `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=...`
+4. Server renders from the highest available bin zoom (sparse bins) and caches the resulting PNG bytes.
+5. If the server is built with `-tags soma` and the dataset has `soma_path`, extra endpoints become available
+   for arbitrary gene queries and differential-expression jobs (persisted in SQLite).
 
 ## Quick Start
 
