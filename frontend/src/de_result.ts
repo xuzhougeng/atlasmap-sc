@@ -96,14 +96,14 @@ function formatPct(v: number): string {
 
 function renderTableBody(items: SomaDeResultItem[]): string {
     if (!items.length) {
-        return `<tr><td colspan="10" style="color:var(--text-secondary); padding:12px;">No results</td></tr>`;
+        return `<tr><td colspan="10" style="color:var(--text-secondary); padding:16px; text-align:center;">No results</td></tr>`;
     }
 
     return items
         .map((it) => {
             return `
                 <tr>
-                    <td class="mono">${escapeHtml(it.gene)}</td>
+                    <td>${escapeHtml(it.gene)}</td>
                     <td>${formatNumber(it.log2fc, 3)}</td>
                     <td>${formatNumber(it.mean1, 4)}</td>
                     <td>${formatNumber(it.mean2, 4)}</td>
@@ -140,17 +140,37 @@ function negLog10(v: number): number {
     return -Math.log10(safe);
 }
 
-function renderResult(root: HTMLElement, result: SomaDeJobResultResponse, statusUrl: string) {
+function renderResult(root: HTMLElement, result: SomaDeJobResultResponse) {
     const params = result.params;
     const group2Label = params.group2?.length ? params.group2.join(', ') : '(one-vs-rest)';
+
+    // Compact Summary Strip
     root.querySelector('#summary')!.innerHTML = `
-        <div><span style="color:var(--text-secondary);">groupby:</span> <span class="mono">${escapeHtml(params.groupby)}</span></div>
-        <div><span style="color:var(--text-secondary);">group1:</span> <span class="mono">${escapeHtml(params.group1.join(', '))}</span></div>
-        <div><span style="color:var(--text-secondary);">group2:</span> <span class="mono">${escapeHtml(group2Label)}</span></div>
-        <div><span style="color:var(--text-secondary);">tests:</span> <span class="mono">${escapeHtml((params.tests || []).join(', '))}</span></div>
-        <div><span style="color:var(--text-secondary);">n1/n2:</span> <span class="mono">${result.n1} / ${result.n2}</span></div>
-        <div><span style="color:var(--text-secondary);">total genes:</span> <span class="mono">${result.total}</span></div>
-        <div style="margin-top:8px; color:var(--text-secondary);">Job status URL: <span class="mono">${escapeHtml(statusUrl)}</span> (save this link)</div>
+        <div class="de-result-summary-item">
+            <span class="label">Group By</span>
+            <span class="value">${escapeHtml(params.groupby)}</span>
+        </div>
+        <div class="de-result-summary-item">
+            <span class="label">Group 1</span>
+            <span class="value" title="${escapeHtml(params.group1.join(', '))}">${escapeHtml(params.group1.join(', '))}</span>
+        </div>
+        <div class="de-result-summary-item">
+            <span class="label">Group 2</span>
+            <span class="value" title="${escapeHtml(group2Label)}">${escapeHtml(group2Label)}</span>
+        </div>
+        <div class="de-result-summary-divider"></div>
+        <div class="de-result-summary-item">
+            <span class="label">Tests</span>
+            <span class="value">${escapeHtml((params.tests || []).join(', '))}</span>
+        </div>
+        <div class="de-result-summary-item">
+            <span class="label">N1 / N2</span>
+            <span class="value">${result.n1} / ${result.n2}</span>
+        </div>
+        <div class="de-result-summary-item">
+            <span class="label">Total Genes</span>
+            <span class="value">${result.total.toLocaleString()}</span>
+        </div>
     `;
 
     const tableBody = root.querySelector('#results-body')!;
@@ -174,102 +194,137 @@ function renderResult(root: HTMLElement, result: SomaDeJobResultResponse, status
     nextBtn.disabled = result.offset + result.limit >= result.total;
 }
 
-function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
+function renderBase(root: HTMLElement, jobId: string) {
+    // Add result page class to body
+    document.body.classList.add('de-result-page');
+
     root.innerHTML = `
-        <div class="status-row">
-            <span>Job ID:</span>
-            <span class="mono">${escapeHtml(jobId)}</span>
-            <span>Status:</span>
-            <span class="status-badge queued" id="status-badge">loading</span>
-            <button class="btn-secondary" id="btn-refresh" type="button">Refresh</button>
-            <button class="btn-secondary" id="btn-copy" type="button">Copy URL</button>
+        <!-- Status Strip -->
+        <div class="de-result-status-strip">
+            <div class="de-result-status-left">
+                <div class="de-result-job-id">
+                    <span class="label">Job ID</span>
+                    <span class="value">${escapeHtml(jobId)}</span>
+                </div>
+                <span class="de-result-status-badge queued" id="status-badge">loading</span>
+            </div>
+            <div class="de-result-status-right">
+                <button class="de-result-btn" id="btn-refresh" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    Refresh
+                </button>
+                <button class="de-result-btn" id="btn-copy" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    Copy Link
+                </button>
+            </div>
         </div>
 
-        <div class="notice">
-            Results page URL (bookmark/share): <span class="mono">${escapeHtml(currentUrl)}</span>
-        </div>
+        <!-- Summary Strip -->
+        <div class="de-result-summary-strip" id="summary"></div>
 
-        <div class="form-grid" style="margin-top:12px;">
-            <div class="form-row">
-                <label for="order-by">Order By</label>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <select id="order-by" class="select" style="max-width: 260px;">
-                        <option value="fdr_ranksum">fdr_ranksum (default)</option>
-                        <option value="fdr_ttest">fdr_ttest</option>
-                        <option value="p_ranksum">p_ranksum</option>
-                        <option value="p_ttest">p_ttest</option>
-                        <option value="abs_log2fc">abs_log2fc</option>
-                    </select>
-                    <span class="form-help">offset=<span id="offset" class="mono">0</span></span>
+        <!-- Error Container -->
+        <div id="error" class="de-result-error" style="display:none;"></div>
+
+        <!-- Main Split Panel -->
+        <div class="de-result-main">
+            <!-- Volcano Plot Panel -->
+            <div class="de-result-panel de-result-volcano-panel">
+                <div class="de-result-panel-header">
+                    <span class="de-result-panel-title">Volcano Plot</span>
+                    <div class="de-result-panel-controls">
+                        <div class="de-result-control-group">
+                            <span class="label">Metric</span>
+                            <select id="plot-metric" class="de-result-select">
+                                <option value="fdr_ranksum">fdr_ranksum</option>
+                                <option value="p_ranksum">p_ranksum</option>
+                                <option value="fdr_ttest">fdr_ttest</option>
+                                <option value="p_ttest">p_ttest</option>
+                            </select>
+                        </div>
+                        <div class="de-result-control-group">
+                            <span class="label">|log2FC| ≥</span>
+                            <input id="plot-fc" class="de-result-input" type="number" step="0.1" value="1" />
+                        </div>
+                        <div class="de-result-control-group">
+                            <span class="label">Sig ≤</span>
+                            <input id="plot-sig" class="de-result-input" type="number" step="0.001" min="0" max="1" value="0.05" />
+                        </div>
+                        <button class="de-result-btn-sm primary" id="btn-load-plot" type="button">Load Plot</button>
+                        <span id="plot-status" class="de-result-panel-status"></span>
+                    </div>
+                </div>
+                <div class="de-result-volcano-body">
+                    <canvas id="volcano-gl"></canvas>
+                    <canvas id="volcano-overlay"></canvas>
+                    <div class="de-result-volcano-placeholder" id="volcano-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2L2 22h20L12 2z"/>
+                            <circle cx="12" cy="16" r="1"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                        </svg>
+                        <p>Click "Load Plot" to fetch all genes and render the volcano plot.</p>
+                        <p class="hint">(This may take a moment for large datasets)</p>
+                    </div>
+                </div>
+                <div id="plot-error" class="de-result-volcano-error" style="display:none;"></div>
+            </div>
+
+            <!-- Table Panel -->
+            <div class="de-result-panel de-result-table-panel">
+                <div class="de-result-panel-header">
+                    <span class="de-result-panel-title">Gene Results</span>
+                    <div class="de-result-panel-controls">
+                        <div class="de-result-control-group">
+                            <span class="label">Sort By</span>
+                            <select id="order-by" class="de-result-select">
+                                <option value="fdr_ranksum">fdr_ranksum</option>
+                                <option value="fdr_ttest">fdr_ttest</option>
+                                <option value="p_ranksum">p_ranksum</option>
+                                <option value="p_ttest">p_ttest</option>
+                                <option value="abs_log2fc">abs_log2fc</option>
+                            </select>
+                        </div>
+                        <div class="de-result-control-group">
+                            <span class="label">Limit</span>
+                            <input id="limit" class="de-result-input" type="number" min="1" max="500" value="50" />
+                        </div>
+                        <button class="de-result-btn-sm" id="btn-apply" type="button">Apply</button>
+                    </div>
+                </div>
+                <div class="de-result-table-body">
+                    <table class="de-result-table">
+                        <thead>
+                            <tr>
+                                <th>Gene</th>
+                                <th>log2fc</th>
+                                <th>mean1</th>
+                                <th>mean2</th>
+                                <th>pct1</th>
+                                <th>pct2</th>
+                                <th>p_ttest</th>
+                                <th>fdr_ttest</th>
+                                <th>p_ranksum</th>
+                                <th>fdr_ranksum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body"></tbody>
+                    </table>
+                </div>
+                <div class="de-result-table-footer">
+                    <div class="de-result-pagination">
+                        <button class="de-result-btn-sm" id="btn-prev" type="button">Prev</button>
+                        <span id="page-info" class="de-result-pagination-info"></span>
+                        <button class="de-result-btn-sm" id="btn-next" type="button">Next</button>
+                    </div>
                 </div>
             </div>
-
-            <div class="form-row">
-                <label>Pagination</label>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <input id="limit" class="input" type="number" min="1" max="500" value="50" style="max-width: 120px;" />
-                    <button class="btn-secondary" id="btn-apply" type="button">Apply</button>
-                    <button class="btn-secondary" id="btn-prev" type="button">Prev</button>
-                    <button class="btn-secondary" id="btn-next" type="button">Next</button>
-                    <span id="page-info" class="form-help"></span>
-                </div>
-            </div>
-        </div>
-
-        <div id="summary" class="notice"></div>
-        <div id="error" style="margin-top:12px;"></div>
-
-        <div class="volcano-panel">
-            <div class="volcano-header">
-                <span style="font-weight:700;">Volcano plot (WebGL)</span>
-                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
-                    Metric
-                    <select id="plot-metric" class="select" style="max-width: 220px;">
-                        <option value="fdr_ranksum">fdr_ranksum</option>
-                        <option value="p_ranksum">p_ranksum</option>
-                        <option value="fdr_ttest">fdr_ttest</option>
-                        <option value="p_ttest">p_ttest</option>
-                    </select>
-                </label>
-                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
-                    |log2FC| ≥
-                    <input id="plot-fc" class="input" type="number" step="0.1" value="1" style="max-width: 90px;" />
-                </label>
-                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
-                    Metric ≤
-                    <input id="plot-sig" class="input" type="number" step="0.001" min="0" max="1" value="0.05" style="max-width: 110px;" />
-                </label>
-                <button class="btn-secondary" id="btn-load-plot" type="button">Load plot (all genes)</button>
-                <span id="plot-status" class="volcano-status"></span>
-            </div>
-            <div class="volcano-canvas-wrap">
-                <canvas id="volcano-gl"></canvas>
-                <canvas id="volcano-overlay"></canvas>
-                <div class="volcano-placeholder" id="volcano-placeholder">
-                    Load the plot to fetch all genes (paged requests) and render the volcano plot.
-                </div>
-            </div>
-            <div id="plot-error" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="results-table-container" style="margin-top:12px;">
-            <table class="results-table">
-                <thead>
-                    <tr>
-                        <th>Gene</th>
-                        <th>log2fc</th>
-                        <th>mean1</th>
-                        <th>mean2</th>
-                        <th>pct1</th>
-                        <th>pct2</th>
-                        <th>p_ttest</th>
-                        <th>fdr_ttest</th>
-                        <th>p_ranksum</th>
-                        <th>fdr_ranksum</th>
-                    </tr>
-                </thead>
-                <tbody id="results-body"></tbody>
-            </table>
         </div>
     `;
 
@@ -278,10 +333,10 @@ function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
         try {
             await navigator.clipboard.writeText(window.location.href);
             copyBtn.textContent = 'Copied';
-            window.setTimeout(() => (copyBtn.textContent = 'Copy URL'), 1200);
+            window.setTimeout(() => (copyBtn.textContent = 'Copy Link'), 1200);
         } catch {
             copyBtn.textContent = 'Copy failed';
-            window.setTimeout(() => (copyBtn.textContent = 'Copy URL'), 1200);
+            window.setTimeout(() => (copyBtn.textContent = 'Copy Link'), 1200);
         }
     });
 }
@@ -344,7 +399,7 @@ async function init() {
 
     const api = new ApiClient(`/d/${encodeURIComponent(dataset)}/api`);
 
-    renderBase(root, jobId, window.location.href);
+    renderBase(root, jobId);
 
     const badge = root.querySelector('#status-badge') as HTMLElement;
     const refreshBtn = root.querySelector('#btn-refresh') as HTMLButtonElement;
@@ -373,9 +428,11 @@ async function init() {
     const renderPlotError = (message: string | null) => {
         if (!message) {
             plotErrorEl.innerHTML = '';
+            plotErrorEl.style.display = 'none';
             return;
         }
-        plotErrorEl.innerHTML = `<div class="error-box">${escapeHtml(message)}</div>`;
+        plotErrorEl.style.display = 'block';
+        plotErrorEl.innerHTML = `<div class="de-result-error-box">${escapeHtml(message)}</div>`;
     };
 
     const getPlotThresholds = () => {
@@ -453,9 +510,11 @@ async function init() {
     const renderError = (message: string | null) => {
         if (!message) {
             errorEl.innerHTML = '';
+            errorEl.style.display = 'none';
             return;
         }
-        errorEl.innerHTML = `<div class="error-box">${escapeHtml(message)}</div>`;
+        errorEl.style.display = 'block';
+        errorEl.innerHTML = `<div class="de-result-error-box">${escapeHtml(message)}</div>`;
     };
 
     const refreshStatus = async (): Promise<SomaDeJobStatusResponse> => {
@@ -534,8 +593,6 @@ async function init() {
         limitEl.value = String(limit);
         orderByEl.value = order_by;
 
-        const statusUrl = jobUrl.toString();
-
         const status = lastStatus || (await refreshStatus());
         if (status.status !== 'completed') {
             renderError(`Job is not completed yet (status: ${status.status}). Please use the Job Status page and wait for completion.`);
@@ -545,7 +602,7 @@ async function init() {
         const result = await api.getSomaDeJobResult(jobId, { offset, limit, order_by });
         lastResult = result;
         renderError(null);
-        renderResult(root, result, statusUrl);
+        renderResult(root, result);
     };
 
     const refreshAll = async () => {
