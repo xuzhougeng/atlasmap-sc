@@ -9,6 +9,7 @@ import {
     SomaDeResultOrderBy,
 } from './api/client';
 import { ThemeManager } from './components/ThemeManager';
+import { VolcanoPlot } from './components/VolcanoPlot';
 
 interface DatasetInfo {
     id: string;
@@ -118,6 +119,27 @@ function renderTableBody(items: SomaDeResultItem[]): string {
         .join('');
 }
 
+type VolcanoMetric = 'fdr_ranksum' | 'p_ranksum' | 'fdr_ttest' | 'p_ttest';
+
+function getMetricValue(item: SomaDeResultItem, metric: VolcanoMetric): number {
+    switch (metric) {
+        case 'fdr_ranksum':
+            return item.fdr_ranksum;
+        case 'p_ranksum':
+            return item.p_ranksum;
+        case 'fdr_ttest':
+            return item.fdr_ttest;
+        case 'p_ttest':
+            return item.p_ttest;
+    }
+}
+
+function negLog10(v: number): number {
+    const eps = 1e-300;
+    const safe = Math.max(eps, Math.min(1, v));
+    return -Math.log10(safe);
+}
+
 function renderResult(root: HTMLElement, result: SomaDeJobResultResponse, statusUrl: string) {
     const params = result.params;
     const group2Label = params.group2?.length ? params.group2.join(', ') : '(one-vs-rest)';
@@ -128,7 +150,7 @@ function renderResult(root: HTMLElement, result: SomaDeJobResultResponse, status
         <div><span style="color:var(--text-secondary);">tests:</span> <span class="mono">${escapeHtml((params.tests || []).join(', '))}</span></div>
         <div><span style="color:var(--text-secondary);">n1/n2:</span> <span class="mono">${result.n1} / ${result.n2}</span></div>
         <div><span style="color:var(--text-secondary);">total genes:</span> <span class="mono">${result.total}</span></div>
-        <div style="margin-top:8px; color:var(--text-secondary);">任务状态查询 URL：<span class="mono">${escapeHtml(statusUrl)}</span>（请保存）</div>
+        <div style="margin-top:8px; color:var(--text-secondary);">Job status URL: <span class="mono">${escapeHtml(statusUrl)}</span> (save this link)</div>
     `;
 
     const tableBody = root.querySelector('#results-body')!;
@@ -159,17 +181,17 @@ function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
             <span class="mono">${escapeHtml(jobId)}</span>
             <span>Status:</span>
             <span class="status-badge queued" id="status-badge">loading</span>
-            <button class="btn-secondary" id="btn-refresh" type="button">刷新</button>
-            <button class="btn-secondary" id="btn-copy" type="button">复制 URL</button>
+            <button class="btn-secondary" id="btn-refresh" type="button">Refresh</button>
+            <button class="btn-secondary" id="btn-copy" type="button">Copy URL</button>
         </div>
 
         <div class="notice">
-            结果页面 URL（可保存/分享）：<span class="mono">${escapeHtml(currentUrl)}</span>
+            Results page URL (bookmark/share): <span class="mono">${escapeHtml(currentUrl)}</span>
         </div>
 
         <div class="form-grid" style="margin-top:12px;">
             <div class="form-row">
-                <label for="order-by">排序（order_by）</label>
+                <label for="order-by">Order By</label>
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <select id="order-by" class="select" style="max-width: 260px;">
                         <option value="fdr_ranksum">fdr_ranksum (default)</option>
@@ -183,12 +205,12 @@ function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
             </div>
 
             <div class="form-row">
-                <label>分页</label>
+                <label>Pagination</label>
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <input id="limit" class="input" type="number" min="1" max="500" value="50" style="max-width: 120px;" />
-                    <button class="btn-secondary" id="btn-apply" type="button">应用</button>
-                    <button class="btn-secondary" id="btn-prev" type="button">上一页</button>
-                    <button class="btn-secondary" id="btn-next" type="button">下一页</button>
+                    <button class="btn-secondary" id="btn-apply" type="button">Apply</button>
+                    <button class="btn-secondary" id="btn-prev" type="button">Prev</button>
+                    <button class="btn-secondary" id="btn-next" type="button">Next</button>
                     <span id="page-info" class="form-help"></span>
                 </div>
             </div>
@@ -196,6 +218,39 @@ function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
 
         <div id="summary" class="notice"></div>
         <div id="error" style="margin-top:12px;"></div>
+
+        <div class="volcano-panel">
+            <div class="volcano-header">
+                <span style="font-weight:700;">Volcano plot (WebGL)</span>
+                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
+                    Metric
+                    <select id="plot-metric" class="select" style="max-width: 220px;">
+                        <option value="fdr_ranksum">fdr_ranksum</option>
+                        <option value="p_ranksum">p_ranksum</option>
+                        <option value="fdr_ttest">fdr_ttest</option>
+                        <option value="p_ttest">p_ttest</option>
+                    </select>
+                </label>
+                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
+                    |log2FC| ≥
+                    <input id="plot-fc" class="input" type="number" step="0.1" value="1" style="max-width: 90px;" />
+                </label>
+                <label class="form-help" style="display:flex; gap:6px; align-items:center;">
+                    Metric ≤
+                    <input id="plot-sig" class="input" type="number" step="0.001" min="0" max="1" value="0.05" style="max-width: 110px;" />
+                </label>
+                <button class="btn-secondary" id="btn-load-plot" type="button">Load plot (all genes)</button>
+                <span id="plot-status" class="volcano-status"></span>
+            </div>
+            <div class="volcano-canvas-wrap">
+                <canvas id="volcano-gl"></canvas>
+                <canvas id="volcano-overlay"></canvas>
+                <div class="volcano-placeholder" id="volcano-placeholder">
+                    Load the plot to fetch all genes (paged requests) and render the volcano plot.
+                </div>
+            </div>
+            <div id="plot-error" style="margin-top:10px;"></div>
+        </div>
 
         <div class="results-table-container" style="margin-top:12px;">
             <table class="results-table">
@@ -222,11 +277,11 @@ function renderBase(root: HTMLElement, jobId: string, currentUrl: string) {
     copyBtn?.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(window.location.href);
-            copyBtn.textContent = '已复制';
-            window.setTimeout(() => (copyBtn.textContent = '复制 URL'), 1200);
+            copyBtn.textContent = 'Copied';
+            window.setTimeout(() => (copyBtn.textContent = 'Copy URL'), 1200);
         } catch {
-            copyBtn.textContent = '复制失败';
-            window.setTimeout(() => (copyBtn.textContent = '复制 URL'), 1200);
+            copyBtn.textContent = 'Copy failed';
+            window.setTimeout(() => (copyBtn.textContent = 'Copy URL'), 1200);
         }
     });
 }
@@ -242,7 +297,7 @@ async function init() {
     const jobId = url.searchParams.get('job_id') || '';
 
     if (!dataset || !jobId) {
-        root.innerHTML = `<div class="error-box">缺少参数：需要 <span class="mono">dataset</span> 和 <span class="mono">job_id</span>。</div>`;
+        root.innerHTML = `<div class="error-box">Missing parameters: requires <span class="mono">dataset</span> and <span class="mono">job_id</span>.</div>`;
         return;
     }
 
@@ -300,6 +355,81 @@ async function init() {
     const nextBtn = root.querySelector('#btn-next') as HTMLButtonElement;
     const errorEl = root.querySelector('#error') as HTMLDivElement;
 
+    const plotMetricEl = root.querySelector('#plot-metric') as HTMLSelectElement;
+    const plotFcEl = root.querySelector('#plot-fc') as HTMLInputElement;
+    const plotSigEl = root.querySelector('#plot-sig') as HTMLInputElement;
+    const plotBtn = root.querySelector('#btn-load-plot') as HTMLButtonElement;
+    const plotStatusEl = root.querySelector('#plot-status') as HTMLSpanElement;
+    const plotPlaceholderEl = root.querySelector('#volcano-placeholder') as HTMLDivElement;
+    const plotErrorEl = root.querySelector('#plot-error') as HTMLDivElement;
+    const plotGlCanvas = root.querySelector('#volcano-gl') as HTMLCanvasElement;
+    const plotOverlayCanvas = root.querySelector('#volcano-overlay') as HTMLCanvasElement;
+
+    let volcanoPlot: VolcanoPlot | null = null;
+    let plotItems: SomaDeResultItem[] | null = null;
+    let plotLoading = false;
+    let plotSupported = true;
+
+    const renderPlotError = (message: string | null) => {
+        if (!message) {
+            plotErrorEl.innerHTML = '';
+            return;
+        }
+        plotErrorEl.innerHTML = `<div class="error-box">${escapeHtml(message)}</div>`;
+    };
+
+    const getPlotThresholds = () => {
+        const fc = Math.max(0, parseFloat(plotFcEl.value || '1') || 1);
+        const sigCutoffRaw = parseFloat(plotSigEl.value || '0.05');
+        const sigCutoff = Number.isFinite(sigCutoffRaw) ? sigCutoffRaw : 0.05;
+        const sigY = negLog10(sigCutoff);
+        return { fc, sigCutoff, sigY };
+    };
+
+    const ensurePlotInstance = () => {
+        if (!plotSupported) return false;
+        if (volcanoPlot) return true;
+        try {
+            volcanoPlot = new VolcanoPlot(plotGlCanvas, plotOverlayCanvas, { pointSize: 3 });
+            const metric = plotMetricEl.value as VolcanoMetric;
+            volcanoPlot.setLabels('log2FC', `-log10(${metric})`);
+            const { fc, sigY } = getPlotThresholds();
+            volcanoPlot.setThresholds(fc, sigY);
+            volcanoPlot.setData([]);
+            return true;
+        } catch (e: any) {
+            console.error(e);
+            renderPlotError(e?.message || String(e));
+            plotSupported = false;
+            plotBtn.disabled = true;
+            plotPlaceholderEl.textContent = 'WebGL is not available; volcano plot cannot be rendered.';
+            return false;
+        }
+    };
+
+    const updatePlotThresholds = () => {
+        if (!volcanoPlot) return;
+        const { fc, sigY } = getPlotThresholds();
+        volcanoPlot.setThresholds(fc, sigY);
+    };
+
+    const updatePlotData = () => {
+        if (!plotItems) return;
+        if (!ensurePlotInstance() || !volcanoPlot) return;
+
+        const metric = plotMetricEl.value as VolcanoMetric;
+        volcanoPlot.setLabels('log2FC', `-log10(${metric})`);
+
+        const points = plotItems.map(it => ({
+            x: it.log2fc,
+            y: negLog10(getMetricValue(it, metric)),
+        }));
+        volcanoPlot.setData(points);
+        updatePlotThresholds();
+
+        plotPlaceholderEl.style.display = 'none';
+    };
+
     const getQueryState = () => {
         const u = new URL(window.location.href);
         const offset = Math.max(0, parseInt(u.searchParams.get('offset') || '0', 10) || 0);
@@ -333,7 +463,69 @@ async function init() {
         badge.textContent = info.status;
         setBadgeClass(badge, info.status);
         lastStatus = info;
+
+        plotBtn.disabled = !plotSupported || plotLoading || info.status !== 'completed';
+        plotStatusEl.textContent = !plotSupported
+            ? 'WebGL unavailable'
+            : info.status === 'completed'
+                ? (plotItems ? `Loaded ${plotItems.length.toLocaleString()} genes` : 'Ready to load')
+                : `Waiting (status: ${info.status})`;
+
         return info;
+    };
+
+    const loadAllResultsForPlot = async (): Promise<void> => {
+        if (plotLoading) return;
+        const status = lastStatus || (await refreshStatus());
+        if (status.status !== 'completed') {
+            renderPlotError(`Job is not completed yet (status: ${status.status}).`);
+            return;
+        }
+
+        if (!ensurePlotInstance()) return;
+
+        plotLoading = true;
+        plotBtn.disabled = true;
+        renderPlotError(null);
+        plotPlaceholderEl.style.display = 'flex';
+        plotPlaceholderEl.textContent = 'Loading plot data...';
+        plotStatusEl.textContent = 'Fetching...';
+        plotBtn.textContent = 'Loading...';
+
+        try {
+            const items: SomaDeResultItem[] = [];
+            let total = 0;
+            let offset = 0;
+            const limit = 500;
+
+            while (true) {
+                const res = await api.getSomaDeJobResult(jobId, { offset, limit, order_by: 'fdr_ranksum' });
+                if (total === 0) total = res.total;
+                items.push(...res.items);
+                offset += res.items.length;
+                if (total > 0) {
+                    plotStatusEl.textContent = `Loaded ${Math.min(offset, total).toLocaleString()}/${total.toLocaleString()}`;
+                } else {
+                    plotStatusEl.textContent = `Loaded ${offset.toLocaleString()}`;
+                }
+                if (res.items.length === 0 || (total > 0 && offset >= total)) break;
+            }
+
+            plotItems = items;
+            plotStatusEl.textContent = `Loaded ${items.length.toLocaleString()} genes`;
+            plotBtn.textContent = 'Reload plot';
+            plotBtn.disabled = false;
+
+            updatePlotData();
+        } catch (e: any) {
+            console.error(e);
+            renderPlotError(e?.message || String(e));
+            plotBtn.disabled = false;
+            plotBtn.textContent = 'Load plot (all genes)';
+            plotStatusEl.textContent = 'Failed to load';
+        } finally {
+            plotLoading = false;
+        }
     };
 
     const loadResults = async () => {
@@ -346,7 +538,7 @@ async function init() {
 
         const status = lastStatus || (await refreshStatus());
         if (status.status !== 'completed') {
-            renderError(`任务未完成（status: ${status.status}）。请前往“任务进度”页面等待完成。`);
+            renderError(`Job is not completed yet (status: ${status.status}). Please use the Job Status page and wait for completion.`);
             return;
         }
 
@@ -373,6 +565,21 @@ async function init() {
     };
 
     refreshBtn.addEventListener('click', () => void refreshAll());
+
+    plotBtn.addEventListener('click', () => void loadAllResultsForPlot());
+
+    plotMetricEl.addEventListener('change', () => {
+        renderPlotError(null);
+        updatePlotData();
+    });
+    plotFcEl.addEventListener('change', () => {
+        renderPlotError(null);
+        updatePlotThresholds();
+    });
+    plotSigEl.addEventListener('change', () => {
+        renderPlotError(null);
+        updatePlotThresholds();
+    });
 
     applyBtn.addEventListener('click', () => {
         const limit = Math.max(1, Math.min(500, parseInt(limitEl.value || '50', 10) || 50));
@@ -411,4 +618,3 @@ async function init() {
 document.addEventListener('DOMContentLoaded', () => {
     void init();
 });
-

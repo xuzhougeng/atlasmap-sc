@@ -840,6 +840,54 @@
     background-color: var(--bg-tertiary);
 }
 
+.volcano-panel {
+    margin-top: 12px;
+}
+
+.volcano-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.volcano-status {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.volcano-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 420px;
+    margin-top: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background-color: var(--bg-primary);
+    overflow: hidden;
+}
+
+.volcano-canvas-wrap canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.volcano-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 12px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    pointer-events: none;
+}
+
 /* Tab Panel */
 .tab-panel-container {
     flex: 1;
