@@ -138,11 +138,11 @@ export async function downloadPngAtCurrentZoom(
 
     const dataBounds = mapController.getDataBounds();
     const topLeftPx = map.project(
-        L.latLng(dataBounds.min_y, dataBounds.min_x),
+        L.latLng(dataBounds.max_y, dataBounds.min_x),
         zoom
     );
     const bottomRightPx = map.project(
-        L.latLng(dataBounds.max_y, dataBounds.max_x),
+        L.latLng(dataBounds.min_y, dataBounds.max_x),
         zoom
     );
 

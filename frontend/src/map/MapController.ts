@@ -58,10 +58,15 @@ export class MapController {
             [config.bounds.max_y, config.bounds.max_x]
         );
 
-        // Initialize map with a CRS that keeps Y increasing downward (image-like coordinates),
-        // which also keeps tile y indices non-negative.
+        // Initialize map with a CRS that keeps Y increasing upward (Cartesian/UMAP-like),
+        // while shifting the origin so tile indices stay non-negative.
         const crs = L.Util.extend({}, L.CRS.Simple, {
-            transformation: new L.Transformation(1, 0, 1, 0),
+            transformation: new L.Transformation(
+                1,
+                -config.bounds.min_x,
+                -1,
+                config.bounds.max_y
+            ),
         }) as L.CRS;
 
         this.map = L.map(container, {

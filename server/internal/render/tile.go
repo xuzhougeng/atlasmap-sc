@@ -85,7 +85,7 @@ func (r *TileRenderer) RenderTile(bins []zarr.Bin, binsPerTileAxis int, tileX, t
 		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
-		py := localY * binSize
+		py := ((nBinsPerTile - 1) - localY) * binSize
 
 		// Skip if outside tile
 		if px < 0 || px >= tileSize || py < 0 || py >= tileSize {
@@ -161,7 +161,7 @@ func (r *TileRenderer) RenderExpressionTile(
 		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
-		py := localY * binSize
+		py := ((nBinsPerTile - 1) - localY) * binSize
 
 		if px < 0 || px >= tileSize || py < 0 || py >= tileSize {
 			continue
@@ -212,7 +212,7 @@ func (r *TileRenderer) RenderCategoryTile(
 		localY := float64(bin.Y) - float64(tileY)*nBinsPerTile
 
 		px := localX * binSize
-		py := localY * binSize
+		py := ((nBinsPerTile - 1) - localY) * binSize
 
 		if px < 0 || px >= tileSize || py < 0 || py >= tileSize {
 			continue

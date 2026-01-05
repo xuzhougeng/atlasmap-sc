@@ -90,28 +90,31 @@ func (s *TileService) loadBins() error {
 	return s.binsErr
 }
 
-func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int, int, error) {
+func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int, int, int, error) {
 	if mapZoom < 0 || mapZoom > s.renderZoom {
-		return nil, nil, 0, fmt.Errorf("invalid zoom level: %d", mapZoom)
+		return nil, nil, 0, 0, fmt.Errorf("invalid zoom level: %d", mapZoom)
 	}
 	if tileX < 0 || tileY < 0 {
-		return nil, nil, 0, fmt.Errorf("invalid tile coordinates: %d/%d", tileX, tileY)
+		return nil, nil, 0, 0, fmt.Errorf("invalid tile coordinates: %d/%d", tileX, tileY)
 	}
 
 	if err := s.loadBins(); err != nil {
-		return nil, nil, 0, err
+		return nil, nil, 0, 0, err
 	}
 
 	tilesPerAxis := 1 << mapZoom
 	if tileX >= tilesPerAxis || tileY >= tilesPerAxis {
-		return nil, nil, 0, fmt.Errorf("tile out of range: %d/%d (tiles_per_axis=%d)", tileX, tileY, tilesPerAxis)
+		return nil, nil, 0, 0, fmt.Errorf("tile out of range: %d/%d (tiles_per_axis=%d)", tileX, tileY, tilesPerAxis)
 	}
 
 	binsPerTileAxis := 1 << (s.renderZoom - mapZoom)
 	startX := int32(tileX * binsPerTileAxis)
 	endX := int32((tileX + 1) * binsPerTileAxis)
-	startY := int32(tileY * binsPerTileAxis)
-	endY := int32((tileY + 1) * binsPerTileAxis)
+	// Flip Y so that tileY=0 corresponds to the top (max-Y) of the dataset,
+	// matching the conventional Cartesian orientation for UMAP plots.
+	flippedTileY := (tilesPerAxis - 1) - tileY
+	startY := int32(flippedTileY * binsPerTileAxis)
+	endY := int32((flippedTileY + 1) * binsPerTileAxis)
 
 	outBins := make([]zarr.Bin, 0, 64)
 	outIdx := make([]int, 0, 64)
@@ -126,7 +129,7 @@ func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int,
 		outIdx = append(outIdx, i)
 	}
 
-	return outBins, outIdx, binsPerTileAxis, nil
+	return outBins, outIdx, binsPerTileAxis, flippedTileY, nil
 }
 
 func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, error) {
@@ -194,13 +197,13 @@ func (s *TileService) GetTile(z, x, y int) ([]byte, error) {
 	}
 
 	// Load bins for this tile (rendered from highest-available zoom level)
-	bins, _, binsPerTileAxis, err := s.binsForTile(z, x, y)
+	bins, _, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
 
 	// Render tile
-	data, err := s.renderer.RenderTile(bins, binsPerTileAxis, x, y)
+	data, err := s.renderer.RenderTile(bins, binsPerTileAxis, x, renderTileY)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render tile: %w", err)
 	}
@@ -243,7 +246,7 @@ func (s *TileService) GetExpressionTile(
 	}
 
 	// Load bins (rendered from highest-available zoom level)
-	bins, indices, binsPerTileAxis, err := s.binsForTile(z, x, y)
+	bins, indices, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
@@ -279,7 +282,7 @@ func (s *TileService) GetExpressionTile(
 		minV,
 		maxV,
 		binsPerTileAxis,
-		x, y,
+		x, renderTileY,
 		colormap,
 	)
 	if err != nil {
@@ -315,7 +318,7 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 	}
 
 	// Load bins (rendered from highest-available zoom level)
-	bins, indices, binsPerTileAxis, err := s.binsForTile(z, x, y)
+	bins, indices, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
@@ -354,7 +357,7 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 	}
 
 	// Render tile
-	data, err := s.renderer.RenderCategoryTile(bins, categoryTile, binsPerTileAxis, x, y)
+	data, err := s.renderer.RenderCategoryTile(bins, categoryTile, binsPerTileAxis, x, renderTileY)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render tile: %w", err)
 	}
