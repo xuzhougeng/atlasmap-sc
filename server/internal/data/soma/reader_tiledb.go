@@ -564,7 +564,7 @@ func (r *Reader) ObsColumns() ([]string, error) {
 	}
 
 	var columns []string
-	for i := uint32(0); i < nattrs; i++ {
+	for i := uint(0); i < nattrs; i++ {
 		attr, err := schema.AttributeFromIndex(i)
 		if err != nil {
 			continue
@@ -786,6 +786,5 @@ func (r *Reader) loadObsGroupIndex(column string) (map[string][]int64, error) {
 		}
 	}
 }
-
 
 
