@@ -15,6 +15,7 @@ type Config struct {
 	Data   DataConfig   `yaml:"-"` // Custom unmarshal
 	Cache  CacheConfig  `yaml:"cache"`
 	Render RenderConfig `yaml:"render"`
+	DE     DEConfig     `yaml:"de"`
 }
 
 // ServerConfig contains HTTP server settings.
@@ -49,12 +50,20 @@ type RenderConfig struct {
 	DefaultColormap string `yaml:"default_colormap"`
 }
 
+// DEConfig contains differential expression analysis settings.
+type DEConfig struct {
+	MaxConcurrent int    `yaml:"max_concurrent"`  // Max concurrent DE jobs (default 1)
+	SQLitePath    string `yaml:"sqlite_path"`     // Path to SQLite database for job persistence (default ./data/de_jobs.sqlite)
+	RetentionDays int    `yaml:"retention_days"`  // Days to keep completed job results (default 7)
+}
+
 // rawConfig is used for initial YAML parsing.
 type rawConfig struct {
-	Server ServerConfig   `yaml:"server"`
-	Data   yaml.Node      `yaml:"data"`
-	Cache  CacheConfig    `yaml:"cache"`
-	Render RenderConfig   `yaml:"render"`
+	Server ServerConfig `yaml:"server"`
+	Data   yaml.Node    `yaml:"data"`
+	Cache  CacheConfig  `yaml:"cache"`
+	Render RenderConfig `yaml:"render"`
+	DE     DEConfig     `yaml:"de"`
 }
 
 // Load reads configuration from a YAML file.
@@ -80,6 +89,7 @@ func Load(path string) (*Config, error) {
 		Data:   *dataConfig,
 		Cache:  raw.Cache,
 		Render: raw.Render,
+		DE:     raw.DE,
 	}
 
 	applyDefaults(cfg)
@@ -186,6 +196,11 @@ func DefaultConfig() *Config {
 			TileSize:        256,
 			DefaultColormap: "viridis",
 		},
+		DE: DEConfig{
+			MaxConcurrent: 1,
+			SQLitePath:    "./data/de_jobs.sqlite",
+			RetentionDays: 7,
+		},
 	}
 }
 
@@ -217,6 +232,17 @@ func applyDefaults(cfg *Config) {
 			ds.ZarrPath = defaults.Data.Datasets["default"].ZarrPath
 			cfg.Data.Datasets[id] = ds
 		}
+	}
+
+	// DE defaults
+	if cfg.DE.MaxConcurrent <= 0 {
+		cfg.DE.MaxConcurrent = defaults.DE.MaxConcurrent
+	}
+	if cfg.DE.SQLitePath == "" {
+		cfg.DE.SQLitePath = defaults.DE.SQLitePath
+	}
+	if cfg.DE.RetentionDays <= 0 {
+		cfg.DE.RetentionDays = defaults.DE.RetentionDays
 	}
 }
 

@@ -39,4 +39,34 @@ func (r *Reader) ExpressionByCellJoinID(gene string, cellJoinIDs []int64) (geneJ
 	return 0, nil, ErrUnsupported
 }
 
+// GeneRange returns the min and max soma_joinid of genes in the var DataFrame.
+func (r *Reader) GeneRange() (minID, maxID int64, err error) {
+	return 0, 0, ErrUnsupported
+}
+
+// AllGenes returns a map of gene_id -> soma_joinid for all genes.
+func (r *Reader) AllGenes() (map[string]int64, error) {
+	return nil, ErrUnsupported
+}
+
+// ScanXForCells streams through ms/RNA/X/data for the given cell joinids (all genes).
+func (r *Reader) ScanXForCells(cellJoinIDs []int64, onRow func(cell, gene int64, val float32)) error {
+	return ErrUnsupported
+}
+
+// ObsColumns returns the list of attribute names in the obs DataFrame.
+func (r *Reader) ObsColumns() ([]string, error) {
+	return nil, ErrUnsupported
+}
+
+// ObsColumnValues returns unique values for a string column in obs.
+func (r *Reader) ObsColumnValues(column string) ([]string, error) {
+	return nil, ErrUnsupported
+}
+
+// ObsGroupIndex returns a map of column value -> cell joinids for a string column.
+func (r *Reader) ObsGroupIndex(column string) (map[string][]int64, error) {
+	return nil, ErrUnsupported
+}
+
 

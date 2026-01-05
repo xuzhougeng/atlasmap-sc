@@ -58,6 +58,11 @@ cache:
 render:
   tile_size: 256
   default_colormap: viridis
+
+de:
+  max_concurrent: 1                      # 同时运行的最大 DE 任务数（默认 1）
+  sqlite_path: "./data/de_jobs.sqlite"   # SQLite 数据库路径（持久化任务状态与结果）
+  retention_days: 7                      # 已完成任务保留天数（默认 7 天）
 ```
 
 ### 多数据集配置（新格式）
@@ -85,6 +90,11 @@ cache:
 render:
   tile_size: 256
   default_colormap: viridis
+
+de:
+  max_concurrent: 1
+  sqlite_path: "./data/de_jobs.sqlite"
+  retention_days: 7
 ```
 
 多数据集时，前端会显示数据集选择下拉框，用户可以切换不同的数据集。
@@ -472,4 +482,152 @@ curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG0000003
 - 400：参数错误 / gene 不存在 / TileDB 查询失败（错误体为纯文本）
 
 > Docker 注意：当前 `server/Dockerfile` 使用 `CGO_ENABLED=0` 的静态构建，默认不支持 `-tags soma`。如需在容器内启用 SOMA，需要自定义镜像并安装 TileDB core。
+
+## SOMA 差异表达分析（DE Job）
+
+该接口用于在线计算两组细胞之间的差异表达基因，支持 **全基因** t-test 和秩和检验。
+
+前提与 SOMA 表达查询相同：需要 `-tags soma` 构建并安装 TileDB core。
+
+### 工作流程
+
+1. **提交任务**：`POST /d/{dataset}/api/soma/de/jobs` 返回 `job_id`
+2. **轮询状态**：`GET /d/{dataset}/api/soma/de/jobs/{job_id}` 直到 `status=completed`
+3. **拉取结果**：`GET /d/{dataset}/api/soma/de/jobs/{job_id}/result?offset=&limit=`
+
+### `POST /d/{dataset}/api/soma/de/jobs`
+
+提交差异表达分析任务。
+
+请求体（JSON）：
+
+```json
+{
+  "groupby": "cell_type",
+  "group1": ["T"],
+  "group2": ["B", "Myeloid"],
+  "tests": ["ttest", "ranksum"],
+  "max_cells_per_group": 2000,
+  "seed": 0,
+  "limit": 50
+}
+```
+
+参数说明：
+
+- `groupby`：obs 列名（用于分组，如 `cell_type`）
+- `group1`：组1 类别（至少一个）
+- `group2`：组2 类别（可选；空表示 one-vs-rest，即 group1 vs 其他所有细胞）
+- `tests`：要运行的检验（默认 `["ttest", "ranksum"]`）
+- `max_cells_per_group`：每组最多采样细胞数（默认 2000，上限 20000）
+- `seed`：采样随机种子（默认 0，保证可复现）
+- `limit`：返回 top N 基因（默认 50，上限 500）
+
+响应：
+
+```json
+{
+  "job_id": "a1b2c3d4e5f6g7h8",
+  "status": "queued"
+}
+```
+
+### `GET /d/{dataset}/api/soma/de/jobs/{job_id}`
+
+查询任务状态。
+
+响应：
+
+```json
+{
+  "job_id": "a1b2c3d4e5f6g7h8",
+  "status": "running",
+  "created_at": "2025-01-05T10:00:00Z",
+  "started_at": "2025-01-05T10:00:01Z",
+  "finished_at": null,
+  "progress": {
+    "phase": "scanning_group1",
+    "done": 5000,
+    "total": 20000
+  },
+  "error": ""
+}
+```
+
+状态值：`queued` | `running` | `completed` | `failed` | `cancelled`
+
+### `GET /d/{dataset}/api/soma/de/jobs/{job_id}/result`
+
+拉取完成任务的结果（分页，支持排序）。
+
+Query 参数：
+
+- `offset`：起始位置（默认 0）
+- `limit`：返回条数（默认 50，上限 500）
+- `order_by`：排序方式，可选值：
+  - `fdr_ranksum`（默认）：按秩和检验 FDR 升序，然后 |log2fc| 降序
+  - `fdr_ttest`：按 t-test FDR 升序
+  - `p_ranksum`：按秩和检验 p-value 升序
+  - `p_ttest`：按 t-test p-value 升序
+  - `abs_log2fc`：按 |log2fc| 降序
+
+响应：
+
+```json
+{
+  "params": { ... },
+  "n1": 500,
+  "n2": 1500,
+  "total": 20000,
+  "offset": 0,
+  "limit": 50,
+  "order_by": "fdr_ranksum",
+  "items": [
+    {
+      "gene": "CD3D",
+      "gene_joinid": 123,
+      "mean1": 2.5,
+      "mean2": 0.3,
+      "pct1": 0.85,
+      "pct2": 0.12,
+      "log2fc": 3.06,
+      "p_ttest": 1.2e-10,
+      "fdr_ttest": 2.4e-6,
+      "p_ranksum": 5.6e-12,
+      "fdr_ranksum": 1.1e-7
+    }
+  ]
+}
+```
+
+### `DELETE /d/{dataset}/api/soma/de/jobs/{job_id}`
+
+取消任务（best-effort）。
+
+### obs 元数据查询
+
+用于前端获取可用的分组列和取值：
+
+- `GET /d/{dataset}/api/soma/obs/columns`：返回 obs 列名列表
+- `GET /d/{dataset}/api/soma/obs/{column}/values`：返回该列的唯一值
+
+### 统计方法
+
+- **Welch t-test**：不假设等方差的双样本 t 检验，p-value 用 Student-t 分布 CDF
+- **Mann-Whitney U**：秩和检验（Wilcoxon rank-sum），带 tie 校正，使用正态近似计算 p-value
+- **BH-FDR**：Benjamini-Hochberg 多重检验校正
+
+### 持久化与恢复
+
+- **SQLite 持久化**：任务状态与全基因结果存储在 SQLite 数据库（`de.sqlite_path`），不占用内存，服务重启后可继续查询历史结果
+- **重启恢复**：
+  - 正在运行的任务会被标记为 `failed`（error: "server restarted"）
+  - 排队中的任务会自动重新入队
+- **TTL 清理**：完成的任务默认保留 **7 天**（`de.retention_days`），每小时检查并自动清理过期任务
+
+### 限制与注意事项
+
+- **采样限制**：为控制计算成本，每组最多采样 20000 细胞（超出会随机采样）
+- **并发限制**：默认同时最多运行 1 个 DE 任务（可通过 `de.max_concurrent` 配置），其余排队等待
+- **全基因计算**：会对所有基因计算统计量，大数据集可能需要数分钟
 

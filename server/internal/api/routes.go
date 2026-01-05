@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/soma-tiles/server/internal/data/soma"
+	"github.com/soma-tiles/server/internal/destore"
 	"github.com/soma-tiles/server/internal/service"
 )
 
@@ -24,6 +25,7 @@ import (
 type RouterConfig struct {
 	Registry    *DatasetRegistry
 	CORSOrigins []string
+	JobManager  *JobManager
 }
 
 // NewRouter creates a new HTTP router.
@@ -77,6 +79,18 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.Get("/categories/{column}/legend", datasetCategoryLegendHandler)
 			r.Get("/stats", datasetStatsHandler)
 			r.Get("/soma/expression", datasetSomaExpressionHandler)
+
+			// SOMA DE job endpoints
+			r.Route("/soma/de/jobs", func(r chi.Router) {
+				r.Post("/", deJobSubmitHandler(cfg.JobManager))
+				r.Get("/{job_id}", deJobStatusHandler(cfg.JobManager))
+				r.Get("/{job_id}/result", deJobResultHandler(cfg.JobManager))
+				r.Delete("/{job_id}", deJobCancelHandler(cfg.JobManager))
+			})
+
+			// SOMA obs metadata endpoints (for groupby column discovery)
+			r.Get("/soma/obs/columns", datasetSomaObsColumnsHandler)
+			r.Get("/soma/obs/{column}/values", datasetSomaObsValuesHandler)
 		})
 	})
 
@@ -728,4 +742,294 @@ func parseCSVInt64(s string, maxItems int) ([]int64, error) {
 		return nil, errors.New("empty cells list")
 	}
 	return out, nil
+}
+
+// DE Job handlers
+
+type deJobSubmitRequest struct {
+	Groupby          string   `json:"groupby"`
+	Group1           []string `json:"group1"`
+	Group2           []string `json:"group2"`
+	Tests            []string `json:"tests"`
+	MaxCellsPerGroup int      `json:"max_cells_per_group"`
+	Seed             int      `json:"seed"`
+	Limit            int      `json:"limit"`
+}
+
+func deJobSubmitHandler(jm *JobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		svc := getDatasetService(r)
+		if svc == nil {
+			http.Error(w, "dataset service not available", http.StatusInternalServerError)
+			return
+		}
+		sr := svc.Soma()
+		if sr == nil {
+			http.Error(w, "soma not configured for this dataset", http.StatusNotFound)
+			return
+		}
+		if !sr.Supported() {
+			http.Error(w, soma.ErrUnsupported.Error(), http.StatusNotImplemented)
+			return
+		}
+
+		var req deJobSubmitRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate required fields
+		if req.Groupby == "" {
+			http.Error(w, "groupby is required", http.StatusBadRequest)
+			return
+		}
+		if len(req.Group1) == 0 {
+			http.Error(w, "group1 is required (at least one category value)", http.StatusBadRequest)
+			return
+		}
+
+		// Apply defaults
+		if len(req.Tests) == 0 {
+			req.Tests = []string{"ttest", "ranksum"}
+		}
+		if req.MaxCellsPerGroup <= 0 {
+			req.MaxCellsPerGroup = 2000
+		}
+		if req.MaxCellsPerGroup > 20000 {
+			req.MaxCellsPerGroup = 20000
+		}
+		if req.Limit <= 0 {
+			req.Limit = 50
+		}
+		if req.Limit > 500 {
+			req.Limit = 500
+		}
+
+		datasetID := chi.URLParam(r, "dataset")
+		params := destore.DEJobParams{
+			DatasetID:        datasetID,
+			Groupby:          req.Groupby,
+			Group1:           req.Group1,
+			Group2:           req.Group2,
+			Tests:            req.Tests,
+			MaxCellsPerGroup: req.MaxCellsPerGroup,
+			Seed:             req.Seed,
+			Limit:            req.Limit,
+		}
+
+		job, err := jm.Submit(params)
+		if err != nil {
+			http.Error(w, "failed to submit job: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id": job.ID,
+			"status": job.Status,
+		})
+	}
+}
+
+func deJobStatusHandler(jm *JobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		// Check dataset matches
+		datasetID := chi.URLParam(r, "dataset")
+		if job.Params.DatasetID != datasetID {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      job.ID,
+			"status":      job.Status,
+			"created_at":  job.CreatedAt,
+			"started_at":  job.StartedAt,
+			"finished_at": job.FinishedAt,
+			"progress":    job.Progress,
+			"n1":          job.N1,
+			"n2":          job.N2,
+			"error":       job.Error,
+		})
+	}
+}
+
+func deJobResultHandler(jm *JobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		datasetID := chi.URLParam(r, "dataset")
+		if job.Params.DatasetID != datasetID {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		if job.Status != destore.JobStatusCompleted {
+			http.Error(w, "job not completed (status: "+string(job.Status)+")", http.StatusBadRequest)
+			return
+		}
+
+		// Parse pagination and order params
+		offset := 0
+		limit := job.Params.Limit
+		if limit <= 0 {
+			limit = 50
+		}
+		orderBy := r.URL.Query().Get("order_by")
+		if orderBy == "" {
+			orderBy = "fdr_ranksum"
+		}
+		if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+			if v, err := strconv.Atoi(offsetStr); err == nil && v >= 0 {
+				offset = v
+			}
+		}
+		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+				limit = v
+				if limit > 500 {
+					limit = 500
+				}
+			}
+		}
+
+		// Query results from SQLite
+		items, total, err := jm.Store().QueryResults(jobID, orderBy, offset, limit)
+		if err != nil {
+			http.Error(w, "failed to query results: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"params":   job.Params,
+			"n1":       job.N1,
+			"n2":       job.N2,
+			"total":    total,
+			"offset":   offset,
+			"limit":    limit,
+			"order_by": orderBy,
+			"items":    items,
+		})
+	}
+}
+
+func deJobCancelHandler(jm *JobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		datasetID := chi.URLParam(r, "dataset")
+		if job.Params.DatasetID != datasetID {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		jm.Cancel(jobID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":    jobID,
+			"cancelled": true,
+		})
+	}
+}
+
+// SOMA obs metadata handlers
+
+func datasetSomaObsColumnsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not available", http.StatusInternalServerError)
+		return
+	}
+	sr := svc.Soma()
+	if sr == nil {
+		http.Error(w, "soma not configured for this dataset", http.StatusNotFound)
+		return
+	}
+	if !sr.Supported() {
+		http.Error(w, soma.ErrUnsupported.Error(), http.StatusNotImplemented)
+		return
+	}
+
+	columns, err := sr.ObsColumns()
+	if err != nil {
+		http.Error(w, "failed to get obs columns: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"columns": columns,
+	})
+}
+
+func datasetSomaObsValuesHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not available", http.StatusInternalServerError)
+		return
+	}
+	sr := svc.Soma()
+	if sr == nil {
+		http.Error(w, "soma not configured for this dataset", http.StatusNotFound)
+		return
+	}
+	if !sr.Supported() {
+		http.Error(w, soma.ErrUnsupported.Error(), http.StatusNotImplemented)
+		return
+	}
+
+	column := chi.URLParam(r, "column")
+	values, err := sr.ObsColumnValues(column)
+	if err != nil {
+		http.Error(w, "failed to get column values: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"column": column,
+		"values": values,
+	})
 }

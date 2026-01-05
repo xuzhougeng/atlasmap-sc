@@ -32,3 +32,9 @@ cache:
 render:
   tile_size: 256
   default_colormap: viridis
+
+# Differential expression analysis settings
+de:
+  max_concurrent: 1                      # Max concurrent DE jobs (default 1)
+  sqlite_path: "./data/de_jobs.sqlite"   # Path to SQLite database for job persistence
+  retention_days: 7                      # Days to keep completed job results (default 7)

@@ -93,10 +93,31 @@ func main() {
 		registry.Register(datasetID, tileService)
 	}
 
+	// Initialize job manager for DE jobs (SQLite persistence)
+	jobManager, err := api.NewJobManager(api.JobManagerConfig{
+		MaxConcurrent: cfg.DE.MaxConcurrent,
+		SQLitePath:    cfg.DE.SQLitePath,
+		RetentionDays: cfg.DE.RetentionDays,
+		CleanupPeriod: 1 * time.Hour,
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize job manager: %v", err)
+	}
+	log.Printf("DE job manager: max_concurrent=%d, retention_days=%d, sqlite=%s",
+		cfg.DE.MaxConcurrent, cfg.DE.RetentionDays, cfg.DE.SQLitePath)
+
+	// Wire up DE service as job executor
+	deService := service.NewDEService(registry)
+	jobManager.Executor = deService.ExecuteDEJob
+
+	jobManager.Start()
+	defer jobManager.Stop()
+
 	// Set up HTTP router
 	router := api.NewRouter(api.RouterConfig{
 		Registry:    registry,
 		CORSOrigins: cfg.Server.CORSOrigins,
+		JobManager:  jobManager,
 	})
 
 	// Create HTTP server

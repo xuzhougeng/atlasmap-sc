@@ -51,6 +51,86 @@ curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG0000003
 - 501：服务未以 `-tags soma` 构建
 - 400：参数错误 / gene 不存在 / TileDB 查询失败（错误体为纯文本）
 
+### SOMA 差异表达分析（DE Job，TileDB-SOMA）
+
+> 同样需要后端以 `-tags soma` 构建。
+
+差异表达分析为异步任务：提交后返回 `job_id`，前端轮询状态，完成后拉取结果。
+
+#### 提交任务
+
+- `POST /d/{dataset}/api/soma/de/jobs`
+  - Body（JSON）：
+    - `groupby`: string（obs 列名，如 `cell_type`）
+    - `group1`: string[]（组1 类别，至少一个）
+    - `group2`: string[]（组2 类别；空表示 one-vs-rest）
+    - `tests`: string[]（`["ttest","ranksum"]`；默认两者都算）
+    - `max_cells_per_group`: int（每组最多采样细胞数；默认 2000，上限 20000）
+    - `seed`: int（采样随机种子；默认 0）
+    - `limit`: int（返回 top N 基因；默认 50，上限 500）
+  - Response: `{ "job_id": "...", "status": "queued" }`
+
+示例：
+
+```bash
+curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
+  -H 'Content-Type: application/json' \
+  -d '{"groupby":"cell_type","group1":["T"],"group2":["B"]}'
+```
+
+#### 查询状态
+
+- `GET /d/{dataset}/api/soma/de/jobs/{job_id}`
+  - Response: `{ job_id, status, created_at, started_at, finished_at, progress:{phase,done,total}, error }`
+  - `status`: `queued|running|completed|failed|cancelled`
+
+#### 拉取结果
+
+- `GET /d/{dataset}/api/soma/de/jobs/{job_id}/result?offset=&limit=&order_by=`
+  - 仅当 `status=completed` 时可用
+  - Query 参数：
+    - `offset`：起始位置（默认 0）
+    - `limit`：返回条数（默认 50，上限 500）
+    - `order_by`：排序方式，可选值：`fdr_ranksum`（默认）、`fdr_ttest`、`p_ranksum`、`p_ttest`、`abs_log2fc`
+  - Response:
+    ```json
+    {
+      "params": {...},
+      "n1": 500, "n2": 500,
+      "total": 20000,
+      "offset": 0, "limit": 50,
+      "order_by": "fdr_ranksum",
+      "items": [
+        {"gene":"...", "gene_joinid":123, "mean1":0.5, "mean2":0.1, "pct1":0.8, "pct2":0.2,
+         "log2fc":2.3, "p_ttest":0.001, "fdr_ttest":0.01, "p_ranksum":0.002, "fdr_ranksum":0.02},
+        ...
+      ]
+    }
+    ```
+
+#### 取消任务
+
+- `DELETE /d/{dataset}/api/soma/de/jobs/{job_id}`
+
+#### obs 元数据查询（用于前端下拉）
+
+- `GET /d/{dataset}/api/soma/obs/columns`：返回 obs 可用列名
+- `GET /d/{dataset}/api/soma/obs/{column}/values`：返回该列的唯一值
+
+#### 统计方法说明
+
+- **t-test**：Welch t-test（不假设等方差），p-value 用 Student-t 分布 CDF
+- **ranksum**：Mann-Whitney U 检验（Wilcoxon rank-sum），带 tie 校正，正态近似 p-value
+- **FDR**：Benjamini-Hochberg 多重校正
+
+#### 持久化与限制
+
+- **SQLite 持久化**：任务状态与结果存储在 SQLite 数据库（`de.sqlite_path`），服务重启后可继续查询历史结果
+- **重启恢复**：服务重启时，正在运行的任务会被标记为 `failed`；排队中的任务会重新入队
+- **TTL 清理**：完成的任务默认保留 **7 天**（`de.retention_days`），到期自动清理
+- 每组最多采样 20000 细胞（`max_cells_per_group`）
+- 默认同时运行最多 1 个 DE 任务（可通过配置 `de.max_concurrent` 调整），其余排队
+
 ### Tiles（PNG）
 
 - `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`：基础 tile
