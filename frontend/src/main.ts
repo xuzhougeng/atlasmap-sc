@@ -402,7 +402,7 @@ async function init() {
     }
 
     // Set up toolbar buttons
-    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel!, defaultCategory);
+    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel!, defaultCategory, currentDataset);
 
     // Initialize sidebar resizer
     const sidebarResizer = document.getElementById('sidebar-resizer');
@@ -442,10 +442,12 @@ function setupToolbar(
     tabPanel: TabPanel,
     categoryLegend: CategoryLegend,
     cellQueryPanel: CellQueryPanel,
-    defaultCategory: string
+    defaultCategory: string,
+    datasetId: string
 ) {
     const resetBtn = document.getElementById('btn-reset');
     const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
+    const deBtn = document.getElementById('btn-de') as HTMLButtonElement | null;
     const downloadStatus = document.getElementById('download-status');
 
     if (resetBtn) {
@@ -514,6 +516,15 @@ function setupToolbar(
                 downloading = false;
                 downloadBtn.disabled = false;
             }
+        });
+    }
+
+    if (deBtn) {
+        deBtn.addEventListener('click', () => {
+            const url = new URL(window.location.href);
+            url.pathname = '/de.html';
+            url.searchParams.set('dataset', datasetId);
+            window.location.href = url.toString();
         });
     }
 }

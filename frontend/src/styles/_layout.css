@@ -71,6 +71,12 @@
     min-height: 0;
 }
 
+.page-main {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+}
+
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
@@ -125,4 +131,3 @@
     font-size: 0.75rem;
     box-shadow: var(--shadow);
 }
-

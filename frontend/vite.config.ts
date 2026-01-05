@@ -4,12 +4,15 @@ import { resolve } from 'path';
 export default defineConfig({
   root: '.',
   publicDir: 'public',
+  appType: 'mpa',
   build: {
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+        de: resolve(__dirname, 'de.html'),
+        deJob: resolve(__dirname, 'de_job.html'),
       },
     },
   },
@@ -25,7 +28,7 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
-      '/d': {
+      '/d/': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },

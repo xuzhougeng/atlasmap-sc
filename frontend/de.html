@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOMA-Tiles - Differential Expression</title>
+</head>
+<body class="de-page">
+    <div id="app">
+        <header class="header">
+            <h1 class="header-title">SOMA-Tiles</h1>
+            <div class="header-info" id="dataset-info"></div>
+        </header>
+
+        <main class="page-main">
+            <div class="page-card">
+                <div class="page-card-header">
+                    <div>
+                        <h2 class="page-title">Differential Expression Analysis</h2>
+                        <div class="page-subtitle">Submit a job to run DE analysis. Save the job URL to check status later.</div>
+                    </div>
+                    <a class="btn-secondary" id="btn-back" href="/">Back to Map</a>
+                </div>
+                <div id="de-root"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/src/de.ts"></script>
+</body>
+</html>

@@ -83,6 +83,47 @@ export interface BinQueryParams {
     limit?: number;
 }
 
+export type SomaDeTest = 'ttest' | 'ranksum';
+export type SomaDeJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface SomaDeJobCreateRequest {
+    groupby: string;
+    group1: string[];
+    group2: string[];
+    tests?: SomaDeTest[];
+    max_cells_per_group?: number;
+    seed?: number;
+    limit?: number;
+}
+
+export interface SomaDeJobCreateResponse {
+    job_id: string;
+    status: SomaDeJobStatus;
+}
+
+export interface SomaDeJobStatusResponse {
+    job_id: string;
+    status: SomaDeJobStatus;
+    created_at?: string;
+    started_at?: string;
+    finished_at?: string;
+    progress?: {
+        phase?: string;
+        done?: number;
+        total?: number;
+    };
+    error?: string;
+}
+
+interface SomaObsColumnsResponse {
+    columns: string[];
+}
+
+interface SomaObsValuesResponse {
+    column: string;
+    values: string[];
+}
+
 export class ApiClient {
     private baseUrl: string;
 
@@ -90,44 +131,42 @@ export class ApiClient {
         this.baseUrl = baseUrl;
     }
 
-    async getMetadata(): Promise<Metadata> {
-        const response = await fetch(`${this.baseUrl}/metadata`);
+    private async readError(response: Response): Promise<string> {
+        try {
+            const text = await response.text();
+            return text || response.statusText;
+        } catch {
+            return response.statusText;
+        }
+    }
+
+    private async fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+        const response = await fetch(url, init);
         if (!response.ok) {
-            throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+            const message = await this.readError(response);
+            throw new Error(`HTTP ${response.status}: ${message}`);
         }
         return response.json();
+    }
+
+    async getMetadata(): Promise<Metadata> {
+        return this.fetchJson(`${this.baseUrl}/metadata`);
     }
 
     async getGenes(): Promise<{ genes: string[]; total: number }> {
-        const response = await fetch(`${this.baseUrl}/genes`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch genes: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/genes`);
     }
 
     async getGeneInfo(gene: string): Promise<GeneInfo> {
-        const response = await fetch(`${this.baseUrl}/genes/${encodeURIComponent(gene)}`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch gene info: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/genes/${encodeURIComponent(gene)}`);
     }
 
     async getCategories(): Promise<Record<string, CategoryInfo>> {
-        const response = await fetch(`${this.baseUrl}/categories`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch categories: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/categories`);
     }
 
     async getStats(): Promise<Record<string, any>> {
-        const response = await fetch(`${this.baseUrl}/stats`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch stats: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/stats`);
     }
 
     /**
@@ -146,26 +185,14 @@ export class ApiClient {
      * Get color mapping for a category column
      */
     async getCategoryColors(column: string): Promise<Record<string, string>> {
-        const response = await fetch(
-            `${this.baseUrl}/categories/${encodeURIComponent(column)}/colors`
-        );
-        if (!response.ok) {
-            throw new Error(`Failed to fetch category colors: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/colors`);
     }
 
     /**
      * Get legend data for a category column
      */
     async getCategoryLegend(column: string): Promise<CategoryLegendItem[]> {
-        const response = await fetch(
-            `${this.baseUrl}/categories/${encodeURIComponent(column)}/legend`
-        );
-        if (!response.ok) {
-            throw new Error(`Failed to fetch category legend: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/legend`);
     }
 
     /**
@@ -193,13 +220,7 @@ export class ApiClient {
             query.set('limit', params.limit.toString());
         }
 
-        const response = await fetch(
-            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/bins?${query}`
-        );
-        if (!response.ok) {
-            throw new Error(`Failed to query bins: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(`${this.baseUrl}/genes/${encodeURIComponent(gene)}/bins?${query}`);
     }
 
     /**
@@ -216,24 +237,50 @@ export class ApiClient {
         const queryStr = query.toString();
         const url = `${this.baseUrl}/genes/${encodeURIComponent(gene)}/stats${queryStr ? '?' + queryStr : ''}`;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to get gene stats: ${response.statusText}`);
-        }
-        return response.json();
+        return this.fetchJson(url);
     }
 
     /**
      * Get mean expression per category value for a gene
      */
     async getGeneCategoryMeans(gene: string, column: string): Promise<GeneCategoryMeanItem[]> {
-        const response = await fetch(
+        const data: GeneCategoryMeansResponse = await this.fetchJson(
             `${this.baseUrl}/genes/${encodeURIComponent(gene)}/category/${encodeURIComponent(column)}/means`
         );
-        if (!response.ok) {
-            throw new Error(`Failed to get gene category means: ${response.statusText}`);
-        }
-        const data: GeneCategoryMeansResponse = await response.json();
         return data.items;
+    }
+
+    async getSomaObsColumns(): Promise<string[]> {
+        const data: SomaObsColumnsResponse = await this.fetchJson(`${this.baseUrl}/soma/obs/columns`);
+        return data.columns;
+    }
+
+    async getSomaObsColumnValues(column: string): Promise<string[]> {
+        const data: SomaObsValuesResponse = await this.fetchJson(
+            `${this.baseUrl}/soma/obs/${encodeURIComponent(column)}/values`
+        );
+        return data.values;
+    }
+
+    async createSomaDeJob(params: SomaDeJobCreateRequest): Promise<SomaDeJobCreateResponse> {
+        return this.fetchJson(`${this.baseUrl}/soma/de/jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+    }
+
+    async getSomaDeJob(jobId: string): Promise<SomaDeJobStatusResponse> {
+        return this.fetchJson(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}`);
+    }
+
+    async cancelSomaDeJob(jobId: string): Promise<void> {
+        const response = await fetch(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}`, {
+            method: 'DELETE',
+        });
+        if (!response.ok) {
+            const message = await this.readError(response);
+            throw new Error(`HTTP ${response.status}: ${message}`);
+        }
     }
 }

@@ -162,6 +162,12 @@
     border-color: var(--accent-primary);
 }
 
+.tool-text {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
 /* Buttons */
 .btn-link {
     background: none;
@@ -194,6 +200,212 @@
 .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.btn-secondary {
+    padding: 8px 12px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.btn-secondary:hover {
+    background-color: var(--border-color);
+}
+
+.page-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.page-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.page-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.form-row label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    padding-top: 8px;
+}
+
+.form-help {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 6px;
+}
+
+.input,
+.select,
+.textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+    border-color: var(--accent-primary);
+}
+
+.multi-select {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.multi-select-box {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background-color: var(--bg-tertiary);
+}
+
+.multi-select-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.multi-select-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+}
+
+.chip button {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+}
+
+.status-badge.queued {
+    color: var(--text-secondary);
+}
+
+.status-badge.running {
+    border-color: var(--accent-secondary);
+    color: var(--accent-secondary);
+}
+
+.status-badge.completed {
+    border-color: #2ecc71;
+    color: #2ecc71;
+}
+
+.status-badge.failed,
+.status-badge.cancelled {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.notice {
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 12px;
+}
+
+.error-box {
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background-color: rgba(233, 69, 96, 0.08);
+    color: var(--text-primary);
+    font-size: 0.875rem;
 }
 
 /* Legend */
@@ -713,3 +925,722 @@
     margin-top: 0;
 }
 
+/* ============================================
+   DE Analysis Pages - Scientific/Lab Aesthetic
+   ============================================ */
+
+/* Page-level styles for DE pages */
+.de-page {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    background:
+        linear-gradient(rgba(15, 52, 96, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 52, 96, 0.03) 1px, transparent 1px),
+        var(--bg-primary);
+    background-size: 24px 24px;
+}
+
+.de-page .page-main {
+    padding: 32px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Enhanced Page Card */
+.de-page .page-card {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(22, 33, 62, 0.8) 100%);
+    border: 1px solid rgba(42, 42, 74, 0.6);
+    border-radius: 16px;
+    padding: 0;
+    box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(233, 69, 96, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.de-page .page-card-header {
+    padding: 24px 28px;
+    margin-bottom: 0;
+    background: linear-gradient(135deg, rgba(15, 52, 96, 0.4) 0%, rgba(15, 52, 96, 0.2) 100%);
+    border-bottom: 1px solid rgba(42, 42, 74, 0.5);
+    position: relative;
+}
+
+.de-page .page-card-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--accent-primary) 0%, #ff6b6b 100%);
+}
+
+.de-page .page-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.de-page .page-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.de-page .btn-secondary {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(42, 42, 74, 0.8);
+    background: rgba(26, 26, 46, 0.6);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    font-size: 0.8125rem;
+    text-decoration: none;
+}
+
+.de-page .btn-secondary:hover {
+    background: rgba(233, 69, 96, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
+/* DE Job Form Container */
+#de-root {
+    padding: 28px;
+}
+
+.de-job-form {
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.de-job-form .form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.de-job-form .form-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.de-job-form .form-row > label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding-top: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.de-job-form .form-field {
+    flex: 1;
+}
+
+.de-job-form .form-help {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    opacity: 0.8;
+}
+
+/* Checkbox styling */
+.de-job-form .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 24px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    padding: 8px 0;
+}
+
+.de-job-form .checkbox-label input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.de-job-form .checkbox-label input[type="checkbox"]:checked {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.de-job-form .checkbox-label input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.de-job-form .checkbox-label input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+}
+
+/* Select styling */
+.de-job-form .select {
+    font-family: 'IBM Plex Sans', sans-serif;
+    padding: 12px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.de-job-form .select:hover {
+    border-color: rgba(233, 69, 96, 0.4);
+}
+
+.de-job-form .select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.15);
+}
+
+.de-job-form .select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Input styling */
+.de-job-form .input {
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 12px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.de-job-form .input:hover {
+    border-color: rgba(233, 69, 96, 0.4);
+}
+
+.de-job-form .input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.15);
+}
+
+/* Group Selection Controls */
+.de-job-form .group-selection-controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(42, 42, 74, 0.4);
+}
+
+/* Multi-select boxes */
+.de-job-form .multi-select {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.de-job-form .multi-select-box {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(15, 52, 96, 0.3) 0%, rgba(15, 52, 96, 0.15) 100%);
+    transition: all 0.2s ease;
+}
+
+.de-job-form .multi-select-box:hover {
+    border-color: rgba(233, 69, 96, 0.3);
+}
+
+.de-job-form .multi-select-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.de-job-form .multi-select-title::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+}
+
+.de-job-form .multi-select-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.de-job-form .multi-select select[multiple] {
+    height: 200px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8125rem;
+}
+
+/* Chip styling */
+.de-job-form .chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    min-height: 32px;
+}
+
+.de-job-form .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(233, 69, 96, 0.1);
+    border: 1px solid rgba(233, 69, 96, 0.3);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    animation: chipIn 0.2s ease;
+}
+
+@keyframes chipIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.de-job-form .chip button {
+    border: none;
+    background: none;
+    color: var(--accent-primary);
+    cursor: pointer;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.de-job-form .chip button:hover {
+    opacity: 1;
+}
+
+/* Parameter grid */
+.de-job-form .param-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.de-job-form .param-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.de-job-form .param-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6875rem;
+    color: var(--text-secondary);
+    text-transform: lowercase;
+}
+
+.de-job-form .param-item .input {
+    font-size: 0.8125rem;
+    padding: 10px 12px;
+}
+
+/* Form actions */
+.de-job-form .form-actions {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-top: 8px;
+}
+
+/* Primary button enhanced */
+.de-job-form .btn-primary {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, #ff6b6b 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.de-job-form .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.4);
+}
+
+.de-job-form .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.de-job-form .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Error box enhanced */
+.de-job-form .error-box,
+.de-page .error-box {
+    border: 1px solid rgba(233, 69, 96, 0.5);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(233, 69, 96, 0.1) 0%, rgba(233, 69, 96, 0.05) 100%);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    margin-top: 16px;
+    position: relative;
+    padding-left: 44px;
+}
+
+.de-job-form .error-box::before,
+.de-page .error-box::before {
+    content: '!';
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: white;
+}
+
+/* ============================================
+   DE Job Status Page
+   ============================================ */
+
+#de-job-root {
+    padding: 28px;
+}
+
+.de-job-status {
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+
+/* Status card layout */
+.de-job-status .status-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.de-job-status .status-section {
+    padding: 20px;
+    background: rgba(15, 52, 96, 0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(42, 42, 74, 0.4);
+}
+
+.de-job-status .status-section-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+/* Job ID display */
+.de-job-status .job-id {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    word-break: break-all;
+}
+
+/* Status badge enhanced */
+.de-job-status .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid transparent;
+}
+
+.de-job-status .status-badge::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.de-job-status .status-badge.queued {
+    background: rgba(160, 160, 160, 0.1);
+    border-color: rgba(160, 160, 160, 0.3);
+    color: var(--text-secondary);
+}
+
+.de-job-status .status-badge.running {
+    background: rgba(15, 76, 117, 0.2);
+    border-color: rgba(15, 76, 117, 0.5);
+    color: #4dabf7;
+    animation: pulse 2s infinite;
+}
+
+.de-job-status .status-badge.running::before {
+    animation: blink 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(77, 171, 247, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(77, 171, 247, 0); }
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.de-job-status .status-badge.completed {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.4);
+    color: #2ecc71;
+}
+
+.de-job-status .status-badge.failed,
+.de-job-status .status-badge.cancelled {
+    background: rgba(233, 69, 96, 0.15);
+    border-color: rgba(233, 69, 96, 0.4);
+    color: var(--accent-primary);
+}
+
+/* Progress bar */
+.de-job-status .progress-container {
+    margin-top: 16px;
+}
+
+.de-job-status .progress-bar {
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.de-job-status .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), #ff6b6b);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.de-job-status .progress-text {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Timestamps */
+.de-job-status .timestamps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.de-job-status .timestamp-item {
+    text-align: center;
+    padding: 12px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+}
+
+.de-job-status .timestamp-label {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.de-job-status .timestamp-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+}
+
+/* Action buttons */
+.de-job-status .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.de-job-status .btn-action {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.de-job-status .btn-action:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.de-job-status .btn-action.primary {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, #ff6b6b 100%);
+    border: none;
+    color: white;
+}
+
+.de-job-status .btn-action.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+}
+
+/* URL notice */
+.de-job-status .url-notice {
+    margin-top: 24px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(15, 76, 117, 0.2) 0%, rgba(15, 76, 117, 0.1) 100%);
+    border: 1px dashed rgba(15, 76, 117, 0.4);
+    border-radius: 8px;
+}
+
+.de-job-status .url-notice-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.de-job-status .url-notice-url {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    word-break: break-all;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .de-page {
+    background:
+        linear-gradient(rgba(15, 52, 96, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 52, 96, 0.02) 1px, transparent 1px),
+        var(--bg-primary);
+}
+
+[data-theme="light"] .de-page .page-card {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(255, 255, 255, 0.9) 100%);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .de-page .page-card-header {
+    background: linear-gradient(135deg, rgba(228, 230, 235, 0.8) 0%, rgba(228, 230, 235, 0.4) 100%);
+}
+
+[data-theme="light"] .de-job-form .multi-select-box {
+    background: linear-gradient(135deg, rgba(228, 230, 235, 0.6) 0%, rgba(228, 230, 235, 0.3) 100%);
+}
+
+[data-theme="light"] .de-job-form .chip {
+    background: rgba(233, 69, 96, 0.08);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .de-page .page-main {
+        padding: 16px;
+    }
+
+    .de-job-form .form-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .de-job-form .form-row > label {
+        padding-top: 0;
+    }
+
+    .de-job-form .multi-select {
+        grid-template-columns: 1fr;
+    }
+
+    .de-job-form .param-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .de-job-status .timestamps {
+        grid-template-columns: 1fr;
+    }
+}
