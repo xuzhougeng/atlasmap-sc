@@ -212,9 +212,32 @@ func (s *TileService) GetTile(z, x, y int) ([]byte, error) {
 }
 
 // GetExpressionTile returns a tile colored by gene expression.
-func (s *TileService) GetExpressionTile(z, x, y int, gene string, colormap string) ([]byte, error) {
+func (s *TileService) GetExpressionTile(
+	z, x, y int,
+	gene string,
+	colormap string,
+	exprMin *float32,
+	exprMax *float32,
+) ([]byte, error) {
 	// Check cache (prefix with dataset ID)
-	cacheKey := s.datasetID + ":" + cache.ExpressionTileKey(z, x, y, gene, colormap)
+	var (
+		cacheMin    *float32
+		cacheMax    *float32
+		cacheMinVal float32
+		cacheMaxVal float32
+	)
+	if exprMin != nil {
+		cacheMinVal = *exprMin
+		cacheMin = &cacheMinVal
+	}
+	if exprMax != nil {
+		cacheMaxVal = *exprMax
+		cacheMax = &cacheMaxVal
+	}
+	if cacheMin != nil && cacheMax != nil && cacheMaxVal < cacheMinVal {
+		cacheMinVal, cacheMaxVal = cacheMaxVal, cacheMinVal
+	}
+	cacheKey := s.datasetID + ":" + cache.ExpressionTileKey(z, x, y, gene, colormap, cacheMin, cacheMax)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -237,12 +260,24 @@ func (s *TileService) GetExpressionTile(z, x, y int, gene string, colormap strin
 		}
 	}
 
+	minV := exprAll.min
+	maxV := exprAll.max
+	if exprMin != nil {
+		minV = *exprMin
+	}
+	if exprMax != nil {
+		maxV = *exprMax
+	}
+	if maxV < minV {
+		minV, maxV = maxV, minV
+	}
+
 	// Render tile
 	data, err := s.renderer.RenderExpressionTile(
 		bins,
 		exprTile,
-		exprAll.min,
-		exprAll.max,
+		minV,
+		maxV,
 		binsPerTileAxis,
 		x, y,
 		colormap,

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/allegro/bigcache/v3"
@@ -97,8 +98,21 @@ func TileKey(z, x, y int, filters map[string]interface{}) string {
 }
 
 // ExpressionTileKey generates a cache key for an expression tile.
-func ExpressionTileKey(z, x, y int, gene, colormap string) string {
-	return fmt.Sprintf("expr:%d/%d/%d:%s:%s", z, x, y, gene, colormap)
+func ExpressionTileKey(z, x, y int, gene, colormap string, exprMin *float32, exprMax *float32) string {
+	base := fmt.Sprintf("expr:%d/%d/%d:%s:%s", z, x, y, gene, colormap)
+	if exprMin == nil && exprMax == nil {
+		return base
+	}
+
+	minStr := "auto"
+	maxStr := "auto"
+	if exprMin != nil {
+		minStr = strconv.FormatFloat(float64(*exprMin), 'g', -1, 32)
+	}
+	if exprMax != nil {
+		maxStr = strconv.FormatFloat(float64(*exprMax), 'g', -1, 32)
+	}
+	return base + ":" + minStr + ":" + maxStr
 }
 
 // CategoryTileKey generates a cache key for a category tile.

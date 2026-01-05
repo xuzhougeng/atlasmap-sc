@@ -274,6 +274,12 @@ func TestExpressionTileEndpoint(t *testing.T) {
 			expectPNG:      true,
 		},
 		{
+			name:           "expression tile with custom range",
+			path:           "/d/default/tiles/0/0/0/expression/" + validGene + ".png?colormap=viridis&min=0&max=1",
+			expectedStatus: http.StatusOK,
+			expectPNG:      true,
+		},
+		{
 			name:           "unknown gene returns empty tile",
 			path:           "/d/default/tiles/0/0/0/expression/UNKNOWN_GENE_XYZ.png",
 			expectedStatus: http.StatusOK, // Returns empty tile, not error

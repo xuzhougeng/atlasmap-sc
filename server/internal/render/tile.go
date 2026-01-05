@@ -49,6 +49,7 @@ func NewTileRenderer(cfg Config) *TileRenderer {
 	r.colormaps["plasma"] = colormap.Plasma
 	r.colormaps["inferno"] = colormap.Inferno
 	r.colormaps["magma"] = colormap.Magma
+	r.colormaps["seurat"] = colormap.Seurat
 	r.colormaps["categorical"] = colormap.Categorical
 
 	return r

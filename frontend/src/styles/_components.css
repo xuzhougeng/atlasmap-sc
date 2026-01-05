@@ -886,12 +886,69 @@
     margin-bottom: 16px;
 }
 
+.expression-range-selector {
+    margin-bottom: 16px;
+}
+
 .category-column-selector label,
 .colormap-selector label {
     display: block;
     font-size: 0.75rem;
     color: var(--text-secondary);
     margin-bottom: 8px;
+}
+
+.expression-range-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.expression-range-header label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.expression-range-auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.expression-range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.expression-range-input {
+    flex: 1 1 0;
+    width: 0;
+    padding: 8px 12px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.expression-range-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+}
+
+.expression-range-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.expression-range-sep {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
 }
 
 .category-column-selector select,
@@ -926,5 +983,4 @@
 .tab-section-title:first-child {
     margin-top: 0;
 }
-
 

@@ -12,6 +12,7 @@ import { CategoryColumnSelector } from './components/CategoryColumnSelector';
 import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
 import { ColorScaleSelector } from './components/ColorScaleSelector';
+import { ExpressionRangeSelector } from './components/ExpressionRangeSelector';
 import { SidebarResizer } from './components/SidebarResizer';
 import { ThemeManager } from './components/ThemeManager';
 import { StateManager, AppState } from './state/StateManager';
@@ -338,18 +339,39 @@ async function init() {
     colormapSelectorContainer.id = 'colormap-selector';
     expressionContainer.appendChild(colormapSelectorContainer);
 
+    let expressionRangeSelector: ExpressionRangeSelector | null = null;
+
     // Initialize colormap selector
     const colormapSelector = new ColorScaleSelector(colormapSelectorContainer, {
         onScaleChange: (scale) => {
             state.setState({ colorScale: scale });
             const { colorGene, colorMode } = state.getState();
             if (colorMode === 'expression' && colorGene) {
-                mapController.setExpressionGene(colorGene, scale);
+                mapController.setExpressionGene(
+                    colorGene,
+                    scale,
+                    expressionRangeSelector?.getRange() ?? null
+                );
             }
         },
     });
-    colormapSelector.setScales(['viridis', 'plasma', 'inferno', 'magma']);
+    colormapSelector.setScales(['viridis', 'plasma', 'inferno', 'magma', 'seurat']);
     colormapSelector.setSelectedScale(state.getState().colorScale);
+
+    // Create expression range selector container
+    const expressionRangeSelectorContainer = document.createElement('div');
+    expressionRangeSelectorContainer.id = 'expression-range-selector';
+    expressionContainer.appendChild(expressionRangeSelectorContainer);
+
+    // Initialize expression range selector
+    expressionRangeSelector = new ExpressionRangeSelector(expressionRangeSelectorContainer, {
+        onRangeChange: (range) => {
+            const { colorGene, colorMode, colorScale } = state.getState();
+            if (colorMode === 'expression' && colorGene) {
+                mapController.setExpressionGene(colorGene, colorScale, range);
+            }
+        },
+    });
 
     // Create expression legend container
     const expressionLegendContainer = document.createElement('div');
@@ -392,7 +414,11 @@ async function init() {
 
         // Switch to expression tab (this will also trigger mode change)
         tabPanel.switchTab('expression');
-        mapController.setExpressionGene(gene, state.getState().colorScale);
+        mapController.setExpressionGene(
+            gene,
+            state.getState().colorScale,
+            expressionRangeSelector?.getRange() ?? null
+        );
         categoryLegend.hide();
 
         // Update cell query panel with selected gene

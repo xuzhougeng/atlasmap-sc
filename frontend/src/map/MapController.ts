@@ -29,6 +29,11 @@ export interface TileRequest {
     init?: RequestInit;
 }
 
+export interface ExpressionColorRange {
+    min: number;
+    max: number;
+}
+
 export class MapController {
     private map: L.Map;
     private config: MapConfig;
@@ -39,6 +44,8 @@ export class MapController {
     private currentCategory: string | null = null;
     private currentExpressionGene: string | null = null;
     private currentExpressionColorScale: string | null = null;
+    // null => auto range (use gene min/max on backend)
+    private currentExpressionRange: ExpressionColorRange | null = null;
     // null => no filter (show all); [] => filter to none (show none)
     private selectedCategories: string[] | null = null;
 
@@ -118,14 +125,29 @@ export class MapController {
     /**
      * Set expression gene for coloring
      */
-    setExpressionGene(gene: string, colorScale: string = 'viridis'): void {
+    setExpressionGene(
+        gene: string,
+        colorScale: string = 'viridis',
+        range?: ExpressionColorRange | null
+    ): void {
         // Remove existing coloring layers
         this.clearExpression();
         this.clearCategoryLayer();
 
+        if (typeof range !== 'undefined') {
+            this.currentExpressionRange = range;
+        }
+
+        const query = new URLSearchParams();
+        query.set('colormap', colorScale);
+        if (this.currentExpressionRange !== null) {
+            query.set('min', String(this.currentExpressionRange.min));
+            query.set('max', String(this.currentExpressionRange.max));
+        }
+
         // Add expression-colored tile layer
         this.expressionLayer = L.tileLayer(
-            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?colormap=${colorScale}`,
+            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?${query.toString()}`,
             {
                 tileSize: this.config.tileSize,
                 noWrap: true,
@@ -264,9 +286,14 @@ export class MapController {
         const apiUrl = this.config.apiUrl.replace(/\/$/, '');
         if (this.currentColorMode === 'expression' && this.currentExpressionGene) {
             const gene = encodeURIComponent(this.currentExpressionGene);
-            const colormap = encodeURIComponent(this.currentExpressionColorScale ?? 'viridis');
+            const query = new URLSearchParams();
+            query.set('colormap', this.currentExpressionColorScale ?? 'viridis');
+            if (this.currentExpressionRange !== null) {
+                query.set('min', String(this.currentExpressionRange.min));
+                query.set('max', String(this.currentExpressionRange.max));
+            }
             return {
-                url: `${apiUrl}/tiles/${z}/${x}/${y}/expression/${gene}.png?colormap=${colormap}`,
+                url: `${apiUrl}/tiles/${z}/${x}/${y}/expression/${gene}.png?${query.toString()}`,
             };
         }
 

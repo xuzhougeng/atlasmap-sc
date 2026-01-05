@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -298,7 +299,28 @@ func expressionTileHandler(svc *service.TileService) http.HandlerFunc {
 			colormap = "viridis"
 		}
 
-		data, err := svc.GetExpressionTile(z, x, y, gene, colormap)
+		var (
+			minPtr *float32
+			maxPtr *float32
+		)
+		if minStr := strings.TrimSpace(r.URL.Query().Get("min")); minStr != "" {
+			if minF64, err := strconv.ParseFloat(minStr, 32); err == nil {
+				if !math.IsNaN(minF64) && !math.IsInf(minF64, 0) {
+					minF32 := float32(minF64)
+					minPtr = &minF32
+				}
+			}
+		}
+		if maxStr := strings.TrimSpace(r.URL.Query().Get("max")); maxStr != "" {
+			if maxF64, err := strconv.ParseFloat(maxStr, 32); err == nil {
+				if !math.IsNaN(maxF64) && !math.IsInf(maxF64, 0) {
+					maxF32 := float32(maxF64)
+					maxPtr = &maxF32
+				}
+			}
+		}
+
+		data, err := svc.GetExpressionTile(z, x, y, gene, colormap, minPtr, maxPtr)
 		if err != nil {
 			data, _ = svc.GetEmptyTile()
 		}

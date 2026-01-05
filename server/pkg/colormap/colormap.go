@@ -111,6 +111,14 @@ var Magma = LinearColormap{
 	},
 }
 
+// Seurat colormap (similar to Seurat FeaturePlot style): light grey -> red.
+var Seurat = LinearColormap{
+	colors: []color.RGBA{
+		{211, 211, 211, 255}, // LightGrey
+		{255, 0, 0, 255},     // Red
+	},
+}
+
 // CategoricalColormap provides distinct colors for categories.
 type CategoricalColormap struct {
 	colors []color.RGBA
