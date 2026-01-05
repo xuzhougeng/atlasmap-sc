@@ -36,6 +36,7 @@ class PreprocessingPipeline:
         self.selected_genes: Optional[list[str]] = None
         self.category_mapping: dict[str, dict[str, int]] = {}
         self.numeric_columns: list[str] = []  # 存储检测到的数值列
+        self.column_name_mapping: dict[str, str] = {}  # 原始列名 -> 清理后列名
 
     def run(self) -> None:
         """Execute the full preprocessing pipeline."""
@@ -108,6 +109,17 @@ class PreprocessingPipeline:
 
         logger.info(f"Selected {len(self.selected_genes)} genes for pre-aggregation")
 
+    def _sanitize_column_name(self, col: str) -> str:
+        """清理列名，替换不适合 URL 的字符。
+
+        Args:
+            col: 原始列名
+
+        Returns:
+            清理后的列名（. 替换为 _）
+        """
+        return col.replace(".", "_")
+
     def _is_numeric_column(self, col: str) -> bool:
         """判断列是否为数值型。
 
@@ -140,15 +152,25 @@ class PreprocessingPipeline:
                 logger.warning(f"Category column '{col}' not found in obs, skipping")
                 continue
 
+            # 清理列名（替换不适合 URL 的字符）
+            sanitized_col = self._sanitize_column_name(col)
+            self.column_name_mapping[sanitized_col] = col  # 清理后 -> 原始
+
             if self._is_numeric_column(col):
                 # 数值列：跳过分类映射
-                self.numeric_columns.append(col)
-                logger.info(f"  {col}: numeric (will aggregate with median)")
+                self.numeric_columns.append(sanitized_col)
+                if sanitized_col != col:
+                    logger.info(f"  {col} -> {sanitized_col}: numeric (will aggregate with median)")
+                else:
+                    logger.info(f"  {col}: numeric (will aggregate with median)")
             else:
-                # 分类列：原有逻辑
+                # 分类列：使用清理后的列名作为 key
                 categories = self.adata.obs[col].astype(str).unique()
-                self.category_mapping[col] = {cat: idx for idx, cat in enumerate(sorted(categories))}
-                logger.info(f"  {col}: {len(categories)} categories")
+                self.category_mapping[sanitized_col] = {cat: idx for idx, cat in enumerate(sorted(categories))}
+                if sanitized_col != col:
+                    logger.info(f"  {col} -> {sanitized_col}: {len(categories)} categories")
+                else:
+                    logger.info(f"  {col}: {len(categories)} categories")
 
     def _build_and_write_bins(self) -> None:
         """Build multi-resolution bins and write to Zarr."""
@@ -214,18 +236,20 @@ class PreprocessingPipeline:
 
                 # Aggregate categories
                 category_counts = {}
-                for col, mapping in self.category_mapping.items():
-                    cats = self.adata.obs[col].iloc[cell_indices].astype(str)
+                for sanitized_col, mapping in self.category_mapping.items():
+                    orig_col = self.column_name_mapping[sanitized_col]
+                    cats = self.adata.obs[orig_col].iloc[cell_indices].astype(str)
                     counts = np.zeros(len(mapping), dtype=np.uint32)
                     for cat, idx in mapping.items():
                         counts[idx] = (cats == cat).sum()
-                    category_counts[col] = counts
+                    category_counts[sanitized_col] = counts
 
                 # Aggregate numeric columns (median)
                 numeric_medians = {}
-                for col in self.numeric_columns:
-                    values = self.adata.obs[col].iloc[cell_indices].values
-                    numeric_medians[col] = float(np.median(values))
+                for sanitized_col in self.numeric_columns:
+                    orig_col = self.column_name_mapping[sanitized_col]
+                    values = self.adata.obs[orig_col].iloc[cell_indices].values
+                    numeric_medians[sanitized_col] = float(np.median(values))
 
                 bins_data.append({
                     "bin_x": int(bin_x),
@@ -264,6 +288,7 @@ class PreprocessingPipeline:
             preaggregated_genes=self.selected_genes,
             category_columns=list(self.category_mapping.keys()),
             numeric_columns=self.numeric_columns,
+            column_name_mapping=self.column_name_mapping,
         )
 
         writer.finalize()
