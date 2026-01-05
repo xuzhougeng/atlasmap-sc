@@ -78,3 +78,5 @@ temp/
 .gomodcache/
 .cache/
 TODO
+
+server/data/de_jobs.sqlite*

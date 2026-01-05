@@ -75,7 +75,7 @@ curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG0000003
 ```bash
 curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
   -H 'Content-Type: application/json' \
-  -d '{"groupby":"cell_type","group1":["T"],"group2":["B"]}'
+  -d '{"groupby":"cell_type","group1":["retinal rod cell"],"group2":[]}'
 ```
 
 #### 查询状态
@@ -83,6 +83,12 @@ curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
 - `GET /d/{dataset}/api/soma/de/jobs/{job_id}`
   - Response: `{ job_id, status, created_at, started_at, finished_at, progress:{phase,done,total}, error }`
   - `status`: `queued|running|completed|failed|cancelled`
+
+示例
+
+```bash
+curl -sS 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785' | jq
+```
 
 #### 拉取结果
 
@@ -107,6 +113,13 @@ curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
       ]
     }
     ```
+
+示例
+
+```bash
+curl 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785/result | jq
+```
+
 
 #### 取消任务
 

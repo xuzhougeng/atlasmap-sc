@@ -19,6 +19,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import sys
@@ -311,6 +312,13 @@ def _read_sparse_gene_subset(
     return out.slice(0, int(max_rows))
 
 
+def truncate_list(items: list[str], max_show: int = 10) -> list[str]:
+    """Return list with truncation notice if too long."""
+    if len(items) <= max_show:
+        return items
+    return items[:max_show] + [f"... and {len(items) - max_show} more"]
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -323,7 +331,163 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--head", type=int, default=5000, help="Read this many obs/var rows (max) for sampling")
     p.add_argument("--max-nnz", type=int, default=200000, help="Max nnz rows to print/analyze from X subset")
     p.add_argument("--seed", type=int, default=0, help="Random seed (0 means deterministic default)")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
     return p.parse_args()
+
+
+def _get_cell_type_stats(obs_tbl: "pa.Table") -> dict[str, Any] | None:  # type: ignore[name-defined]
+    """Get cell_type statistics from obs table. Returns None if no cell_type column found."""
+    import pyarrow as pa  # type: ignore
+    import pyarrow.compute as pc  # type: ignore
+
+    col_name = None
+    if "cell_type" in obs_tbl.column_names:
+        col_name = "cell_type"
+    elif "celltype" in obs_tbl.column_names:
+        col_name = "celltype"
+
+    if col_name is None:
+        return None
+
+    col = obs_tbl[col_name]
+    # Count occurrences of each value using value_counts
+    try:
+        value_counts = pc.value_counts(col)
+        counts = {}
+        for i in range(value_counts.num_rows):
+            val = value_counts["values"][i]
+            count = value_counts["counts"][i]
+            if val.is_valid:
+                counts[str(val.as_py())] = int(count.as_py())
+        return {"column": col_name, "counts": counts}
+    except Exception:
+        # Fallback: manual counting
+        unique_values = pc.unique(col)
+        counts = {}
+        for val in unique_values:
+            if val.is_valid:
+                val_str = val.as_py()
+                mask = pc.equal(col, val)
+                count = int(pc.sum(pc.cast(mask, pa.int64())).as_py())
+                counts[str(val_str)] = count
+        return {"column": col_name, "counts": counts}
+
+
+def get_info(
+    exp: Any,
+    obs_df: Any,
+    var_df: Any,
+    X: Any,
+    obs_tbl: "pa.Table",  # type: ignore[name-defined]
+    var_tbl: "pa.Table",  # type: ignore[name-defined]
+    gene_joinid: int,
+    gene_id: str,
+    cell_ids: Sequence[int],
+    x_tbl: "pa.Table | None",  # type: ignore[name-defined]
+    uri: str,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    """Collect all information into a dictionary."""
+    import pyarrow as pa  # type: ignore
+
+    info: dict[str, Any] = {
+        "experiment": uri,
+        "obs": {
+            "n_rows": int(obs_tbl.num_rows),
+            "n_columns": len(obs_tbl.column_names),
+            "columns": list(obs_tbl.column_names),
+        },
+        "var": {
+            "n_rows": int(var_tbl.num_rows),
+            "n_columns": len(var_tbl.column_names),
+            "columns": list(var_tbl.column_names),
+        },
+        "gene": {
+            "gene_id": gene_id,
+            "soma_joinid": gene_joinid,
+            "requested": args.gene,
+        },
+        "cells": {
+            "sampled": len(cell_ids),
+            "from_obs_head": int(obs_tbl.num_rows),
+            "sample_size": int(args.n_cells),
+        },
+    }
+
+    # Cell type statistics
+    cell_type_stats = _get_cell_type_stats(obs_tbl)
+    if cell_type_stats:
+        info["cell_type"] = cell_type_stats
+
+    if x_tbl is not None and x_tbl.num_rows > 0:
+        x = pa.compute.cast(x_tbl["soma_data"], pa.float64())
+        mean_v = float(pa.compute.mean(x).as_py())
+        max_v = float(pa.compute.max(x).as_py())
+        min_v = float(pa.compute.min(x).as_py())
+        nnz = int(x_tbl.num_rows)
+
+        show = min(10, nnz)
+        dim0 = x_tbl["soma_dim_0"].to_pylist()[:show]
+        data = x_tbl["soma_data"].to_pylist()[:show]
+        entries = [{"cell_joinid": int(dim0[i]), "value": float(data[i])} for i in range(show)]
+
+        info["X_subset"] = {
+            "nnz": nnz,
+            "min": min_v,
+            "mean": mean_v,
+            "max": max_v,
+            "first_entries": entries,
+        }
+    else:
+        info["X_subset"] = {"nnz": 0, "warning": "Gene may be unexpressed in sampled cells"}
+
+    return info
+
+
+def print_human(info: dict[str, Any]) -> None:
+    """Print info in human-readable format."""
+    print(f"Experiment: {info['experiment']}")
+    print()
+
+    obs = info["obs"]
+    print(f"obs: rows≈{obs['n_rows']:,} cols={obs['n_columns']}")
+    cols_display = truncate_list(obs["columns"], 15)
+    print(f"  columns: {', '.join(cols_display)}")
+    print()
+
+    var = info["var"]
+    print(f"var: rows≈{var['n_rows']:,} cols={var['n_columns']}")
+    cols_display = truncate_list(var["columns"], 15)
+    print(f"  columns: {', '.join(cols_display)}")
+    print()
+
+    gene = info["gene"]
+    print(f"Gene: {gene['gene_id']} (soma_joinid={gene['soma_joinid']}, requested={gene['requested']})")
+    print()
+
+    cells = info["cells"]
+    print(f"Cells: sampled={cells['sampled']} (from obs head={cells['from_obs_head']}, sample_size={cells['sample_size']})")
+    print()
+
+    # Cell type statistics
+    if "cell_type" in info:
+        ct_stats = info["cell_type"]
+        print(f"Cell type statistics ({ct_stats['column']}):")
+        sorted_counts = sorted(ct_stats["counts"].items(), key=lambda x: x[1], reverse=True)
+        for ct_name, count in sorted_counts:
+            print(f"  {ct_name}: {count:,}")
+        print()
+
+    x_subset = info["X_subset"]
+    if x_subset["nnz"] == 0:
+        print(f"X subset: nnz=0")
+        if "warning" in x_subset:
+            print(f"  WARNING: {x_subset['warning']}")
+    else:
+        print(f"X subset: nnz={x_subset['nnz']:,} min={x_subset['min']:.6g} mean={x_subset['mean']:.6g} max={x_subset['max']:.6g}")
+        print("  First entries: (cell_joinid, value)")
+        for entry in x_subset["first_entries"]:
+            print(f"    {entry['cell_joinid']}\t{entry['value']}")
 
 
 def main() -> int:
@@ -333,7 +497,6 @@ def main() -> int:
     np, pd, pa, soma = _import_deps()
 
     uri = _resolve_experiment_uri(args.soma)
-    print(f"[info] experiment={uri}")
 
     try:
         exp = soma.Experiment.open(uri)
@@ -349,9 +512,6 @@ def main() -> int:
         obs_tbl = _read_df_head(obs_df, limit=int(args.head))
         var_tbl = _read_df_head(var_df, limit=int(args.head))
 
-        print(f"[info] obs: rows≈{obs_tbl.num_rows} cols={len(obs_tbl.column_names)}")
-        print(f"[info] var: rows≈{var_tbl.num_rows} cols={len(var_tbl.column_names)}")
-
         try:
             gene_joinid, gene_id = _resolve_gene(var_tbl, args.gene)
         except ValueError:
@@ -365,10 +525,8 @@ def main() -> int:
                 gene_joinid, gene_id = _resolve_gene(var_full, args.gene)
             else:
                 raise
-        print(f"[info] gene: {gene_id} (soma_joinid={gene_joinid})")
 
         cell_ids = _pick_cells(obs_tbl, n_cells=int(args.n_cells))
-        print(f"[info] cells: sampled={len(cell_ids)} (from obs head={obs_tbl.num_rows})")
 
         x_tbl = _read_sparse_gene_subset(
             np=np,
@@ -378,25 +536,25 @@ def main() -> int:
             max_rows=int(args.max_nnz),
         )
 
-        nnz = int(x_tbl.num_rows) if x_tbl is not None else 0
-        if nnz == 0:
-            print("[warn] X subset returned 0 nnz (gene may be unexpressed in sampled cells).")
-            return 0
+        info = get_info(
+            exp=exp,
+            obs_df=obs_df,
+            var_df=var_df,
+            X=X,
+            obs_tbl=obs_tbl,
+            var_tbl=var_tbl,
+            gene_joinid=gene_joinid,
+            gene_id=gene_id,
+            cell_ids=cell_ids,
+            x_tbl=x_tbl,
+            uri=uri,
+            args=args,
+        )
 
-        # Basic stats on soma_data
-        x = pa.compute.cast(x_tbl["soma_data"], pa.float64())
-        mean_v = float(pa.compute.mean(x).as_py())
-        max_v = float(pa.compute.max(x).as_py())
-        min_v = float(pa.compute.min(x).as_py())
-        print(f"[info] X subset: nnz={nnz} min={min_v:.6g} mean={mean_v:.6g} max={max_v:.6g}")
-
-        # Show a few entries
-        show = min(10, nnz)
-        dim0 = x_tbl["soma_dim_0"].to_pylist()[:show]
-        data = x_tbl["soma_data"].to_pylist()[:show]
-        print("[info] first entries: (cell_joinid, value)")
-        for i in range(show):
-            print(f"  {dim0[i]}\t{data[i]}")
+        if args.json:
+            print(json.dumps(info, indent=2))
+        else:
+            print_human(info)
 
     return 0
 
