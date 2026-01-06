@@ -558,8 +558,31 @@ async function init() {
         cellQueryPanel?.setGene(gene);
     });
 
-    // Initialize with default category
-    if (defaultCategory) {
+    // Handle gene parameter from URL (e.g., from DE results page)
+    const urlParams = new URLSearchParams(window.location.search);
+    const geneFromUrl = urlParams.get('gene');
+    if (geneFromUrl) {
+        console.log('Gene from URL:', geneFromUrl);
+        state.setState({ colorMode: 'expression', colorGene: geneFromUrl });
+        tabPanel.switchTab('expression');
+        mapController.setExpressionGene(
+            geneFromUrl,
+            state.getState().colorScale,
+            expressionRangeSelector?.getRange() ?? null
+        );
+        categoryLegend.hide();
+        void refreshExpressionColorbar();
+        cellQueryPanel?.setGene(geneFromUrl);
+
+        // Update gene input to show the selected gene
+        const geneInput = document.getElementById('gene-input') as HTMLInputElement | null;
+        if (geneInput) {
+            geneInput.value = geneFromUrl;
+        }
+    }
+
+    // Initialize with default category (skip if gene was specified in URL)
+    if (defaultCategory && !geneFromUrl) {
         const filter = categoryFilter?.getFilterForColumn(defaultCategory) ?? null;
         mapController.setCategoryColumn(defaultCategory, filter);
         categoryLegend.loadLegend(defaultCategory);

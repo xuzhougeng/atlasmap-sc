@@ -94,16 +94,17 @@ function formatPct(v: number): string {
     return `${(v * 100).toFixed(2)}%`;
 }
 
-function renderTableBody(items: SomaDeResultItem[]): string {
+function renderTableBody(items: SomaDeResultItem[], dataset: string): string {
     if (!items.length) {
         return `<tr><td colspan="10" style="color:var(--text-secondary); padding:16px; text-align:center;">No results</td></tr>`;
     }
 
     return items
         .map((it) => {
+            const geneLink = `/?dataset=${encodeURIComponent(dataset)}&gene=${encodeURIComponent(it.gene)}`;
             return `
                 <tr>
-                    <td>${escapeHtml(it.gene)}</td>
+                    <td><a href="${geneLink}" class="gene-link" title="View expression pattern">${escapeHtml(it.gene)}</a></td>
                     <td>${formatNumber(it.log2fc, 3)}</td>
                     <td>${formatNumber(it.mean1, 4)}</td>
                     <td>${formatNumber(it.mean2, 4)}</td>
@@ -140,7 +141,7 @@ function negLog10(v: number): number {
     return -Math.log10(safe);
 }
 
-function renderResult(root: HTMLElement, result: SomaDeJobResultResponse) {
+function renderResult(root: HTMLElement, result: SomaDeJobResultResponse, dataset: string) {
     const params = result.params;
     const group2Label = params.group2?.length ? params.group2.join(', ') : '(one-vs-rest)';
 
@@ -174,7 +175,7 @@ function renderResult(root: HTMLElement, result: SomaDeJobResultResponse) {
     `;
 
     const tableBody = root.querySelector('#results-body')!;
-    tableBody.innerHTML = renderTableBody(result.items);
+    tableBody.innerHTML = renderTableBody(result.items, dataset);
 
     const orderByEl = root.querySelector('#order-by') as HTMLSelectElement;
     if (orderByEl) orderByEl.value = result.order_by;
@@ -618,7 +619,7 @@ async function init() {
         const result = await api.getSomaDeJobResult(jobId, { offset, limit, order_by });
         lastResult = result;
         renderError(null);
-        renderResult(root, result);
+        renderResult(root, result, dataset);
     };
 
     const refreshAll = async () => {

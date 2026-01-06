@@ -2078,3 +2078,27 @@
     background-color: rgba(0, 0, 0, 0.05);
 
 }
+
+/* ============================================
+   Gene Link - Click to view expression
+   ============================================ */
+
+.gene-link {
+    color: #40c0ff;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.gene-link:hover {
+    color: #60d0ff;
+    text-decoration: underline;
+}
+
+[data-theme="light"] .gene-link {
+    color: #0f4c75;
+}
+
+[data-theme="light"] .gene-link:hover {
+    color: #1a6da3;
+}

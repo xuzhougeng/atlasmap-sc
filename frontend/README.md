@@ -184,6 +184,36 @@ interface AppState {
 | `/d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png` | 分类着色瓦片 |
 | `/d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap={scale}` | 表达着色瓦片 |
 
+## URL 参数
+
+### 基因表达直接跳转
+
+主页面支持通过 URL 参数 `gene` 直接跳转到指定基因的表达可视化视图。
+
+**用法：**
+
+```
+/?dataset={dataset_id}&gene={gene_name}
+```
+
+**示例：**
+
+```
+http://localhost:3000/?dataset=retina&gene=AT5G43870
+```
+
+**行为：**
+- 自动切换到 Expression 标签页
+- 加载指定基因的表达瓦片
+- 在基因搜索框中显示当前基因名
+- 更新 Cell Query Panel 中的基因信息
+- 跳过默认的 Category 初始化
+
+**应用场景：**
+- 从差异表达分析结果页面（DE Results）点击基因名直接查看其空间表达模式
+- 书签保存特定基因的可视化链接
+- 在报告或文档中引用特定基因的可视化
+
 ## 组件说明
 
 components
