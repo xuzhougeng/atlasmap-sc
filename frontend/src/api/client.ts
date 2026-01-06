@@ -35,6 +35,16 @@ export interface CategoryLegendItem {
     cell_count: number;
 }
 
+export interface CategoryCentroidItem {
+    value: string;
+    color: string;
+    index: number;
+    bin_count: number;
+    cell_count: number;
+    x: number | null;
+    y: number | null;
+}
+
 export interface BinExpressionInfo {
     bin_index: number;
     bin_x: number;
@@ -232,6 +242,10 @@ export class ApiClient {
      */
     async getCategoryLegend(column: string): Promise<CategoryLegendItem[]> {
         return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/legend`);
+    }
+
+    async getCategoryCentroids(column: string): Promise<CategoryCentroidItem[]> {
+        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/centroids`);
     }
 
     /**

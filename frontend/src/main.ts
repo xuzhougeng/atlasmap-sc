@@ -231,6 +231,22 @@ async function init() {
         : availableCategories[0] || '';
     let currentCategoryColumn = defaultCategory;
     let categoryFilter: CategoryFilter | null = null;
+    let currentCategoryFilter: string[] | null = null;
+
+    const refreshCategoryLabels = async (): Promise<void> => {
+        if (!currentCategoryColumn) {
+            mapController.setCategoryLabelItems(null);
+            return;
+        }
+        try {
+            const items = await api.getCategoryCentroids(currentCategoryColumn);
+            mapController.setCategoryLabelItems(items);
+            mapController.setCategoryLabelFilter(currentCategoryFilter);
+        } catch (error) {
+            console.warn('Failed to load category centroids:', error);
+            mapController.setCategoryLabelItems(null);
+        }
+    };
 
     // Initialize TabPanel
     const tabPanel = new TabPanel(
@@ -252,6 +268,7 @@ async function init() {
                     categoryLegend.hide();
                 }
 
+                void refreshCategoryLabels();
                 void refreshExpressionColorbar();
             },
         }
@@ -280,6 +297,8 @@ async function init() {
                 mapController.setCategoryColumn(column, filter);
                 categoryLegend.loadLegend(column);
                 cellQueryPanel?.setCategoryColumn(column);
+                currentCategoryFilter = filter ?? null;
+                void refreshCategoryLabels();
             },
         }
     );
@@ -320,6 +339,8 @@ async function init() {
             console.log('Categories filtered:', column, filter);
             if (column === currentCategoryColumn) {
                 mapController.updateCategoryFilter(filter);
+                currentCategoryFilter = filter ?? null;
+                mapController.setCategoryLabelFilter(currentCategoryFilter);
             }
             if (column === currentCategoryColumn) {
                 state.setState({ selectedCategories: filter ?? [] });
@@ -489,6 +510,8 @@ async function init() {
         const filter = categoryFilter?.getFilterForColumn(defaultCategory) ?? null;
         mapController.setCategoryColumn(defaultCategory, filter);
         categoryLegend.loadLegend(defaultCategory);
+        currentCategoryFilter = filter ?? null;
+        void refreshCategoryLabels();
     }
 
     // Set up toolbar buttons
@@ -501,6 +524,10 @@ async function init() {
         defaultCategory,
         currentDataset,
         () => {
+            currentCategoryColumn = defaultCategory;
+            currentCategoryFilter = null;
+            mapController.setCategoryLabelFilter(null);
+            void refreshCategoryLabels();
             void refreshExpressionColorbar();
         }
     );

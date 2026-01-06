@@ -2,6 +2,7 @@
 
 import L from 'leaflet';
 import { CategoryPostTileLayer } from './CategoryPostTileLayer';
+import type { CategoryCentroidItem } from '../api/client';
 
 export type ColorMode = 'expression' | 'category' | 'default';
 
@@ -39,6 +40,7 @@ export class MapController {
     private config: MapConfig;
     private expressionLayer: L.TileLayer | null = null;
     private categoryLayer: L.TileLayer | null = null;
+    private categoryLabelLayer: L.LayerGroup;
     private bounds: L.LatLngBounds;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
@@ -48,6 +50,8 @@ export class MapController {
     private currentExpressionRange: ExpressionColorRange | null = null;
     // null => no filter (show all); [] => filter to none (show none)
     private selectedCategories: string[] | null = null;
+    private categoryLabelItems: CategoryCentroidItem[] | null = null;
+    private categoryLabelFilter: string[] | null = null;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.config = config;
@@ -89,6 +93,12 @@ export class MapController {
         // Note: No base tile layer is created here.
         // Tiles are loaded on-demand via setCategoryColumn or setExpressionGene.
 
+        const labelPane = this.map.createPane('categoryLabels');
+        labelPane.style.zIndex = '650';
+        labelPane.style.pointerEvents = 'none';
+
+        this.categoryLabelLayer = L.layerGroup().addTo(this.map);
+
         // Add zoom info display
         this.addZoomDisplay();
 
@@ -124,7 +134,49 @@ export class MapController {
         // Zoom change handler
         this.map.on('zoomend', () => {
             console.log(`Zoom level: ${this.map.getZoom()}`);
+            this.renderCategoryLabels();
         });
+    }
+
+    setCategoryLabelItems(items: CategoryCentroidItem[] | null): void {
+        this.categoryLabelItems = items;
+        this.renderCategoryLabels();
+    }
+
+    setCategoryLabelFilter(values: string[] | null): void {
+        this.categoryLabelFilter = values;
+        this.renderCategoryLabels();
+    }
+
+    private renderCategoryLabels(): void {
+        this.categoryLabelLayer.clearLayers();
+
+        if (!this.categoryLabelItems) return;
+        if (this.categoryLabelFilter && this.categoryLabelFilter.length === 0) return;
+
+        const filterSet =
+            this.categoryLabelFilter === null
+                ? null
+                : new Set(this.categoryLabelFilter);
+
+        for (const item of this.categoryLabelItems) {
+            if (filterSet && !filterSet.has(item.value)) continue;
+            if (item.x === null || item.y === null) continue;
+
+            const text = item.value;
+            const color = item.color || '#ffffff';
+
+            const marker = L.marker([item.y, item.x], {
+                interactive: false,
+                keyboard: false,
+                pane: 'categoryLabels',
+                icon: L.divIcon({
+                    className: 'category-label',
+                    html: `<span class="category-label__text" style="color:${color}">${escapeHtml(text)}</span>`,
+                }),
+            });
+            this.categoryLabelLayer.addLayer(marker);
+        }
     }
 
     /**
@@ -413,4 +465,23 @@ export class MapController {
     getMap(): L.Map {
         return this.map;
     }
+}
+
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (ch) => {
+        switch (ch) {
+            case '&':
+                return '&amp;';
+            case '<':
+                return '&lt;';
+            case '>':
+                return '&gt;';
+            case '"':
+                return '&quot;';
+            case "'":
+                return '&#39;';
+            default:
+                return ch;
+        }
+    });
 }
