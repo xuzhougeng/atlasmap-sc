@@ -131,3 +131,67 @@
     font-size: 0.75rem;
     box-shadow: var(--shadow);
 }
+
+/* Expression Colorbar (map overlay) */
+.expression-colorbar-container {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.expression-colorbar {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 68px;
+}
+
+.expression-colorbar.hidden {
+    display: none;
+}
+
+.expression-colorbar-title {
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.expression-colorbar-subtitle {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.expression-colorbar-scale {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.expression-colorbar-label {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.expression-colorbar-bar {
+    width: 12px;
+    height: 120px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    background: linear-gradient(to top, #440154 0%, #fde725 100%);
+}

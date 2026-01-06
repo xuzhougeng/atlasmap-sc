@@ -12,6 +12,7 @@ import { CategoryColumnSelector } from './components/CategoryColumnSelector';
 import { CategoryLegend } from './components/CategoryLegend';
 import { CellQueryPanel } from './components/CellQueryPanel';
 import { ColorScaleSelector } from './components/ColorScaleSelector';
+import { ExpressionColorbar } from './components/ExpressionColorbar';
 import { ExpressionRangeSelector } from './components/ExpressionRangeSelector';
 import { SidebarResizer } from './components/SidebarResizer';
 import { ThemeManager } from './components/ThemeManager';
@@ -195,7 +196,7 @@ async function init() {
         expressionFilter: { gene: null, min: 0, max: 1 },
         colorMode: 'category',
         colorGene: null,
-        colorScale: 'viridis',
+        colorScale: 'seurat',
     };
     const state = new StateManager(initialState);
 
@@ -213,6 +214,15 @@ async function init() {
         initialZoom: 0,
         bounds: metadata.bounds,
     });
+
+    // Expression colorbar overlay (shown only when expression tiles are active)
+    const expressionColorbarContainer = document.createElement('div');
+    expressionColorbarContainer.id = 'expression-colorbar';
+    mapContainer.appendChild(expressionColorbarContainer);
+    const expressionColorbar = new ExpressionColorbar(expressionColorbarContainer);
+
+    let expressionColorbarStatsRequestId = 0;
+    let expressionColorbarAutoCache: { gene: string; zoom: number; max: number } | null = null;
 
     // Get available category columns
     const availableCategories = api.getAvailableCategories(metadata);
@@ -241,6 +251,8 @@ async function init() {
                 } else {
                     categoryLegend.hide();
                 }
+
+                void refreshExpressionColorbar();
             },
         }
     );
@@ -341,6 +353,49 @@ async function init() {
 
     let expressionRangeSelector: ExpressionRangeSelector | null = null;
 
+    async function refreshExpressionColorbar(): Promise<void> {
+        const mode = mapController.getColorMode();
+        const gene = mapController.getCurrentExpressionGene();
+        if (mode !== 'expression' || !gene) {
+            expressionColorbar.hide();
+            return;
+        }
+
+        expressionColorbar.show();
+        expressionColorbar.setGene(gene);
+        expressionColorbar.setColormap(mapController.getCurrentExpressionColorScale() ?? state.getState().colorScale);
+
+        const manualRange = expressionRangeSelector?.getRange() ?? null;
+        if (manualRange) {
+            expressionColorbar.setRange(manualRange.min, manualRange.max, 'manual');
+            return;
+        }
+
+        // Auto range: show 0..max where max comes from stats at the current zoom.
+        const effectiveZoom = Math.min(Math.max(0, Math.floor(mapController.getZoom())), maxNativeZoom);
+        if (
+            expressionColorbarAutoCache &&
+            expressionColorbarAutoCache.gene === gene &&
+            expressionColorbarAutoCache.zoom === effectiveZoom
+        ) {
+            expressionColorbar.setRange(0, expressionColorbarAutoCache.max, 'auto');
+            return;
+        }
+
+        expressionColorbar.setRange(0, null, 'auto');
+        const requestId = ++expressionColorbarStatsRequestId;
+        try {
+            const stats = await api.getGeneStats(gene, effectiveZoom);
+            if (requestId !== expressionColorbarStatsRequestId) return;
+            expressionColorbarAutoCache = { gene, zoom: effectiveZoom, max: stats.max_expression };
+            expressionColorbar.setRange(0, stats.max_expression, 'auto');
+        } catch (error) {
+            console.error('Failed to load gene stats for expression colorbar:', error);
+            if (requestId !== expressionColorbarStatsRequestId) return;
+            expressionColorbar.setRange(0, null, 'auto');
+        }
+    }
+
     // Initialize colormap selector
     const colormapSelector = new ColorScaleSelector(colormapSelectorContainer, {
         onScaleChange: (scale) => {
@@ -353,6 +408,7 @@ async function init() {
                     expressionRangeSelector?.getRange() ?? null
                 );
             }
+            void refreshExpressionColorbar();
         },
     });
     colormapSelector.setScales(['viridis', 'plasma', 'inferno', 'magma', 'seurat']);
@@ -370,6 +426,7 @@ async function init() {
             if (colorMode === 'expression' && colorGene) {
                 mapController.setExpressionGene(colorGene, colorScale, range);
             }
+            void refreshExpressionColorbar();
         },
     });
 
@@ -405,6 +462,7 @@ async function init() {
     mapController.getMap().on('zoomend', () => {
         const zoom = mapController.getZoom();
         cellQueryPanel?.setZoom(zoom);
+        void refreshExpressionColorbar();
     });
 
     // Gene selection handler
@@ -420,6 +478,7 @@ async function init() {
             expressionRangeSelector?.getRange() ?? null
         );
         categoryLegend.hide();
+        void refreshExpressionColorbar();
 
         // Update cell query panel with selected gene
         cellQueryPanel?.setGene(gene);
@@ -433,7 +492,18 @@ async function init() {
     }
 
     // Set up toolbar buttons
-    setupToolbar(mapController, state, tabPanel, categoryLegend, cellQueryPanel!, defaultCategory, currentDataset);
+    setupToolbar(
+        mapController,
+        state,
+        tabPanel,
+        categoryLegend,
+        cellQueryPanel!,
+        defaultCategory,
+        currentDataset,
+        () => {
+            void refreshExpressionColorbar();
+        }
+    );
 
     // Initialize sidebar resizer
     const sidebarResizer = document.getElementById('sidebar-resizer');
@@ -474,7 +544,8 @@ function setupToolbar(
     categoryLegend: CategoryLegend,
     cellQueryPanel: CellQueryPanel,
     defaultCategory: string,
-    datasetId: string
+    datasetId: string,
+    onAfterReset?: () => void
 ) {
     const resetBtn = document.getElementById('btn-reset');
     const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
@@ -501,6 +572,8 @@ function setupToolbar(
                 colorGene: null,
                 selectedCategories: [],
             });
+
+            onAfterReset?.();
         });
     }
 
