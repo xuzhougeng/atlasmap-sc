@@ -122,7 +122,11 @@ function createH5ADDownloadButton(
     `;
 
     const selector = container.querySelector('.dataset-selector');
-    container.insertBefore(link, selector ?? container.firstChild);
+    if (selector) {
+        container.insertBefore(link, selector.nextSibling);
+    } else {
+        container.appendChild(link);
+    }
 }
 
 // Initialize theme manager early to prevent flash
