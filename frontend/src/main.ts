@@ -628,6 +628,10 @@ function setupToolbar(
     const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
     const deBtn = document.getElementById('btn-de') as HTMLButtonElement | null;
     const downloadStatus = document.getElementById('download-status');
+    const pointSizeBtn = document.getElementById('btn-point-size') as HTMLButtonElement | null;
+    const pointSizeSlider = document.getElementById('point-size-slider') as HTMLInputElement | null;
+    const pointSizeValue = document.getElementById('point-size-value');
+    const pointSizePopover = document.getElementById('point-size-popover') as HTMLDivElement | null;
 
     const updatePanLockUi = () => {
         if (!panLockBtn) return;
@@ -640,9 +644,121 @@ function setupToolbar(
         }
     };
 
+    const setPointSizeUi = (size: number) => {
+        if (!pointSizeValue) return;
+        pointSizeValue.textContent = `${Math.round(size * 100)}%`;
+    };
+
+    const applyPointSize = (size: number) => {
+        map.setPointSize(size);
+        const effective = map.getPointSize();
+        if (pointSizeSlider) {
+            pointSizeSlider.value = String(effective);
+        }
+        setPointSizeUi(effective);
+    };
+
+    if (pointSizeSlider) {
+        const onInput = () => {
+            const value = Number.parseFloat(pointSizeSlider.value);
+            if (!Number.isFinite(value)) return;
+            applyPointSize(value);
+        };
+        pointSizeSlider.addEventListener('input', onInput);
+        onInput();
+        pointSizeSlider.disabled = true;
+    }
+
+    const positionPointSizePopover = () => {
+        if (!pointSizePopover || !pointSizeBtn) return;
+        const panel = pointSizeBtn.closest('.panel') as HTMLElement | null;
+        if (!panel) return;
+
+        const panelRect = panel.getBoundingClientRect();
+        const btnRect = pointSizeBtn.getBoundingClientRect();
+
+        const padding = 8;
+        const gap = 8;
+
+        const popoverWidth = pointSizePopover.offsetWidth;
+        const popoverHeight = pointSizePopover.offsetHeight;
+
+        let left = btnRect.left - panelRect.left;
+        let top = btnRect.bottom - panelRect.top + gap;
+
+        const maxLeft = panelRect.width - popoverWidth - padding;
+        if (left > maxLeft) left = maxLeft;
+        if (left < padding) left = padding;
+
+        if (top + popoverHeight > panelRect.height - padding) {
+            top = btnRect.top - panelRect.top - popoverHeight - gap;
+        }
+        if (top < padding) top = padding;
+
+        pointSizePopover.style.left = `${left}px`;
+        pointSizePopover.style.top = `${top}px`;
+    };
+
+    const closePointSizePopover = () => {
+        if (!pointSizePopover || !pointSizeBtn) return;
+        pointSizePopover.classList.remove('open');
+        pointSizePopover.setAttribute('aria-hidden', 'true');
+        pointSizeBtn.classList.remove('active');
+        if (pointSizeSlider) {
+            pointSizeSlider.disabled = true;
+        }
+    };
+
+    const openPointSizePopover = () => {
+        if (!pointSizePopover || !pointSizeBtn) return;
+        pointSizePopover.classList.add('open');
+        pointSizePopover.setAttribute('aria-hidden', 'false');
+        pointSizeBtn.classList.add('active');
+        if (pointSizeSlider) {
+            pointSizeSlider.disabled = false;
+        }
+        positionPointSizePopover();
+        pointSizeSlider?.focus();
+    };
+
+    if (pointSizeBtn && pointSizePopover) {
+        pointSizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = pointSizePopover.classList.contains('open');
+            if (isOpen) {
+                closePointSizePopover();
+            } else {
+                openPointSizePopover();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const target = e.target as Node | null;
+            if (!target) return;
+            if (pointSizePopover.contains(target)) return;
+            if (pointSizeBtn.contains(target)) return;
+            closePointSizePopover();
+        });
+
+        window.addEventListener('resize', () => {
+            if (!pointSizePopover.classList.contains('open')) return;
+            positionPointSizePopover();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            closePointSizePopover();
+        });
+    }
+
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             map.resetView();
+            if (pointSizeSlider) {
+                pointSizeSlider.value = '1';
+            }
+            applyPointSize(1);
+            closePointSizePopover();
 
             // Reset to category tab
             tabPanel.switchTab('category');

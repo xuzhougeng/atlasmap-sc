@@ -5,6 +5,7 @@
     background-color: var(--bg-tertiary);
     border-radius: var(--radius);
     padding: 16px;
+    position: relative;
 }
 
 .panel-title {
@@ -128,8 +129,52 @@
 
 /* Toolbar */
 .toolbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, 40px);
     gap: 8px;
+    justify-content: start;
+}
+
+.tool-popover {
+    position: absolute;
+    z-index: 1000;
+    padding: 10px 12px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    pointer-events: none;
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease;
+}
+
+.tool-popover.open {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.tool-popover__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tool-popover__row input[type="range"] {
+    width: 170px;
+    accent-color: var(--accent-primary);
+}
+
+.tool-range-value {
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
 }
 
 .download-status {

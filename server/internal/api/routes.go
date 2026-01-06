@@ -340,6 +340,7 @@ func expressionTileHandler(svc *service.TileService) http.HandlerFunc {
 		if colormap == "" {
 			colormap = "viridis"
 		}
+		pointSize := parsePointSize(r.URL.Query())
 
 		var (
 			minPtr *float32
@@ -362,7 +363,7 @@ func expressionTileHandler(svc *service.TileService) http.HandlerFunc {
 			}
 		}
 
-		data, err := svc.GetExpressionTile(z, x, y, gene, colormap, minPtr, maxPtr)
+		data, err := svc.GetExpressionTile(z, x, y, gene, colormap, minPtr, maxPtr, pointSize)
 		if err != nil {
 			data, _ = svc.GetEmptyTile()
 		}
@@ -379,6 +380,7 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		x, _ := strconv.Atoi(chi.URLParam(r, "x"))
 		y, _ := strconv.Atoi(chi.URLParam(r, "y"))
 		column := chi.URLParam(r, "column")
+		pointSize := parsePointSize(r.URL.Query())
 
 		// Parse optional category filter
 		var (
@@ -399,7 +401,7 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 			categoryFilter = nil
 		}
 
-		data, err := svc.GetCategoryTile(z, x, y, column, categoryFilter)
+		data, err := svc.GetCategoryTile(z, x, y, column, categoryFilter, pointSize)
 		if err != nil {
 			data, _ = svc.GetEmptyTile()
 		}
@@ -457,6 +459,27 @@ func parseCategoryFilter(query url.Values) ([]string, bool) {
 		}
 	}
 	return out, true
+}
+
+func parsePointSize(query url.Values) float64 {
+	const defaultPointSize = 1.0
+	raw := strings.TrimSpace(query.Get("point_size"))
+	if raw == "" {
+		return defaultPointSize
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return defaultPointSize
+	}
+	// Clamp to a sane range. 1.0 means "fill the full bin".
+	if v < 0.1 {
+		v = 0.1
+	}
+	if v > 5.0 {
+		v = 5.0
+	}
+	// Quantize for stable caching.
+	return math.Round(v*1000) / 1000
 }
 
 const maxCategoryFilterBodyBytes = 10 << 20 // 10 MiB

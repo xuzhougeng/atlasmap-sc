@@ -57,6 +57,7 @@ export class MapController {
     private categoryLabelItems: CategoryCentroidItem[] | null = null;
     private categoryLabelFilter: string[] | null = null;
     private categoryLabelsVisible: boolean = true;
+    private pointSize: number = 1.0;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.container = container;
@@ -211,6 +212,47 @@ export class MapController {
         this.container.style.setProperty('--category-label-font-size', `${sizePx.toFixed(2)}px`);
     }
 
+    private formatPointSize(): string {
+        return this.pointSize.toFixed(3);
+    }
+
+    setPointSize(pointSize: number): void {
+        const clamped = Math.min(5.0, Math.max(0.1, pointSize));
+        const quantized = Math.round(clamped * 1000) / 1000;
+        if (quantized === this.pointSize) return;
+
+        this.pointSize = quantized;
+
+        if (this.expressionLayer && this.currentExpressionGene) {
+            this.expressionLayer.setUrl(this.buildExpressionTileUrl(this.currentExpressionGene));
+        }
+
+        if (this.categoryLayer && this.currentCategory) {
+            this.categoryLayer.setUrl(this.buildCategoryTileUrl(this.currentCategory));
+        }
+    }
+
+    getPointSize(): number {
+        return this.pointSize;
+    }
+
+    private buildExpressionTileUrl(gene: string): string {
+        const query = new URLSearchParams();
+        query.set('colormap', this.currentExpressionColorScale ?? 'viridis');
+        query.set('point_size', this.formatPointSize());
+        if (this.currentExpressionRange !== null) {
+            query.set('min', String(this.currentExpressionRange.min));
+            query.set('max', String(this.currentExpressionRange.max));
+        }
+        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?${query.toString()}`;
+    }
+
+    private buildCategoryTileUrl(column: string): string {
+        const query = new URLSearchParams();
+        query.set('point_size', this.formatPointSize());
+        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png?${query.toString()}`;
+    }
+
     /**
      * Set expression gene for coloring
      */
@@ -226,17 +268,12 @@ export class MapController {
         if (typeof range !== 'undefined') {
             this.currentExpressionRange = range;
         }
-
-        const query = new URLSearchParams();
-        query.set('colormap', colorScale);
-        if (this.currentExpressionRange !== null) {
-            query.set('min', String(this.currentExpressionRange.min));
-            query.set('max', String(this.currentExpressionRange.max));
-        }
+        this.currentExpressionGene = gene;
+        this.currentExpressionColorScale = colorScale;
 
         // Add expression-colored tile layer
         this.expressionLayer = L.tileLayer(
-            `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?${query.toString()}`,
+            this.buildExpressionTileUrl(gene),
             {
                 tileSize: this.config.tileSize,
                 noWrap: true,
@@ -250,8 +287,6 @@ export class MapController {
         // Bring expression layer to front
         this.expressionLayer.bringToFront();
         this.currentColorMode = 'expression';
-        this.currentExpressionGene = gene;
-        this.currentExpressionColorScale = colorScale;
     }
 
     /**
@@ -277,7 +312,7 @@ export class MapController {
         if (typeof categoryFilter !== 'undefined') {
             this.selectedCategories = categoryFilter;
         }
-        const tileUrl = `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png`;
+        const tileUrl = this.buildCategoryTileUrl(column);
 
         // Add category-colored tile layer
         const layerOptions: L.TileLayerOptions = {
@@ -377,6 +412,7 @@ export class MapController {
             const gene = encodeURIComponent(this.currentExpressionGene);
             const query = new URLSearchParams();
             query.set('colormap', this.currentExpressionColorScale ?? 'viridis');
+            query.set('point_size', this.formatPointSize());
             if (this.currentExpressionRange !== null) {
                 query.set('min', String(this.currentExpressionRange.min));
                 query.set('max', String(this.currentExpressionRange.max));
@@ -388,7 +424,9 @@ export class MapController {
 
         if (this.currentColorMode === 'category' && this.currentCategory) {
             const column = encodeURIComponent(this.currentCategory);
-            const url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png`;
+            const query = new URLSearchParams();
+            query.set('point_size', this.formatPointSize());
+            const url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png?${query.toString()}`;
             if (this.selectedCategories !== null) {
                 return {
                     url,

@@ -118,6 +118,7 @@ func (r *TileRenderer) RenderExpressionTile(
 	binsPerTileAxis int,
 	tileX, tileY int,
 	colormapName string,
+	pointSize float64,
 ) ([]byte, error) {
 	// Get context from pool
 	dc := r.contextPool.Get().(*gg.Context)
@@ -149,6 +150,17 @@ func (r *TileRenderer) RenderExpressionTile(
 	}
 	nBinsPerTile := float64(binsPerTileAxis)
 	binSize := tileSize / nBinsPerTile
+	if pointSize <= 0 {
+		pointSize = 1
+	}
+	if pointSize < 0.1 {
+		pointSize = 0.1
+	}
+	if pointSize > 5.0 {
+		pointSize = 5.0
+	}
+	dotSize := binSize * pointSize
+	dotOffset := (binSize - dotSize) / 2
 
 	// Render each bin
 	for i, bin := range bins {
@@ -173,8 +185,8 @@ func (r *TileRenderer) RenderExpressionTile(
 		c := cmap.At(normalized)
 		dc.SetColor(c)
 
-		// Fill the entire bin area (tile-like rendering).
-		dc.DrawRectangle(px, py, binSize, binSize)
+		// Render as a dot within the bin (controlled by pointSize).
+		dc.DrawRectangle(px+dotOffset, py+dotOffset, dotSize, dotSize)
 		dc.Fill()
 	}
 
@@ -187,6 +199,7 @@ func (r *TileRenderer) RenderCategoryTile(
 	categoryIdx []int,
 	binsPerTileAxis int,
 	tileX, tileY int,
+	pointSize float64,
 ) ([]byte, error) {
 	dc := r.contextPool.Get().(*gg.Context)
 	defer r.contextPool.Put(dc)
@@ -206,6 +219,17 @@ func (r *TileRenderer) RenderCategoryTile(
 	}
 	nBinsPerTile := float64(binsPerTileAxis)
 	binSize := tileSize / nBinsPerTile
+	if pointSize <= 0 {
+		pointSize = 1
+	}
+	if pointSize < 0.1 {
+		pointSize = 0.1
+	}
+	if pointSize > 5.0 {
+		pointSize = 5.0
+	}
+	dotSize := binSize * pointSize
+	dotOffset := (binSize - dotSize) / 2
 
 	for i, bin := range bins {
 		localX := float64(bin.X) - float64(tileX)*nBinsPerTile
@@ -231,8 +255,8 @@ func (r *TileRenderer) RenderCategoryTile(
 		c := cmap.AtIndex(catIdx)
 		dc.SetColor(c)
 
-		// Fill the entire bin area (tile-like rendering).
-		dc.DrawRectangle(px, py, binSize, binSize)
+		// Render as a dot within the bin (controlled by pointSize).
+		dc.DrawRectangle(px+dotOffset, py+dotOffset, dotSize, dotSize)
 		dc.Fill()
 	}
 

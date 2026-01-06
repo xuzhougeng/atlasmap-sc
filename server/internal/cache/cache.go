@@ -98,8 +98,9 @@ func TileKey(z, x, y int, filters map[string]interface{}) string {
 }
 
 // ExpressionTileKey generates a cache key for an expression tile.
-func ExpressionTileKey(z, x, y int, gene, colormap string, exprMin *float32, exprMax *float32) string {
-	base := fmt.Sprintf("expr:%d/%d/%d:%s:%s", z, x, y, gene, colormap)
+func ExpressionTileKey(z, x, y int, gene, colormap string, exprMin *float32, exprMax *float32, pointSize float64) string {
+	pointSizeStr := strconv.FormatFloat(pointSize, 'f', 3, 64)
+	base := fmt.Sprintf("expr:%d/%d/%d:%s:%s:ps=%s", z, x, y, gene, colormap, pointSizeStr)
 	if exprMin == nil && exprMax == nil {
 		return base
 	}
@@ -116,8 +117,9 @@ func ExpressionTileKey(z, x, y int, gene, colormap string, exprMin *float32, exp
 }
 
 // CategoryTileKey generates a cache key for a category tile.
-func CategoryTileKey(z, x, y int, column string, filters []string) string {
-	base := fmt.Sprintf("cat:%d/%d/%d:%s", z, x, y, column)
+func CategoryTileKey(z, x, y int, column string, filters []string, pointSize float64) string {
+	pointSizeStr := strconv.FormatFloat(pointSize, 'f', 3, 64)
+	base := fmt.Sprintf("cat:%d/%d/%d:%s:ps=%s", z, x, y, column, pointSizeStr)
 	if filters == nil {
 		return base
 	}

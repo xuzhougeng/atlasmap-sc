@@ -225,6 +225,7 @@ func (s *TileService) GetExpressionTile(
 	colormap string,
 	exprMin *float32,
 	exprMax *float32,
+	pointSize float64,
 ) ([]byte, error) {
 	// Check cache (prefix with dataset ID)
 	var (
@@ -244,7 +245,7 @@ func (s *TileService) GetExpressionTile(
 	if cacheMin != nil && cacheMax != nil && cacheMaxVal < cacheMinVal {
 		cacheMinVal, cacheMaxVal = cacheMaxVal, cacheMinVal
 	}
-	cacheKey := s.datasetID + ":" + cache.ExpressionTileKey(z, x, y, gene, colormap, cacheMin, cacheMax)
+	cacheKey := s.datasetID + ":" + cache.ExpressionTileKey(z, x, y, gene, colormap, cacheMin, cacheMax, pointSize)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -288,6 +289,7 @@ func (s *TileService) GetExpressionTile(
 		binsPerTileAxis,
 		x, renderTileY,
 		colormap,
+		pointSize,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render tile: %w", err)
@@ -314,9 +316,9 @@ func (s *TileService) Soma() *soma.Reader {
 }
 
 // GetCategoryTile returns a tile colored by category.
-func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter []string) ([]byte, error) {
+func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter []string, pointSize float64) ([]byte, error) {
 	// Check cache (prefix with dataset ID)
-	cacheKey := s.datasetID + ":" + cache.CategoryTileKey(z, x, y, column, categoryFilter)
+	cacheKey := s.datasetID + ":" + cache.CategoryTileKey(z, x, y, column, categoryFilter, pointSize)
 	if data, ok := s.cache.GetTile(cacheKey); ok {
 		return data, nil
 	}
@@ -361,7 +363,7 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 	}
 
 	// Render tile
-	data, err := s.renderer.RenderCategoryTile(bins, categoryTile, binsPerTileAxis, x, renderTileY)
+	data, err := s.renderer.RenderCategoryTile(bins, categoryTile, binsPerTileAxis, x, renderTileY, pointSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render tile: %w", err)
 	}
