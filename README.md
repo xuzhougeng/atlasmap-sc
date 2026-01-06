@@ -10,6 +10,8 @@ SOMA-Tiles is a two-stage pipeline: **offline preprocessing** turns an `.h5ad` i
 multi-zoom bin store, and an **online Go server** renders Leaflet-compatible PNG tiles on demand.
 A static TypeScript frontend consumes the JSON + tile endpoints.
 
+![](doc/images/Architecture.png)
+
 ```text
 ┌──────────────────────────────────────────────┐
 │               Offline (Python)               │

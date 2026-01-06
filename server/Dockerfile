@@ -30,8 +30,8 @@ RUN apk --no-cache add ca-certificates
 # Copy binary from builder
 COPY --from=builder /app/server .
 
-# Copy config (will be overridden by volume mount)
-COPY --from=builder /app/../config/server.yaml /app/config/server.yaml
+# Config is expected to be provided via volume mount (e.g. docker compose mounts ./config to /app/config).
+RUN mkdir -p /app/config
 
 # Expose port
 EXPOSE 8080
