@@ -8,8 +8,11 @@ import (
 	"errors"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,6 +73,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		// API endpoints
 		r.Route("/api", func(r chi.Router) {
 			r.Get("/metadata", datasetMetadataHandler)
+			r.Get("/h5ad", datasetH5ADDownloadHandler(cfg.Registry))
 			r.Get("/genes", datasetGenesHandler)
 			r.Get("/genes/{gene}", datasetGeneInfoHandler)
 			r.Get("/genes/{gene}/bins", datasetGeneBinsHandler)
@@ -175,6 +179,34 @@ func datasetMetadataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metadataHandler(svc)(w, r)
+}
+
+func datasetH5ADDownloadHandler(registry *DatasetRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		datasetID := chi.URLParam(r, "dataset")
+		path := registry.H5ADPath(datasetID)
+		if path == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+
+		filename := filepath.Base(path)
+		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+		if disposition != "" {
+			w.Header().Set("Content-Disposition", disposition)
+		} else {
+			w.Header().Set("Content-Disposition", "attachment")
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		http.ServeFile(w, r, path)
+	}
 }
 
 func datasetGenesHandler(w http.ResponseWriter, r *http.Request) {

@@ -24,6 +24,10 @@
     margin-left: auto;
 }
 
+.header-h5ad-download-btn {
+    text-decoration: none;
+}
+
 .info-item {
     color: var(--text-secondary);
     font-size: 0.875rem;

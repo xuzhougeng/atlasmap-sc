@@ -23,6 +23,7 @@ import { downloadPngAtCurrentZoom } from './map/exportPng';
 interface DatasetInfo {
     id: string;
     name: string;
+    has_h5ad?: boolean;
 }
 
 interface DatasetsResponse {
@@ -58,10 +59,10 @@ function createDatasetSelector(
     container: HTMLElement,
     datasets: DatasetInfo[],
     currentDataset: string
-): void {
+): HTMLDivElement | null {
     if (datasets.length <= 1) {
         // Only one dataset, no need for selector
-        return;
+        return null;
     }
 
     const selectorContainer = document.createElement('div');
@@ -94,6 +95,34 @@ function createDatasetSelector(
 
     // Insert before the existing dataset-info content
     container.insertBefore(selectorContainer, container.firstChild);
+    return selectorContainer;
+}
+
+function createH5ADDownloadButton(
+    container: HTMLElement,
+    datasetId: string,
+    hasH5AD: boolean
+): void {
+    const existing = container.querySelector('#btn-download-h5ad');
+    if (existing) existing.remove();
+
+    if (!hasH5AD) return;
+
+    const link = document.createElement('a');
+    link.id = 'btn-download-h5ad';
+    link.className = 'tool-btn header-h5ad-download-btn';
+    link.href = `/d/${encodeURIComponent(datasetId)}/api/h5ad`;
+    link.download = `${datasetId}.h5ad`;
+    link.title = 'Download H5AD';
+    link.setAttribute('aria-label', 'Download H5AD');
+    link.innerHTML = `
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M5 20h14v-2H5v2zM12 2v12l4-4 1.41 1.41L12 17.83 6.59 11.41 8 10l4 4V2h0z"/>
+        </svg>
+    `;
+
+    const selector = container.querySelector('.dataset-selector');
+    container.insertBefore(link, selector ?? container.firstChild);
 }
 
 // Initialize theme manager early to prevent flash
@@ -186,6 +215,8 @@ async function init() {
     const datasetInfoContainer = document.getElementById('dataset-info');
     if (datasetInfoContainer) {
         createDatasetSelector(datasetInfoContainer, datasetsInfo.datasets, currentDataset);
+        const currentDatasetInfo = datasetsInfo.datasets.find(ds => ds.id === currentDataset);
+        createH5ADDownloadButton(datasetInfoContainer, currentDataset, currentDatasetInfo?.has_h5ad === true);
     }
 
     // Initialize state manager
@@ -561,22 +592,18 @@ async function init() {
 function updateDatasetInfo(metadata: any) {
     const infoEl = document.getElementById('dataset-info');
     if (infoEl) {
-        // Preserve any existing content (like dataset selector) and append info
-        const existingContent = infoEl.querySelector('.dataset-selector');
         const infoSpans = `
             <span class="info-item">${metadata.dataset_name || 'Dataset'}</span>
             <span class="info-item">${formatNumber(metadata.n_cells)} cells</span>
             <span class="info-item">${metadata.n_genes_preaggregated} genes</span>
         `;
-        if (existingContent) {
-            // Dataset selector exists, append after it
-            const infoContainer = document.createElement('span');
+        let infoContainer = infoEl.querySelector('.dataset-info-items') as HTMLSpanElement | null;
+        if (!infoContainer) {
+            infoContainer = document.createElement('span');
             infoContainer.className = 'dataset-info-items';
-            infoContainer.innerHTML = infoSpans;
             infoEl.appendChild(infoContainer);
-        } else {
-            infoEl.innerHTML = infoSpans;
         }
+        infoContainer.innerHTML = infoSpans;
     }
 }
 

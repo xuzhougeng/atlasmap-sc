@@ -29,6 +29,9 @@ type ServerConfig struct {
 type DatasetConfig struct {
 	ZarrPath string `yaml:"zarr_path"`
 	SomaPath string `yaml:"soma_path"`
+	// Optional: path to downloadable H5AD file for this dataset.
+	// If unset, the UI will not show a download button.
+	H5ADPath string `yaml:"h5ad_path"`
 }
 
 // DataConfig contains data source settings (supports legacy single or multi-dataset).
@@ -52,9 +55,9 @@ type RenderConfig struct {
 
 // DEConfig contains differential expression analysis settings.
 type DEConfig struct {
-	MaxConcurrent int    `yaml:"max_concurrent"`  // Max concurrent DE jobs (default 1)
-	SQLitePath    string `yaml:"sqlite_path"`     // Path to SQLite database for job persistence (default ./data/de_jobs.sqlite)
-	RetentionDays int    `yaml:"retention_days"`  // Days to keep completed job results (default 7)
+	MaxConcurrent int    `yaml:"max_concurrent"` // Max concurrent DE jobs (default 1)
+	SQLitePath    string `yaml:"sqlite_path"`    // Path to SQLite database for job persistence (default ./data/de_jobs.sqlite)
+	RetentionDays int    `yaml:"retention_days"` // Days to keep completed job results (default 7)
 }
 
 // rawConfig is used for initial YAML parsing.

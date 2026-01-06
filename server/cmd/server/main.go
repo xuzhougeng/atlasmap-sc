@@ -91,6 +91,10 @@ func main() {
 		})
 
 		registry.Register(datasetID, tileService)
+
+		if ds.H5ADPath != "" {
+			registry.SetH5ADPath(datasetID, ds.H5ADPath)
+		}
 	}
 
 	// Initialize job manager for DE jobs (SQLite persistence)
