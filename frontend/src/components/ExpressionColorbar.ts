@@ -68,7 +68,7 @@ export class ExpressionColorbar {
     }
 
     setRange(min: number | null, max: number | null, mode: ExpressionRangeMode): void {
-        const modeLabel = mode === 'auto' ? 'Auto' : 'Manual';
+        const modeLabel = mode === 'auto' ? 'Auto (p80)' : 'Manual';
         this.subtitleEl.textContent = modeLabel;
         this.subtitleEl.title = modeLabel;
 
@@ -97,4 +97,3 @@ export class ExpressionColorbar {
         return formatted;
     }
 }
-

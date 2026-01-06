@@ -71,6 +71,7 @@ export interface GeneStats {
     total_cells: number;
     mean_expression: number;
     max_expression: number;
+    p80_expression?: number;
 }
 
 export interface GeneCategoryMeanItem {

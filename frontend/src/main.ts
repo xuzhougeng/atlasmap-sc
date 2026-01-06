@@ -443,24 +443,26 @@ async function init() {
             return;
         }
 
-        // Auto range: show 0..max where max comes from stats at the current zoom.
-        const effectiveZoom = Math.min(Math.max(0, Math.floor(mapController.getZoom())), maxNativeZoom);
+        // Auto range: show 0..p80 at the server's native max zoom (matches backend tile scaling).
+        const statsZoom = maxNativeZoom;
         if (
             expressionColorbarAutoCache &&
             expressionColorbarAutoCache.gene === gene &&
-            expressionColorbarAutoCache.zoom === effectiveZoom
+            expressionColorbarAutoCache.zoom === statsZoom
         ) {
             expressionColorbar.setRange(0, expressionColorbarAutoCache.max, 'auto');
             return;
         }
 
-        expressionColorbar.setRange(0, null, 'auto');
-        const requestId = ++expressionColorbarStatsRequestId;
-        try {
-            const stats = await api.getGeneStats(gene, effectiveZoom);
-            if (requestId !== expressionColorbarStatsRequestId) return;
-            expressionColorbarAutoCache = { gene, zoom: effectiveZoom, max: stats.max_expression };
-            expressionColorbar.setRange(0, stats.max_expression, 'auto');
+            expressionColorbar.setRange(0, null, 'auto');
+            const requestId = ++expressionColorbarStatsRequestId;
+            try {
+                const stats = await api.getGeneStats(gene, statsZoom);
+                if (requestId !== expressionColorbarStatsRequestId) return;
+            const p80 = stats.p80_expression;
+            const autoMax = typeof p80 === 'number' && Number.isFinite(p80) && p80 > 0 ? p80 : stats.max_expression;
+            expressionColorbarAutoCache = { gene, zoom: statsZoom, max: autoMax };
+            expressionColorbar.setRange(0, autoMax, 'auto');
         } catch (error) {
             console.error('Failed to load gene stats for expression colorbar:', error);
             if (requestId !== expressionColorbarStatsRequestId) return;

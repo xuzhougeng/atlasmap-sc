@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -889,6 +890,7 @@ type GeneStats struct {
 	TotalCells     int     `json:"total_cells"`
 	MeanExpression float32 `json:"mean_expression"`
 	MaxExpression  float32 `json:"max_expression"`
+	P80Expression  float32 `json:"p80_expression"`
 }
 
 // GetGeneStats returns statistics for a gene at a specific zoom level.
@@ -919,6 +921,7 @@ func (r *Reader) GetGeneStats(gene string, zoom int) (*GeneStats, error) {
 	var sum, maxExpr float32
 	var expressing, totalCells int
 	totalBins := len(expression)
+	expressingValues := expression[:0]
 
 	for i, v := range expression {
 		if v > 0 {
@@ -927,6 +930,7 @@ func (r *Reader) GetGeneStats(gene string, zoom int) (*GeneStats, error) {
 			if v > maxExpr {
 				maxExpr = v
 			}
+			expressingValues = append(expressingValues, v)
 		}
 		if i < len(bins) {
 			totalCells += int(bins[i].CellCount)
@@ -938,6 +942,20 @@ func (r *Reader) GetGeneStats(gene string, zoom int) (*GeneStats, error) {
 		mean = sum / float32(expressing)
 	}
 
+	var p80 float32
+	if len(expressingValues) > 0 {
+		sort.Slice(expressingValues, func(i, j int) bool { return expressingValues[i] < expressingValues[j] })
+		n := len(expressingValues)
+		// idx = ceil(0.80*n) - 1, computed with integers.
+		idx := (80*n+99)/100 - 1
+		if idx < 0 {
+			idx = 0
+		} else if idx >= n {
+			idx = n - 1
+		}
+		p80 = expressingValues[idx]
+	}
+
 	return &GeneStats{
 		Gene:           gene,
 		Index:          geneIdx,
@@ -946,6 +964,7 @@ func (r *Reader) GetGeneStats(gene string, zoom int) (*GeneStats, error) {
 		TotalCells:     totalCells,
 		MeanExpression: mean,
 		MaxExpression:  maxExpr,
+		P80Expression:  p80,
 	}, nil
 }
 

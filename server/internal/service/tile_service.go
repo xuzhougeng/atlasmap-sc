@@ -3,6 +3,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/soma-tiles/server/internal/cache"
@@ -77,6 +78,7 @@ type expressionCacheEntry struct {
 	values []float32
 	min    float32
 	max    float32
+	autoMax float32
 }
 
 type GeneCategoryMeanItem struct {
@@ -155,13 +157,17 @@ func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, erro
 	}
 
 	if len(values) == 0 {
-		cached := expressionCacheEntry{values: values, min: 0, max: 0}
+		cached := expressionCacheEntry{values: values, min: 0, max: 0, autoMax: 0}
 		s.exprCache[gene] = cached
 		return cached, nil
 	}
 
 	minV := values[0]
 	maxV := values[0]
+	expressing := 0
+	if values[0] > 0 {
+		expressing = 1
+	}
 	for _, v := range values[1:] {
 		if v < minV {
 			minV = v
@@ -169,9 +175,39 @@ func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, erro
 		if v > maxV {
 			maxV = v
 		}
+		if v > 0 {
+			expressing++
+		}
 	}
 
-	cached := expressionCacheEntry{values: values, min: minV, max: maxV}
+	// Auto max is a robust upper bound to avoid outliers compressing the colormap.
+	// Use the 80th percentile of non-zero values (nearest-rank).
+	autoMax := float32(0)
+	if expressing > 0 {
+		expressingValues := make([]float32, 0, expressing)
+		for _, v := range values {
+			if v > 0 {
+				expressingValues = append(expressingValues, v)
+			}
+		}
+		sort.Slice(expressingValues, func(i, j int) bool { return expressingValues[i] < expressingValues[j] })
+		n := len(expressingValues)
+		if n > 0 {
+			// idx = ceil(0.80*n) - 1, computed with integers.
+			idx := (80*n+99)/100 - 1
+			if idx < 0 {
+				idx = 0
+			} else if idx >= n {
+				idx = n - 1
+			}
+			autoMax = expressingValues[idx]
+		}
+	}
+	if autoMax <= 0 {
+		autoMax = maxV
+	}
+
+	cached := expressionCacheEntry{values: values, min: minV, max: maxV, autoMax: autoMax}
 	s.exprCache[gene] = cached
 	return cached, nil
 }
@@ -268,8 +304,11 @@ func (s *TileService) GetExpressionTile(
 		}
 	}
 
-	minV := exprAll.min
-	maxV := exprAll.max
+	minV := float32(0)
+	maxV := exprAll.autoMax
+	if maxV <= 0 {
+		maxV = exprAll.max
+	}
 	if exprMin != nil {
 		minV = *exprMin
 	}
