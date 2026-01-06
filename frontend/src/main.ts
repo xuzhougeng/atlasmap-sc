@@ -232,8 +232,14 @@ async function init() {
     let currentCategoryColumn = defaultCategory;
     let categoryFilter: CategoryFilter | null = null;
     let currentCategoryFilter: string[] | null = null;
+    let showCategoryLabels = true;
 
     const refreshCategoryLabels = async (): Promise<void> => {
+        mapController.setCategoryLabelsVisible(showCategoryLabels);
+        if (!showCategoryLabels) {
+            mapController.setCategoryLabelItems(null);
+            return;
+        }
         if (!currentCategoryColumn) {
             mapController.setCategoryLabelItems(null);
             return;
@@ -307,6 +313,23 @@ async function init() {
         categoryColumnSelector.setSelectedCategory(defaultCategory);
         currentCategoryColumn = defaultCategory;
     }
+
+    const categoryLabelToggleContainer = document.createElement('div');
+    categoryLabelToggleContainer.className = 'category-label-toggle';
+    categoryLabelToggleContainer.innerHTML = `
+        <label class="toggle-row" title="Show/hide category labels on the map">
+            <input type="checkbox" id="toggle-category-labels" checked />
+            <span>Show labels</span>
+        </label>
+    `;
+    categoryContainer.appendChild(categoryLabelToggleContainer);
+    const showLabelsCheckbox = categoryLabelToggleContainer.querySelector(
+        '#toggle-category-labels'
+    ) as HTMLInputElement | null;
+    showLabelsCheckbox?.addEventListener('change', () => {
+        showCategoryLabels = !!showLabelsCheckbox.checked;
+        void refreshCategoryLabels();
+    });
 
     // Create category legend container
     const categoryLegendContainer = document.createElement('div');
@@ -575,9 +598,23 @@ function setupToolbar(
     onAfterReset?: () => void
 ) {
     const resetBtn = document.getElementById('btn-reset');
+    const panLockBtn = document.getElementById('btn-pan-lock') as HTMLButtonElement | null;
+    const panLockedIcon = document.getElementById('icon-pan-locked') as HTMLElement | null;
+    const panUnlockedIcon = document.getElementById('icon-pan-unlocked') as HTMLElement | null;
     const downloadBtn = document.getElementById('btn-download') as HTMLButtonElement | null;
     const deBtn = document.getElementById('btn-de') as HTMLButtonElement | null;
     const downloadStatus = document.getElementById('download-status');
+
+    const updatePanLockUi = () => {
+        if (!panLockBtn) return;
+        const locked = map.isPanLocked();
+        panLockBtn.classList.toggle('active', !locked);
+        panLockBtn.title = locked ? 'Unlock panning (allow free drag)' : 'Lock panning (stay within data bounds)';
+        if (panLockedIcon && panUnlockedIcon) {
+            panLockedIcon.style.display = locked ? 'block' : 'none';
+            panUnlockedIcon.style.display = locked ? 'none' : 'block';
+        }
+    };
 
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -601,6 +638,14 @@ function setupToolbar(
             });
 
             onAfterReset?.();
+        });
+    }
+
+    if (panLockBtn) {
+        updatePanLockUi();
+        panLockBtn.addEventListener('click', () => {
+            map.setPanLocked(!map.isPanLocked());
+            updatePanLockUi();
         });
     }
 

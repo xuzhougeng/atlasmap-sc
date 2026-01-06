@@ -984,6 +984,21 @@
     margin-top: 0;
 }
 
+/* Simple checkbox row */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.toggle-row input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+}
+
 /* Map category label overlay (Leaflet divIcon) */
 .category-label {
     background: transparent;
@@ -995,7 +1010,7 @@
     user-select: none;
     white-space: nowrap;
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--category-label-font-size, 12px);
     line-height: 1;
     text-shadow:
         0 1px 0 rgba(0, 0, 0, 0.9),

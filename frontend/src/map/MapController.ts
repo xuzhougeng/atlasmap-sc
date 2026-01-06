@@ -37,11 +37,15 @@ export interface ExpressionColorRange {
 
 export class MapController {
     private map: L.Map;
+    private container: HTMLElement;
     private config: MapConfig;
     private expressionLayer: L.TileLayer | null = null;
     private categoryLayer: L.TileLayer | null = null;
     private categoryLabelLayer: L.LayerGroup;
+    private categoryLabelPane: HTMLElement;
     private bounds: L.LatLngBounds;
+    private maxBounds: L.LatLngBounds;
+    private panLocked: boolean = true;
     private currentColorMode: ColorMode = 'default';
     private currentCategory: string | null = null;
     private currentExpressionGene: string | null = null;
@@ -52,8 +56,10 @@ export class MapController {
     private selectedCategories: string[] | null = null;
     private categoryLabelItems: CategoryCentroidItem[] | null = null;
     private categoryLabelFilter: string[] | null = null;
+    private categoryLabelsVisible: boolean = true;
 
     constructor(container: HTMLElement, config: MapConfig) {
+        this.container = container;
         this.config = config;
 
         // Calculate bounds from config (CRS.Simple expects [lat, lng] = [y, x])
@@ -61,6 +67,8 @@ export class MapController {
             [config.bounds.min_y, config.bounds.min_x],
             [config.bounds.max_y, config.bounds.max_x]
         );
+        // Use a slightly padded bounds to allow a small amount of slack when panning is locked.
+        this.maxBounds = L.latLngBounds(this.bounds.getSouthWest(), this.bounds.getNorthEast()).pad(0.1);
 
         // Initialize map with a CRS that keeps Y increasing upward (Cartesian/UMAP-like),
         // while shifting the origin so tile indices stay non-negative.
@@ -88,7 +96,7 @@ export class MapController {
         if (typeof config.initialZoom === 'number') {
             this.map.setZoom(config.initialZoom);
         }
-        this.map.setMaxBounds(this.bounds.pad(0.1));
+        this.setPanLocked(true);
 
         // Note: No base tile layer is created here.
         // Tiles are loaded on-demand via setCategoryColumn or setExpressionGene.
@@ -96,8 +104,10 @@ export class MapController {
         const labelPane = this.map.createPane('categoryLabels');
         labelPane.style.zIndex = '650';
         labelPane.style.pointerEvents = 'none';
+        this.categoryLabelPane = labelPane;
 
         this.categoryLabelLayer = L.layerGroup().addTo(this.map);
+        this.updateCategoryLabelStyle();
 
         // Add zoom info display
         this.addZoomDisplay();
@@ -134,8 +144,20 @@ export class MapController {
         // Zoom change handler
         this.map.on('zoomend', () => {
             console.log(`Zoom level: ${this.map.getZoom()}`);
+            this.updateCategoryLabelStyle();
             this.renderCategoryLabels();
         });
+    }
+
+    setCategoryLabelsVisible(visible: boolean): void {
+        this.categoryLabelsVisible = visible;
+        this.categoryLabelPane.style.display = visible ? '' : 'none';
+        if (!visible) {
+            this.categoryLabelLayer.clearLayers();
+            return;
+        }
+        this.updateCategoryLabelStyle();
+        this.renderCategoryLabels();
     }
 
     setCategoryLabelItems(items: CategoryCentroidItem[] | null): void {
@@ -151,6 +173,7 @@ export class MapController {
     private renderCategoryLabels(): void {
         this.categoryLabelLayer.clearLayers();
 
+        if (!this.categoryLabelsVisible) return;
         if (!this.categoryLabelItems) return;
         if (this.categoryLabelFilter && this.categoryLabelFilter.length === 0) return;
 
@@ -177,6 +200,15 @@ export class MapController {
             });
             this.categoryLabelLayer.addLayer(marker);
         }
+    }
+
+    private updateCategoryLabelStyle(): void {
+        const zoom = this.map.getZoom();
+        const baseSizePx = 12;
+        const zoom0 = this.config.initialZoom ?? 0;
+        const scale = Math.pow(2, (zoom - zoom0) * 0.15);
+        const sizePx = Math.max(11, Math.min(26, baseSizePx * scale));
+        this.container.style.setProperty('--category-label-font-size', `${sizePx.toFixed(2)}px`);
     }
 
     /**
@@ -464,6 +496,27 @@ export class MapController {
      */
     getMap(): L.Map {
         return this.map;
+    }
+
+    /**
+     * Whether panning is constrained to the dataset bounds.
+     */
+    isPanLocked(): boolean {
+        return this.panLocked;
+    }
+
+    /**
+     * Lock/unlock panning to the dataset bounds.
+     * When unlocked, users can freely drag the map view beyond the data extent.
+     */
+    setPanLocked(locked: boolean): void {
+        this.panLocked = locked;
+        if (locked) {
+            this.map.setMaxBounds(this.maxBounds);
+        } else {
+            // Calling without arguments clears the maxBounds constraint.
+            this.map.setMaxBounds();
+        }
     }
 }
 
