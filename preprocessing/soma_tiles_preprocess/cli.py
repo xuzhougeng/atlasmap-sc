@@ -48,7 +48,13 @@ def main():
 @click.option(
     "--umap-key",
     default="X_umap",
-    help="Key for UMAP coordinates in adata.obsm",
+    help="Default coordinate key in adata.obsm (legacy name; default: X_umap)",
+)
+@click.option(
+    "--coord-key",
+    "coordinate_keys",
+    multiple=True,
+    help="Coordinate key(s) in adata.obsm (can specify multiple); overrides --umap-key if provided",
 )
 @click.option(
     "--zoom-levels", "-z",
@@ -113,6 +119,7 @@ def run(
     input_path: Path,
     output_dir: Path,
     umap_key: str,
+    coordinate_keys: tuple[str, ...],
     zoom_levels: int,
     n_genes: int,
     use_all_expressed: bool,
@@ -141,6 +148,7 @@ def run(
         input_path=input_path,
         output_dir=output_dir,
         umap_key=umap_key,
+        coordinate_keys=list(coordinate_keys),
         zoom_levels=zoom_levels,
         n_genes=n_genes,
         use_all_expressed=use_all_expressed,
@@ -247,6 +255,12 @@ def init_config(output_path: Path):
     help="Path to Zarr output directory (contains bins.zarr, metadata.json)",
 )
 @click.option(
+    "--coord",
+    "coord_key",
+    default=None,
+    help="Coordinate key to visualize (e.g., X_umap, X_tsne); default uses bins.zarr",
+)
+@click.option(
     "--output", "-o",
     "output_dir",
     required=True,
@@ -297,6 +311,7 @@ def init_config(output_path: Path):
 )
 def visualize(
     input_dir: Path,
+    coord_key: str | None,
     output_dir: Path,
     zoom_levels_str: str,
     categories: tuple[str, ...],
@@ -335,7 +350,7 @@ def visualize(
 
     # Initialize visualizer
     try:
-        visualizer = ZarrVisualizer(input_dir)
+        visualizer = ZarrVisualizer(input_dir, coord_key=coord_key)
     except Exception as e:
         logger.error(f"Failed to load Zarr data: {e}")
         raise click.ClickException(str(e))

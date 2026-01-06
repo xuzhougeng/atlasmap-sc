@@ -15,6 +15,7 @@ import (
 // TileServiceConfig contains tile service configuration.
 type TileServiceConfig struct {
 	DatasetID  string
+	CoordKey   string
 	ZarrReader *zarr.Reader
 	SomaReader *soma.Reader
 	Cache      *cache.Manager
@@ -24,6 +25,7 @@ type TileServiceConfig struct {
 // TileService handles tile rendering and serving.
 type TileService struct {
 	datasetID string
+	coordKey  string
 	zarr      *zarr.Reader
 	soma      *soma.Reader
 	cache     *cache.Manager
@@ -62,6 +64,7 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 
 	return &TileService{
 		datasetID:              datasetID,
+		coordKey:               cfg.CoordKey,
 		zarr:                   cfg.ZarrReader,
 		soma:                   cfg.SomaReader,
 		cache:                  cfg.Cache,
@@ -75,9 +78,9 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 }
 
 type expressionCacheEntry struct {
-	values []float32
-	min    float32
-	max    float32
+	values  []float32
+	min     float32
+	max     float32
 	autoMax float32
 }
 
@@ -347,7 +350,15 @@ func (s *TileService) GetEmptyTile() ([]byte, error) {
 
 // Metadata returns dataset metadata.
 func (s *TileService) Metadata() *zarr.ZarrMetadata {
-	return s.zarr.Metadata()
+	md := s.zarr.Metadata()
+	if md == nil {
+		return nil
+	}
+	out := *md
+	if s.coordKey != "" {
+		out.CoordinateSystem = s.coordKey
+	}
+	return &out
 }
 
 func (s *TileService) Soma() *soma.Reader {

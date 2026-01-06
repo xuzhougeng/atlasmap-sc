@@ -56,6 +56,7 @@ func TestGeneStatsEndpoint_NoListen(t *testing.T) {
 
 	tileService := service.NewTileService(service.TileServiceConfig{
 		DatasetID:  "default",
+		CoordKey:   "",
 		ZarrReader: zarrReader,
 		Cache:      cacheManager,
 		Renderer:   tileRenderer,

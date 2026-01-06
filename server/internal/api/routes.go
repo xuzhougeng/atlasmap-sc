@@ -120,7 +120,8 @@ func datasetMiddleware(registry *DatasetRegistry) func(http.Handler) http.Handle
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			datasetID := chi.URLParam(r, "dataset")
-			svc := registry.Get(datasetID)
+			coordKey := strings.TrimSpace(r.URL.Query().Get("coord"))
+			svc := registry.GetCoord(datasetID, coordKey)
 			if svc == nil {
 				http.Error(w, "dataset not found: "+datasetID, http.StatusNotFound)
 				return

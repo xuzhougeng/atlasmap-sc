@@ -15,7 +15,12 @@ class PreprocessConfig:
     output_dir: Path
 
     # Coordinate settings
+    # NOTE: `umap_key` is kept for backward compatibility; it now represents the
+    # default coordinate system key (not necessarily UMAP).
     umap_key: str = "X_umap"
+    # Optional list of coordinate keys to preprocess (supports multiple).
+    # If empty, falls back to [`umap_key`].
+    coordinate_keys: list[str] = field(default_factory=list)
     coordinate_range: float = 256.0  # Normalize to [0, coordinate_range)
 
     # Binning settings
@@ -74,6 +79,7 @@ class PreprocessConfig:
             "input_path": str(self.input_path),
             "output_dir": str(self.output_dir),
             "umap_key": self.umap_key,
+            "coordinate_keys": self.coordinate_keys or [self.umap_key],
             "coordinate_range": self.coordinate_range,
             "zoom_levels": self.zoom_levels,
             "tile_size": self.tile_size,
@@ -103,6 +109,24 @@ class PreprocessConfig:
         """Validate configuration parameters."""
         if not self.input_path.exists():
             raise FileNotFoundError(f"Input file not found: {self.input_path}")
+
+        # Coordinate keys
+        keys = self.coordinate_keys if self.coordinate_keys else [self.umap_key]
+        keys = [str(k).strip() for k in keys if str(k).strip()]
+        if not keys:
+            raise ValueError("No coordinate keys provided (set coordinate_keys or umap_key)")
+        # De-duplicate while preserving order
+        seen: set[str] = set()
+        uniq: list[str] = []
+        for k in keys:
+            if k in seen:
+                continue
+            seen.add(k)
+            uniq.append(k)
+        self.coordinate_keys = uniq
+        # Ensure default key exists in the list
+        if self.umap_key not in self.coordinate_keys:
+            self.umap_key = self.coordinate_keys[0]
 
         if self.zoom_levels < 1 or self.zoom_levels > 12:
             raise ValueError(f"zoom_levels must be between 1 and 12, got {self.zoom_levels}")

@@ -99,6 +99,23 @@ de:
 
 多数据集时，前端会显示数据集选择下拉框，用户可以切换不同的数据集。
 
+## 多坐标系（coord，可选）
+
+如果预处理时通过 `--coord-key` 生成了多套坐标系（`metadata.json` 里包含 `coordinate_systems`），后端会在启动时自动加载同一 `zarr/` 目录下的多套 `bins.*.zarr`。
+
+所有数据集 scoped 的 Tiles/API 接口都支持可选的查询参数：
+
+- `coord={key}`：坐标系 key（通常对应 `.h5ad` 的 `adata.obsm[key]`，例如 `X_umap`、`X_tsne`）
+
+示例：
+
+```bash
+curl "http://localhost:8080/d/pbmc/api/metadata?coord=X_tsne"
+curl "http://localhost:8080/d/pbmc/tiles/2/1/1/category/cell_type.png?coord=X_tsne" -o tile.png
+```
+
+不带 `coord` 时会使用默认坐标系（`default_coordinate_system`）。
+
 ## 通用约定
 
 - Base URL：`http://localhost:8080`
@@ -630,4 +647,3 @@ Query 参数：
 - **采样限制**：为控制计算成本，每组最多采样 20000 细胞（超出会随机采样）
 - **并发限制**：默认同时最多运行 1 个 DE 任务（可通过 `de.max_concurrent` 配置），其余排队等待
 - **全基因计算**：会对所有基因计算统计量，大数据集可能需要数分钟
-

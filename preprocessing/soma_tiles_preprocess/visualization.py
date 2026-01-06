@@ -16,20 +16,38 @@ logger = logging.getLogger(__name__)
 class ZarrVisualizer:
     """Visualize preprocessed Zarr bin data."""
 
-    def __init__(self, zarr_dir: Path):
+    def __init__(self, zarr_dir: Path, coord_key: str | None = None):
         """Initialize visualizer with Zarr output directory.
 
         Args:
             zarr_dir: Path to the Zarr output directory (contains bins.zarr, metadata.json)
+            coord_key: Optional coordinate key to visualize (e.g., X_umap, X_tsne)
         """
         self.zarr_dir = Path(zarr_dir)
-        self.bins_path = self.zarr_dir / "bins.zarr"
         self.metadata_path = self.zarr_dir / "metadata.json"
         self.gene_index_path = self.zarr_dir / "gene_index.json"
 
         # Load metadata
         with open(self.metadata_path) as f:
             self.metadata = json.load(f)
+
+        # Resolve which Zarr store to open
+        bins_rel = "bins.zarr"
+        if coord_key:
+            found = None
+            for item in (self.metadata.get("coordinate_systems") or []):
+                if item.get("key") == coord_key:
+                    found = item.get("zarr_path")
+                    break
+            if found:
+                bins_rel = str(found)
+            else:
+                default_key = self.metadata.get("default_coordinate_system") or self.metadata.get("umap_key")
+                if coord_key != default_key:
+                    available = [i.get("key") for i in (self.metadata.get("coordinate_systems") or [])]
+                    raise ValueError(f"Coordinate '{coord_key}' not found. Available: {available}")
+
+        self.bins_path = self.zarr_dir / bins_rel
 
         # Load gene index
         with open(self.gene_index_path) as f:
@@ -42,6 +60,7 @@ class ZarrVisualizer:
         self.store = zarr.open(str(self.bins_path), mode="r")
 
         logger.info(f"Loaded Zarr data from {self.zarr_dir}")
+        logger.info(f"  Store: {self.bins_path.name}")
         logger.info(f"  Cells: {self.metadata['n_cells']:,}")
         logger.info(f"  Genes: {self.metadata['n_genes_preaggregated']}")
         logger.info(f"  Zoom levels: {self.metadata['zoom_levels']}")

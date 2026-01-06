@@ -18,6 +18,7 @@ data/
   preprocessed/             # 预处理输出
     zarr/
       bins.zarr/            # Zarr store（注意：是目录）
+      bins.X_tsne.zarr/     # （可选）其它坐标系的 Zarr store（当使用 --coord-key 多次指定时）
       metadata.json
       gene_index.json
     soma/                   # TileDBSOMA 存储（可选，默认启用）
@@ -85,7 +86,8 @@ soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 10 -g 500
 
 常用参数（与代码一致，见 `preprocessing/soma_tiles_preprocess/cli.py`）：
 
-- `--umap-key`：`.h5ad` 里 `adata.obsm[...]` 的坐标键（默认 `X_umap`）
+- `--coord-key`：`.h5ad` 里 `adata.obsm[...]` 的坐标键（可多次指定，生成多套坐标系 tiles）
+- `--umap-key`：默认坐标键（旧参数名；用于指定默认/主坐标系，默认 `X_umap`）
 - `--category/-c`：要写入的分类字段（来自 `adata.obs`，可多次指定）
 - `--zoom-levels/-z`：缩放层级数（默认 8，从0开始, 一直到设置的参数为止)
 - `--n-genes/-g`：预聚合基因数（默认 500）
@@ -188,6 +190,8 @@ data:
 
 前端会显示数据集选择下拉框，API 可通过 `/d/{dataset}/api/...` 访问特定数据集。
 
+如果预处理时通过 `--coord-key` 生成了多套坐标系，前端会额外显示 `Coord` 下拉框；也可以在任意 tiles/API 请求后追加 `?coord=X_tsne` 来切换坐标系。
+
 启动后自检（注意：需先通过 `/api/datasets` 获取数据集 ID）：
 
 ```bash
@@ -257,9 +261,9 @@ docker compose --profile tools run --rm preprocess run \
 - `data.zarr_path` 必须指向 `.../zarr/bins.zarr`（目录）
 - `.../zarr/metadata.json` 与 `.../zarr/gene_index.json` 必须存在
 
-### 预处理报错：`UMAP key 'X_umap' not found`
+### 预处理报错：`Coordinate key 'X_umap' not found`
 
-输入 `.h5ad` 不包含 `adata.obsm['X_umap']`，请用 `--umap-key` 指定正确键名。
+输入 `.h5ad` 不包含对应的 `adata.obsm[...]` 坐标键，请用 `--coord-key`（或旧参数 `--umap-key`）指定正确键名。
 
 ### 基因表达 tile 一直空白/找不到 gene
 

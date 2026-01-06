@@ -28,17 +28,30 @@ type Reader struct {
 
 // ZarrMetadata contains metadata about the Zarr store.
 type ZarrMetadata struct {
-	ZoomLevels           int                     `json:"zoom_levels"`
-	TileSize             int                     `json:"tile_size"`
-	NGenes               int                     `json:"n_genes_preaggregated"`
-	NCategories          map[string]int          `json:"n_categories"`
-	FormatVersion        string                  `json:"format_version"`
-	DatasetName          string                  `json:"dataset_name"`
-	NCells               int                     `json:"n_cells"`
-	Genes                []string                `json:"preaggregated_genes"`
-	GeneIndex            map[string]int          `json:"gene_index"`
-	Categories           map[string]CategoryInfo `json:"categories"`
-	Bounds               Bounds                  `json:"bounds"`
+	ZoomLevels    int                     `json:"zoom_levels"`
+	TileSize      int                     `json:"tile_size"`
+	NGenes        int                     `json:"n_genes_preaggregated"`
+	NCategories   map[string]int          `json:"n_categories"`
+	FormatVersion string                  `json:"format_version"`
+	DatasetName   string                  `json:"dataset_name"`
+	NCells        int                     `json:"n_cells"`
+	Genes         []string                `json:"preaggregated_genes"`
+	GeneIndex     map[string]int          `json:"gene_index"`
+	Categories    map[string]CategoryInfo `json:"categories"`
+	Bounds        Bounds                  `json:"bounds"`
+	// Optional metadata for multiple coordinate systems (preprocessed as multiple Zarr stores).
+	CoordinateSystems       []CoordinateSystem `json:"coordinate_systems,omitempty"`
+	DefaultCoordinateSystem string             `json:"default_coordinate_system,omitempty"`
+	// Backward-compatible field written by older preprocessors.
+	UMAPKey string `json:"umap_key,omitempty"`
+	// Filled by the server when serving a specific coordinate system.
+	CoordinateSystem string `json:"coordinate_system,omitempty"`
+}
+
+// CoordinateSystem describes one coordinate system's Zarr store location.
+type CoordinateSystem struct {
+	Key      string `json:"key"`
+	ZarrPath string `json:"zarr_path"`
 }
 
 // CategoryInfo contains information about a category column.
@@ -77,7 +90,7 @@ type Bin struct {
 
 // ZarrV3ArrayMeta represents Zarr v3 array metadata (zarr.json).
 type ZarrV3ArrayMeta struct {
-	Shape     []int `json:"shape"`
+	Shape     []int  `json:"shape"`
 	DataType  string `json:"data_type"`
 	ChunkGrid struct {
 		Name          string `json:"name"`

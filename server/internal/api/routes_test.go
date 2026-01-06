@@ -62,6 +62,7 @@ func setupTestServer(t *testing.T) *testServer {
 	// Initialize tile service
 	tileService := service.NewTileService(service.TileServiceConfig{
 		DatasetID:  "default",
+		CoordKey:   "",
 		ZarrReader: zarrReader,
 		Cache:      cacheManager,
 		Renderer:   tileRenderer,

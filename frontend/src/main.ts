@@ -38,10 +38,21 @@ function getCurrentDatasetFromUrl(): string | null {
     return params.get('dataset');
 }
 
+function getCurrentCoordFromUrl(): string | null {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('coord');
+}
+
 // Set dataset in URL and reload
 function setDatasetAndReload(datasetId: string): void {
     const url = new URL(window.location.href);
     url.searchParams.set('dataset', datasetId);
+    window.location.href = url.toString();
+}
+
+function setCoordAndReload(coordKey: string): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set('coord', coordKey);
     window.location.href = url.toString();
 }
 
@@ -98,6 +109,52 @@ function createDatasetSelector(
     return selectorContainer;
 }
 
+function createCoordSelector(
+    container: HTMLElement,
+    coords: { key: string }[] | undefined,
+    currentCoord: string
+): HTMLDivElement | null {
+    if (!coords || coords.length <= 1) {
+        return null;
+    }
+
+    const selectorContainer = document.createElement('div');
+    selectorContainer.className = 'dataset-selector';
+
+    const label = document.createElement('label');
+    label.textContent = 'Coord: ';
+    label.htmlFor = 'coord-select';
+
+    const select = document.createElement('select');
+    select.id = 'coord-select';
+    select.className = 'dataset-select';
+
+    for (const cs of coords) {
+        const option = document.createElement('option');
+        option.value = cs.key;
+        option.textContent = cs.key;
+        option.selected = cs.key === currentCoord;
+        select.appendChild(option);
+    }
+
+    select.addEventListener('change', () => {
+        setCoordAndReload(select.value);
+    });
+
+    selectorContainer.appendChild(label);
+    selectorContainer.appendChild(select);
+
+    const selectors = container.querySelectorAll('.dataset-selector');
+    const anchor = selectors.length ? selectors[selectors.length - 1] : null;
+    if (anchor && anchor.parentElement === container) {
+        container.insertBefore(selectorContainer, anchor.nextSibling);
+    } else {
+        container.insertBefore(selectorContainer, container.firstChild);
+    }
+
+    return selectorContainer;
+}
+
 function createH5ADDownloadButton(
     container: HTMLElement,
     datasetId: string,
@@ -121,9 +178,10 @@ function createH5ADDownloadButton(
         </svg>
     `;
 
-    const selector = container.querySelector('.dataset-selector');
-    if (selector) {
-        container.insertBefore(link, selector.nextSibling);
+    const selectors = container.querySelectorAll('.dataset-selector');
+    const anchor = selectors.length ? selectors[selectors.length - 1] : null;
+    if (anchor && anchor.parentElement === container) {
+        container.insertBefore(link, anchor.nextSibling);
     } else {
         container.appendChild(link);
     }
@@ -200,7 +258,8 @@ async function init() {
     const tilesBaseUrl = `/d/${encodeURIComponent(currentDataset)}`;
 
     // Create API client
-    const api = new ApiClient(apiBaseUrl);
+    const urlCoord = getCurrentCoordFromUrl();
+    let api = new ApiClient(apiBaseUrl, urlCoord ? { coord: urlCoord } : {});
     let cellQueryPanel: CellQueryPanel | null = null;
 
     // Load metadata
@@ -215,10 +274,30 @@ async function init() {
         return;
     }
 
+    const effectiveCoord =
+        metadata.coordinate_system ||
+        urlCoord ||
+        metadata.default_coordinate_system ||
+        metadata.umap_key ||
+        null;
+
+    // Keep the URL in sync if the server fell back to a different coord.
+    if (effectiveCoord && urlCoord && effectiveCoord !== urlCoord) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('coord', effectiveCoord);
+        window.history.replaceState({}, '', url.toString());
+    }
+
+    // Recreate API client so all subsequent API calls use the effective coord.
+    if (effectiveCoord) {
+        api = new ApiClient(apiBaseUrl, { coord: effectiveCoord });
+    }
+
     // Create dataset selector in header
     const datasetInfoContainer = document.getElementById('dataset-info');
     if (datasetInfoContainer) {
         createDatasetSelector(datasetInfoContainer, datasetsInfo.datasets, currentDataset);
+        createCoordSelector(datasetInfoContainer, metadata.coordinate_systems, effectiveCoord ?? '');
         const currentDatasetInfo = datasetsInfo.datasets.find(ds => ds.id === currentDataset);
         createH5ADDownloadButton(datasetInfoContainer, currentDataset, currentDatasetInfo?.has_h5ad === true);
     }
@@ -242,6 +321,7 @@ async function init() {
     const maxZoom = maxNativeZoom + 4;
     const mapController = new MapController(mapContainer, {
         apiUrl: tilesBaseUrl,
+        coord: effectiveCoord ?? undefined,
         tileSize: 256,
         maxZoom,
         maxNativeZoom,

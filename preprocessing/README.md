@@ -57,6 +57,8 @@ soma-preprocess run \
     -i data.h5ad \
     -o ./output \
     --umap-key X_umap \
+    --coord-key X_umap \
+    --coord-key X_tsne \
     --zoom-levels 8 \
     --n-genes 500 \
     --category cell_type \
@@ -86,7 +88,8 @@ soma-preprocess from-config -c config.yaml
 |------|------|--------|------|
 | `--input` | `-i` | 必填 | 输入 H5AD 文件路径 |
 | `--output` | `-o` | 必填 | 输出目录路径 |
-| `--umap-key` | | `X_umap` | UMAP 坐标在 `adata.obsm` 中的键名 |
+| `--umap-key` | | `X_umap` | 默认坐标键（旧参数名；用于指定默认/主坐标系） |
+| `--coord-key` | | | 坐标键（来自 `adata.obsm`，可多次指定以生成多套坐标系 tiles） |
 | `--zoom-levels` | `-z` | `8` | 缩放级别数量（1-12） |
 | `--n-genes` | `-g` | `500` | 预聚合的基因数量 |
 | `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
@@ -123,6 +126,7 @@ soma-preprocess visualize -i ./output/zarr -o ./figures -f svg --dpi 300
 | 参数 | 简写 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--input` | `-i` | 必填 | Zarr 输出目录路径 |
+| `--coord` | | | 要可视化的坐标键（如 `X_umap`/`X_tsne`；默认使用 `bins.zarr`） |
 | `--output` | `-o` | 必填 | 图片输出目录 |
 | `--zoom-levels` | `-z` | `3,5,7` | 要可视化的 zoom 级别（逗号分隔）；建议至少包含最高 zoom（如 zoom_levels=8 则为 7） |
 | `--category` | `-c` | 全部 | 要可视化的类别列 |
@@ -156,6 +160,9 @@ output_dir: ./preprocessed
 
 # 坐标设置
 umap_key: X_umap
+coordinate_keys:
+  - X_umap
+  - X_tsne
 coordinate_range: 256.0
 
 # 分箱设置
@@ -197,10 +204,11 @@ dataset_description: Single-cell dataset description
 ```
 output/
 ├── zarr/
-│   ├── bins.zarr/           # 多分辨率 bin 数据
+│   ├── bins.zarr/           # 多分辨率 bin 数据（默认坐标系）
 │   │   ├── zoom_0/          # 缩放级别 0
 │   │   ├── zoom_1/          # 缩放级别 1
 │   │   └── ...
+│   ├── bins.X_tsne.zarr/    # （可选）其它坐标系的 bin 数据（结构同 bins.zarr）
 │   ├── metadata.json        # 数据集元数据
 │   └── gene_index.json      # 基因索引映射
 │
@@ -223,6 +231,11 @@ output/
   "tile_size": 256,
   "coordinate_range": 256.0,
   "preaggregated_genes": ["gene1", "gene2", ...],
+  "coordinate_systems": [
+    {"key": "X_umap", "zarr_path": "bins.zarr"},
+    {"key": "X_tsne", "zarr_path": "bins.X_tsne.zarr"}
+  ],
+  "default_coordinate_system": "X_umap",
   "categories": {
     "cell_type": {
       "values": ["T cell", "B cell", ...],
@@ -244,7 +257,7 @@ output/
 ## 处理流程
 
 1. **加载数据**：读取 H5AD 文件
-2. **坐标处理**：从 `obsm` 提取 UMAP 坐标并归一化到 `[0, 256)` 范围
+2. **坐标处理**：从 `obsm` 提取指定坐标键（可多个）并归一化到 `[0, 256)` 范围
 3. **基因选择**：
    - 默认模式：选择 top N 基因（HVG + 标记基因 + 高表达基因）
    - `--all-expressed` 模式：使用所有在至少 `--min-cells`（默认 3）个细胞中表达的基因

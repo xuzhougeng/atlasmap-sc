@@ -15,6 +15,15 @@ export interface Metadata {
         min_y: number;
         max_y: number;
     };
+    umap_key?: string;
+    coordinate_systems?: CoordinateSystemInfo[];
+    default_coordinate_system?: string;
+    coordinate_system?: string;
+}
+
+export interface CoordinateSystemInfo {
+    key: string;
+    zarr_path: string;
 }
 
 export interface CategoryInfo {
@@ -176,9 +185,31 @@ export interface SomaDeJobResultResponse {
 
 export class ApiClient {
     private baseUrl: string;
+    private defaultQuery: Record<string, string>;
 
-    constructor(baseUrl: string) {
+    constructor(baseUrl: string, defaultQuery: Record<string, string> = {}) {
         this.baseUrl = baseUrl;
+        this.defaultQuery = defaultQuery;
+    }
+
+    private buildUrl(path: string, query?: URLSearchParams): string {
+        const base = this.baseUrl.replace(/\/$/, '');
+        const merged = new URLSearchParams();
+
+        for (const [k, v] of Object.entries(this.defaultQuery)) {
+            if (typeof v !== 'undefined' && v !== null && String(v) !== '') {
+                merged.set(k, String(v));
+            }
+        }
+
+        if (query) {
+            for (const [k, v] of query.entries()) {
+                merged.set(k, v);
+            }
+        }
+
+        const suffix = merged.toString() ? `?${merged.toString()}` : '';
+        return `${base}${path}${suffix}`;
     }
 
     private async readError(response: Response): Promise<string> {
@@ -200,23 +231,23 @@ export class ApiClient {
     }
 
     async getMetadata(): Promise<Metadata> {
-        return this.fetchJson(`${this.baseUrl}/metadata`);
+        return this.fetchJson(this.buildUrl('/metadata'));
     }
 
     async getGenes(): Promise<{ genes: string[]; total: number }> {
-        return this.fetchJson(`${this.baseUrl}/genes`);
+        return this.fetchJson(this.buildUrl('/genes'));
     }
 
     async getGeneInfo(gene: string): Promise<GeneInfo> {
-        return this.fetchJson(`${this.baseUrl}/genes/${encodeURIComponent(gene)}`);
+        return this.fetchJson(this.buildUrl(`/genes/${encodeURIComponent(gene)}`));
     }
 
     async getCategories(): Promise<Record<string, CategoryInfo>> {
-        return this.fetchJson(`${this.baseUrl}/categories`);
+        return this.fetchJson(this.buildUrl('/categories'));
     }
 
     async getStats(): Promise<Record<string, any>> {
-        return this.fetchJson(`${this.baseUrl}/stats`);
+        return this.fetchJson(this.buildUrl('/stats'));
     }
 
     /**
@@ -235,18 +266,18 @@ export class ApiClient {
      * Get color mapping for a category column
      */
     async getCategoryColors(column: string): Promise<Record<string, string>> {
-        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/colors`);
+        return this.fetchJson(this.buildUrl(`/categories/${encodeURIComponent(column)}/colors`));
     }
 
     /**
      * Get legend data for a category column
      */
     async getCategoryLegend(column: string): Promise<CategoryLegendItem[]> {
-        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/legend`);
+        return this.fetchJson(this.buildUrl(`/categories/${encodeURIComponent(column)}/legend`));
     }
 
     async getCategoryCentroids(column: string): Promise<CategoryCentroidItem[]> {
-        return this.fetchJson(`${this.baseUrl}/categories/${encodeURIComponent(column)}/centroids`);
+        return this.fetchJson(this.buildUrl(`/categories/${encodeURIComponent(column)}/centroids`));
     }
 
     /**
@@ -274,7 +305,7 @@ export class ApiClient {
             query.set('limit', params.limit.toString());
         }
 
-        return this.fetchJson(`${this.baseUrl}/genes/${encodeURIComponent(gene)}/bins?${query}`);
+        return this.fetchJson(this.buildUrl(`/genes/${encodeURIComponent(gene)}/bins`, query));
     }
 
     /**
@@ -287,11 +318,7 @@ export class ApiClient {
         if (zoom !== undefined) {
             query.set('zoom', zoom.toString());
         }
-
-        const queryStr = query.toString();
-        const url = `${this.baseUrl}/genes/${encodeURIComponent(gene)}/stats${queryStr ? '?' + queryStr : ''}`;
-
-        return this.fetchJson(url);
+        return this.fetchJson(this.buildUrl(`/genes/${encodeURIComponent(gene)}/stats`, query));
     }
 
     /**
@@ -299,25 +326,25 @@ export class ApiClient {
      */
     async getGeneCategoryMeans(gene: string, column: string): Promise<GeneCategoryMeanItem[]> {
         const data: GeneCategoryMeansResponse = await this.fetchJson(
-            `${this.baseUrl}/genes/${encodeURIComponent(gene)}/category/${encodeURIComponent(column)}/means`
+            this.buildUrl(`/genes/${encodeURIComponent(gene)}/category/${encodeURIComponent(column)}/means`)
         );
         return data.items;
     }
 
     async getSomaObsColumns(): Promise<string[]> {
-        const data: SomaObsColumnsResponse = await this.fetchJson(`${this.baseUrl}/soma/obs/columns`);
+        const data: SomaObsColumnsResponse = await this.fetchJson(this.buildUrl('/soma/obs/columns'));
         return data.columns;
     }
 
     async getSomaObsColumnValues(column: string): Promise<string[]> {
         const data: SomaObsValuesResponse = await this.fetchJson(
-            `${this.baseUrl}/soma/obs/${encodeURIComponent(column)}/values`
+            this.buildUrl(`/soma/obs/${encodeURIComponent(column)}/values`)
         );
         return data.values;
     }
 
     async createSomaDeJob(params: SomaDeJobCreateRequest): Promise<SomaDeJobCreateResponse> {
-        return this.fetchJson(`${this.baseUrl}/soma/de/jobs`, {
+        return this.fetchJson(this.buildUrl('/soma/de/jobs'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(params),
@@ -325,7 +352,7 @@ export class ApiClient {
     }
 
     async getSomaDeJob(jobId: string): Promise<SomaDeJobStatusResponse> {
-        return this.fetchJson(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}`);
+        return this.fetchJson(this.buildUrl(`/soma/de/jobs/${encodeURIComponent(jobId)}`));
     }
 
     async getSomaDeJobResult(
@@ -336,12 +363,11 @@ export class ApiClient {
         if (params.offset !== undefined) query.set('offset', params.offset.toString());
         if (params.limit !== undefined) query.set('limit', params.limit.toString());
         if (params.order_by !== undefined) query.set('order_by', params.order_by);
-        const suffix = query.toString() ? `?${query}` : '';
-        return this.fetchJson(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}/result${suffix}`);
+        return this.fetchJson(this.buildUrl(`/soma/de/jobs/${encodeURIComponent(jobId)}/result`, query));
     }
 
     async cancelSomaDeJob(jobId: string): Promise<void> {
-        const response = await fetch(`${this.baseUrl}/soma/de/jobs/${encodeURIComponent(jobId)}`, {
+        const response = await fetch(this.buildUrl(`/soma/de/jobs/${encodeURIComponent(jobId)}`), {
             method: 'DELETE',
         });
         if (!response.ok) {

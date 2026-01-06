@@ -8,6 +8,7 @@ export type ColorMode = 'expression' | 'category' | 'default';
 
 export interface MapConfig {
     apiUrl: string;
+    coord?: string;
     tileSize: number;
     // Leaflet zoom range (allows extra "magnification" zooms beyond native data)
     maxZoom: number;
@@ -238,6 +239,7 @@ export class MapController {
 
     private buildExpressionTileUrl(gene: string): string {
         const query = new URLSearchParams();
+        if (this.config.coord) query.set('coord', this.config.coord);
         query.set('colormap', this.currentExpressionColorScale ?? 'viridis');
         query.set('point_size', this.formatPointSize());
         if (this.currentExpressionRange !== null) {
@@ -250,6 +252,7 @@ export class MapController {
 
     private buildCategoryTileUrl(column: string): string {
         const query = new URLSearchParams();
+        if (this.config.coord) query.set('coord', this.config.coord);
         query.set('point_size', this.formatPointSize());
         const columnParam = encodeURIComponent(column);
         return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${columnParam}.png?${query.toString()}`;
@@ -413,6 +416,7 @@ export class MapController {
         if (this.currentColorMode === 'expression' && this.currentExpressionGene) {
             const gene = encodeURIComponent(this.currentExpressionGene);
             const query = new URLSearchParams();
+            if (this.config.coord) query.set('coord', this.config.coord);
             query.set('colormap', this.currentExpressionColorScale ?? 'viridis');
             query.set('point_size', this.formatPointSize());
             if (this.currentExpressionRange !== null) {
@@ -427,6 +431,7 @@ export class MapController {
         if (this.currentColorMode === 'category' && this.currentCategory) {
             const column = encodeURIComponent(this.currentCategory);
             const query = new URLSearchParams();
+            if (this.config.coord) query.set('coord', this.config.coord);
             query.set('point_size', this.formatPointSize());
             const url = `${apiUrl}/tiles/${z}/${x}/${y}/category/${column}.png?${query.toString()}`;
             if (this.selectedCategories !== null) {

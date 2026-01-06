@@ -110,7 +110,7 @@ def print_human(info: dict[str, Any]) -> None:
     else:
         print("Embeddings/Coordinates (obsm): None")
     if not info["has_X_umap"]:
-        print("  WARNING: X_umap not found (needed for SOMA-Tiles preprocessing)")
+        print("  WARNING: X_umap not found (default for preprocessing; use --coord-key/--umap-key to choose another)")
 
     # obs
     print()
@@ -161,4 +161,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

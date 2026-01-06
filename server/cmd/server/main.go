@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -82,15 +83,72 @@ func main() {
 			}
 		}
 
-		tileService := service.NewTileService(service.TileServiceConfig{
-			DatasetID:  datasetID,
-			ZarrReader: zarrReader,
-			SomaReader: somaReader,
-			Cache:      cacheManager,
-			Renderer:   tileRenderer,
-		})
+		// Initialize tile services for each coordinate system (if present).
+		md := zarrReader.Metadata()
+		coordSystems := md.CoordinateSystems
+		defaultCoord := md.DefaultCoordinateSystem
+		if defaultCoord == "" {
+			defaultCoord = md.UMAPKey
+		}
 
-		registry.Register(datasetID, tileService)
+		metadataDir := filepath.Dir(ds.ZarrPath)
+		dsZarrPath := filepath.Clean(ds.ZarrPath)
+
+		// Backward-compat: if metadata doesn't list coordinate systems, register a single one.
+		if len(coordSystems) == 0 {
+			key := defaultCoord
+			if key == "" {
+				key = "X_umap"
+			}
+			rel, err := filepath.Rel(metadataDir, dsZarrPath)
+			if err != nil || rel == "." || rel == "" || rel == ".." || rel[:1] == string(filepath.Separator) {
+				rel = filepath.Base(dsZarrPath)
+			}
+			coordSystems = []zarr.CoordinateSystem{{Key: key, ZarrPath: rel}}
+			defaultCoord = key
+		}
+		if defaultCoord == "" && len(coordSystems) > 0 {
+			defaultCoord = coordSystems[0].Key
+		}
+
+		for _, cs := range coordSystems {
+			if cs.Key == "" {
+				log.Fatalf("  [%s] Invalid coordinate system entry with empty key", datasetID)
+			}
+			if cs.ZarrPath == "" {
+				log.Fatalf("  [%s] Invalid coordinate system entry %q with empty zarr_path", datasetID, cs.Key)
+			}
+
+			storePath := cs.ZarrPath
+			if !filepath.IsAbs(storePath) {
+				storePath = filepath.Join(metadataDir, storePath)
+			}
+			storePath = filepath.Clean(storePath)
+
+			reader := zarrReader
+			if storePath != dsZarrPath {
+				r, err := zarr.NewReader(storePath)
+				if err != nil {
+					log.Fatalf("Failed to initialize Zarr reader for dataset %q coord %q: %v", datasetID, cs.Key, err)
+				}
+				reader = r
+				log.Printf("  [%s] Coord %q loaded from: %s", datasetID, cs.Key, storePath)
+			} else {
+				log.Printf("  [%s] Coord %q uses primary Zarr store", datasetID, cs.Key)
+			}
+
+			tileService := service.NewTileService(service.TileServiceConfig{
+				DatasetID:  datasetID + "|" + cs.Key, // isolate cache namespace across coords
+				CoordKey:   cs.Key,
+				ZarrReader: reader,
+				SomaReader: somaReader,
+				Cache:      cacheManager,
+				Renderer:   tileRenderer,
+			})
+
+			registry.RegisterCoord(datasetID, cs.Key, tileService)
+		}
+		registry.SetDefaultCoord(datasetID, defaultCoord)
 
 		if ds.H5ADPath != "" {
 			registry.SetH5ADPath(datasetID, ds.H5ADPath)

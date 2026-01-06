@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -32,7 +33,8 @@ class PreprocessingPipeline:
         """
         self.config = config
         self.adata: Optional[sc.AnnData] = None
-        self.normalized_coords: Optional[np.ndarray] = None
+        self.normalized_coords: dict[str, np.ndarray] = {}
+        self.coordinate_store_names: dict[str, str] = {}
         self.selected_genes: Optional[list[str]] = None
         self.category_mapping: dict[str, dict[str, int]] = {}
         self.numeric_columns: list[str] = []  # 存储检测到的数值列
@@ -73,26 +75,56 @@ class PreprocessingPipeline:
         logger.info(f"Loaded {self.adata.n_obs:,} cells, {self.adata.n_vars:,} genes")
 
     def _process_coordinates(self) -> None:
-        """Extract and normalize UMAP coordinates."""
-        logger.info(f"Extracting coordinates from obsm['{self.config.umap_key}']")
+        """Extract and normalize coordinates (supports multiple coordinate systems)."""
+        self.coordinate_store_names = self._build_coordinate_store_names()
 
-        if self.config.umap_key not in self.adata.obsm:
-            available_keys = list(self.adata.obsm.keys())
-            raise KeyError(
-                f"UMAP key '{self.config.umap_key}' not found. "
-                f"Available keys: {available_keys}"
+        for key in self.config.coordinate_keys:
+            logger.info(f"Extracting coordinates from obsm['{key}']")
+
+            if key not in self.adata.obsm:
+                available_keys = list(self.adata.obsm.keys())
+                raise KeyError(
+                    f"Coordinate key '{key}' not found. "
+                    f"Available keys: {available_keys}"
+                )
+
+            coords = self.adata.obsm[key][:, :2].astype(np.float64)
+
+            # Normalize to [0, coordinate_range)
+            normalizer = CoordinateNormalizer(self.config.coordinate_range)
+            self.normalized_coords[key] = normalizer.normalize(coords)
+
+            logger.info(
+                f"Normalized '{key}' to [{0}, {self.config.coordinate_range}), "
+                f"shape: {self.normalized_coords[key].shape}"
             )
 
-        coords = self.adata.obsm[self.config.umap_key][:, :2].astype(np.float64)
+    def _sanitize_coordinate_id(self, key: str) -> str:
+        """Convert an obsm key into a filesystem-safe identifier."""
+        safe = re.sub(r"[^A-Za-z0-9]+", "_", key).strip("_")
+        return safe or "coord"
 
-        # Normalize to [0, coordinate_range)
-        normalizer = CoordinateNormalizer(self.config.coordinate_range)
-        self.normalized_coords = normalizer.normalize(coords)
+    def _build_coordinate_store_names(self) -> dict[str, str]:
+        """Build mapping: coordinate key -> Zarr store directory name."""
+        out: dict[str, str] = {}
+        used: set[str] = set()
 
-        logger.info(
-            f"Normalized coordinates to [{0}, {self.config.coordinate_range}), "
-            f"shape: {self.normalized_coords.shape}"
-        )
+        default_key = self.config.umap_key
+        for key in self.config.coordinate_keys:
+            if key == default_key:
+                name = "bins.zarr"
+            else:
+                suffix = self._sanitize_coordinate_id(key)
+                name = f"bins.{suffix}.zarr"
+                i = 2
+                while name in used or name == "bins.zarr":
+                    name = f"bins.{suffix}_{i}.zarr"
+                    i += 1
+
+            out[key] = name
+            used.add(name)
+
+        return out
 
     def _select_genes(self) -> None:
         """Select genes for pre-aggregation."""
@@ -173,26 +205,13 @@ class PreprocessingPipeline:
                     logger.info(f"  {col}: {len(categories)} categories")
 
     def _build_and_write_bins(self) -> None:
-        """Build multi-resolution bins and write to Zarr."""
+        """Build multi-resolution bins and write to Zarr (per coordinate system)."""
         logger.info(f"Building {self.config.zoom_levels} zoom levels")
 
-        # Create output directory
-        zarr_path = self.config.output_dir / "zarr" / "bins.zarr"
-        zarr_path.parent.mkdir(parents=True, exist_ok=True)
+        zarr_dir = self.config.output_dir / "zarr"
+        zarr_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize Zarr writer
-        writer = ZarrBinWriter(
-            zarr_path,
-            zoom_levels=self.config.zoom_levels,
-            tile_size=self.config.tile_size,
-            n_genes=len(self.selected_genes),
-            n_categories={col: len(cats) for col, cats in self.category_mapping.items()},
-            numeric_columns=self.numeric_columns,
-            compressor=self.config.zarr_compressor,
-            compression_level=self.config.zarr_compression_level,
-        )
-
-        # Initialize binner and aggregator
+        # Initialize binner and aggregator (shared across coordinate systems)
         binner = QuadtreeBinner(
             coordinate_range=self.config.coordinate_range,
             zoom_levels=self.config.zoom_levels,
@@ -211,62 +230,81 @@ class PreprocessingPipeline:
             batch_size=self.config.batch_size,
         )
 
-        # Process each zoom level
-        for zoom in tqdm(range(self.config.zoom_levels), desc="Zoom levels"):
-            logger.info(f"Processing zoom level {zoom}")
+        for coord_key in self.config.coordinate_keys:
+            store_name = self.coordinate_store_names.get(coord_key, "bins.zarr")
+            zarr_path = zarr_dir / store_name
+            logger.info(f"Writing Zarr bins for '{coord_key}' -> {zarr_path}")
 
-            # Compute bin assignments for all cells
-            bin_assignments = binner.assign_bins(self.normalized_coords, zoom)
+            # Initialize Zarr writer
+            writer = ZarrBinWriter(
+                zarr_path,
+                zoom_levels=self.config.zoom_levels,
+                tile_size=self.config.tile_size,
+                n_genes=len(self.selected_genes),
+                n_categories={col: len(cats) for col, cats in self.category_mapping.items()},
+                numeric_columns=self.numeric_columns,
+                compressor=self.config.zarr_compressor,
+                compression_level=self.config.zarr_compression_level,
+            )
 
-            # Get unique bins
-            unique_bins = np.unique(bin_assignments, axis=0)
-            logger.info(f"  Zoom {zoom}: {len(unique_bins):,} bins")
+            coords = self.normalized_coords[coord_key]
 
-            # Aggregate data per bin
-            bins_data = []
-            for bin_x, bin_y in tqdm(unique_bins, desc=f"  Aggregating bins", leave=False):
-                mask = (bin_assignments[:, 0] == bin_x) & (bin_assignments[:, 1] == bin_y)
-                cell_indices = np.where(mask)[0]
+            # Process each zoom level
+            for zoom in tqdm(range(self.config.zoom_levels), desc=f"Zoom levels ({coord_key})"):
+                logger.info(f"Processing '{coord_key}' zoom level {zoom}")
 
-                if len(cell_indices) == 0:
-                    continue
+                # Compute bin assignments for all cells
+                bin_assignments = binner.assign_bins(coords, zoom)
 
-                # Aggregate expression
-                expr_mean, expr_max = aggregator.aggregate(cell_indices)
+                # Get unique bins
+                unique_bins = np.unique(bin_assignments, axis=0)
+                logger.info(f"  Zoom {zoom}: {len(unique_bins):,} bins")
 
-                # Aggregate categories
-                category_counts = {}
-                for sanitized_col, mapping in self.category_mapping.items():
-                    orig_col = self.column_name_mapping[sanitized_col]
-                    cats = self.adata.obs[orig_col].iloc[cell_indices].astype(str)
-                    counts = np.zeros(len(mapping), dtype=np.uint32)
-                    for cat, idx in mapping.items():
-                        counts[idx] = (cats == cat).sum()
-                    category_counts[sanitized_col] = counts
+                # Aggregate data per bin
+                bins_data = []
+                for bin_x, bin_y in tqdm(unique_bins, desc=f"  Aggregating bins", leave=False):
+                    mask = (bin_assignments[:, 0] == bin_x) & (bin_assignments[:, 1] == bin_y)
+                    cell_indices = np.where(mask)[0]
 
-                # Aggregate numeric columns (median)
-                numeric_medians = {}
-                for sanitized_col in self.numeric_columns:
-                    orig_col = self.column_name_mapping[sanitized_col]
-                    values = self.adata.obs[orig_col].iloc[cell_indices].values
-                    numeric_medians[sanitized_col] = float(np.median(values))
+                    if len(cell_indices) == 0:
+                        continue
 
-                bins_data.append({
-                    "bin_x": int(bin_x),
-                    "bin_y": int(bin_y),
-                    "cell_count": len(cell_indices),
-                    "cell_ids": cell_indices.astype(np.uint32),
-                    "expression_mean": expr_mean,
-                    "expression_max": expr_max,
-                    "category_counts": category_counts,
-                    "numeric_medians": numeric_medians,
-                })
+                    # Aggregate expression
+                    expr_mean, expr_max = aggregator.aggregate(cell_indices)
 
-            # Write bins for this zoom level
-            writer.write_zoom_level(zoom, bins_data)
+                    # Aggregate categories
+                    category_counts = {}
+                    for sanitized_col, mapping in self.category_mapping.items():
+                        orig_col = self.column_name_mapping[sanitized_col]
+                        cats = self.adata.obs[orig_col].iloc[cell_indices].astype(str)
+                        counts = np.zeros(len(mapping), dtype=np.uint32)
+                        for cat, idx in mapping.items():
+                            counts[idx] = (cats == cat).sum()
+                        category_counts[sanitized_col] = counts
 
-        writer.finalize()
-        logger.info(f"Zarr data written to: {zarr_path}")
+                    # Aggregate numeric columns (median)
+                    numeric_medians = {}
+                    for sanitized_col in self.numeric_columns:
+                        orig_col = self.column_name_mapping[sanitized_col]
+                        values = self.adata.obs[orig_col].iloc[cell_indices].values
+                        numeric_medians[sanitized_col] = float(np.median(values))
+
+                    bins_data.append({
+                        "bin_x": int(bin_x),
+                        "bin_y": int(bin_y),
+                        "cell_count": len(cell_indices),
+                        "cell_ids": cell_indices.astype(np.uint32),
+                        "expression_mean": expr_mean,
+                        "expression_max": expr_max,
+                        "category_counts": category_counts,
+                        "numeric_medians": numeric_medians,
+                    })
+
+                # Write bins for this zoom level
+                writer.write_zoom_level(zoom, bins_data)
+
+            writer.finalize()
+            logger.info(f"Zarr data written to: {zarr_path}")
 
     def _write_soma_store(self) -> None:
         """Write complete expression data to SOMA store."""
@@ -284,7 +322,7 @@ class PreprocessingPipeline:
 
         writer.write_from_adata(
             adata=self.adata,
-            normalized_coords=self.normalized_coords,
+            normalized_coords=self.normalized_coords[self.config.umap_key],
             preaggregated_genes=self.selected_genes,
             category_columns=list(self.category_mapping.keys()),
             numeric_columns=self.numeric_columns,
@@ -316,6 +354,11 @@ class PreprocessingPipeline:
             "tile_size": self.config.tile_size,
             "coordinate_range": self.config.coordinate_range,
             "preaggregated_genes": self.selected_genes,
+            "coordinate_systems": [
+                {"key": key, "zarr_path": self.coordinate_store_names.get(key, "bins.zarr")}
+                for key in self.config.coordinate_keys
+            ],
+            "default_coordinate_system": self.config.umap_key,
             "categories": {
                 col: {
                     "values": list(mapping.keys()),
