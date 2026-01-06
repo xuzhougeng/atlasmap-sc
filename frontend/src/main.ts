@@ -245,8 +245,8 @@ async function init() {
         tileSize: 256,
         maxZoom,
         maxNativeZoom,
-        // Start at an overview zoom so the full dataset is visible immediately.
-        initialZoom: 0,
+        // Start at zoom level 2 for better initial detail.
+        initialZoom: 2,
         bounds: metadata.bounds,
     });
 
