@@ -244,13 +244,15 @@ export class MapController {
             query.set('min', String(this.currentExpressionRange.min));
             query.set('max', String(this.currentExpressionRange.max));
         }
-        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${gene}.png?${query.toString()}`;
+        const geneParam = encodeURIComponent(gene);
+        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/expression/${geneParam}.png?${query.toString()}`;
     }
 
     private buildCategoryTileUrl(column: string): string {
         const query = new URLSearchParams();
         query.set('point_size', this.formatPointSize());
-        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${column}.png?${query.toString()}`;
+        const columnParam = encodeURIComponent(column);
+        return `${this.config.apiUrl}/tiles/{z}/{x}/{y}/category/${columnParam}.png?${query.toString()}`;
     }
 
     /**

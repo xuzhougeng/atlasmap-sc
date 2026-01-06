@@ -285,6 +285,12 @@ func TestExpressionTileEndpoint(t *testing.T) {
 			expectedStatus: http.StatusOK, // Returns empty tile, not error
 			expectPNG:      true,
 		},
+		{
+			name:           "gene containing dot returns empty tile",
+			path:           "/d/default/tiles/0/0/0/expression/UNKNOWN.GENE.png",
+			expectedStatus: http.StatusOK, // Must be routed (not 404)
+			expectPNG:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -335,6 +341,12 @@ func TestCategoryTileEndpoint(t *testing.T) {
 			name:           "valid category tile",
 			path:           "/d/default/tiles/0/0/0/category/" + validCategory + ".png",
 			expectedStatus: http.StatusOK,
+			expectPNG:      true,
+		},
+		{
+			name:           "category containing dot returns empty tile",
+			path:           "/d/default/tiles/0/0/0/category/UNKNOWN.COLUMN.png",
+			expectedStatus: http.StatusOK, // Must be routed (not 404)
 			expectPNG:      true,
 		},
 		{

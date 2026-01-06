@@ -67,8 +67,15 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		// Tile endpoints
 		r.Get("/tiles/{z}/{x}/{y}.png", datasetTileHandler)
 		r.Get("/tiles/{z}/{x}/{y}/expression/{gene}.png", datasetExpressionTileHandler)
+		// NOTE: chi treats '.' as a param delimiter when the route pattern is `{gene}.png`,
+		// which breaks genes/columns containing '.' (e.g. "Azfi-s0217.g058558").
+		// Add a fallback route that captures the full segment (including ".png") and strip
+		// the extension in the handler.
+		r.Get("/tiles/{z}/{x}/{y}/expression/{gene}", datasetExpressionTileHandler)
 		r.Get("/tiles/{z}/{x}/{y}/category/{column}.png", datasetCategoryTileHandler)
 		r.Post("/tiles/{z}/{x}/{y}/category/{column}.png", datasetCategoryTileHandler)
+		r.Get("/tiles/{z}/{x}/{y}/category/{column}", datasetCategoryTileHandler)
+		r.Post("/tiles/{z}/{x}/{y}/category/{column}", datasetCategoryTileHandler)
 
 		// API endpoints
 		r.Route("/api", func(r chi.Router) {
@@ -336,6 +343,7 @@ func expressionTileHandler(svc *service.TileService) http.HandlerFunc {
 		x, _ := strconv.Atoi(chi.URLParam(r, "x"))
 		y, _ := strconv.Atoi(chi.URLParam(r, "y"))
 		gene := chi.URLParam(r, "gene")
+		gene = strings.TrimSuffix(gene, ".png")
 		colormap := r.URL.Query().Get("colormap")
 		if colormap == "" {
 			colormap = "viridis"
@@ -380,6 +388,7 @@ func categoryTileHandler(svc *service.TileService) http.HandlerFunc {
 		x, _ := strconv.Atoi(chi.URLParam(r, "x"))
 		y, _ := strconv.Atoi(chi.URLParam(r, "y"))
 		column := chi.URLParam(r, "column")
+		column = strings.TrimSuffix(column, ".png")
 		pointSize := parsePointSize(r.URL.Query())
 
 		// Parse optional category filter
