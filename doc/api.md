@@ -25,6 +25,7 @@
 - `GET /d/{dataset}/api/genes/{gene}/category/{column}/means`：该基因在指定分类上的均值（用于类别对比）
 - `GET /d/{dataset}/api/categories`：可用分类字段与取值
 - `GET /d/{dataset}/api/categories/{column}/colors`：分类颜色映射
+- `GET /d/{dataset}/api/categories/{column}/centroids`：分类中心点（按 `cell_count` 加权的 `(x,y)`）
 - `GET /d/{dataset}/api/categories/{column}/legend`：分类图例
 
 ### SOMA（实验级表达查询，TileDB-SOMA）

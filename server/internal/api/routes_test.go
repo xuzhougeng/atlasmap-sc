@@ -822,6 +822,86 @@ func TestCategoryLegendEndpoint(t *testing.T) {
 	}
 }
 
+func TestCategoryCentroidsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.close()
+
+	metadata := ts.zarrReader.Metadata()
+	var validCategory string
+	for cat := range metadata.Categories {
+		validCategory = cat
+		break
+	}
+	if validCategory == "" {
+		t.Skip("No categories available in test data")
+	}
+
+	tests := []struct {
+		name           string
+		column         string
+		expectedStatus int
+	}{
+		{
+			name:           "valid category centroids",
+			column:         validCategory,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "unknown category centroids",
+			column:         "unknown_category_xyz",
+			expectedStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Get(ts.server.URL + "/d/default/api/categories/" + tt.column + "/centroids")
+			if err != nil {
+				t.Fatalf("Failed to make request: %v", err)
+			}
+			defer resp.Body.Close()
+
+			assertStatusCode(t, resp, tt.expectedStatus)
+
+			if tt.expectedStatus == http.StatusOK {
+				assertContentType(t, resp, "application/json")
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("Failed to read response body: %v", err)
+				}
+
+				var centroids []map[string]interface{}
+				if err := json.Unmarshal(body, &centroids); err != nil {
+					t.Fatalf("Failed to parse centroids response: %v", err)
+				}
+				if len(centroids) == 0 {
+					t.Fatal("Expected non-empty centroids array")
+				}
+
+				item := centroids[0]
+				if _, ok := item["value"]; !ok {
+					t.Error("Expected centroid item to have 'value' field")
+				}
+				if _, ok := item["color"]; !ok {
+					t.Error("Expected centroid item to have 'color' field")
+				}
+				if _, ok := item["index"]; !ok {
+					t.Error("Expected centroid item to have 'index' field")
+				}
+				if _, ok := item["cell_count"]; !ok {
+					t.Error("Expected centroid item to have 'cell_count' field")
+				}
+				if _, ok := item["x"]; !ok {
+					t.Error("Expected centroid item to have 'x' field")
+				}
+				if _, ok := item["y"]; !ok {
+					t.Error("Expected centroid item to have 'y' field")
+				}
+			}
+		})
+	}
+}
+
 // TestCacheHeaders tests that tile endpoints return proper cache headers
 func TestCacheHeaders(t *testing.T) {
 	ts := setupTestServer(t)

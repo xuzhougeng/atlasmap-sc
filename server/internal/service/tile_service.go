@@ -42,6 +42,9 @@ type TileService struct {
 
 	geneCategoryMeansMu    sync.Mutex
 	geneCategoryMeansCache map[string][]GeneCategoryMeanItem
+
+	categoryCentroidsMu    sync.Mutex
+	categoryCentroidsCache map[string][]CategoryCentroidItem
 }
 
 // NewTileService creates a new tile service.
@@ -66,6 +69,7 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 		exprCache:              make(map[string]expressionCacheEntry),
 		catCache:               make(map[string][]int),
 		geneCategoryMeansCache: make(map[string][]GeneCategoryMeanItem),
+		categoryCentroidsCache: make(map[string][]CategoryCentroidItem),
 	}
 }
 
@@ -376,6 +380,16 @@ type CategoryLegendItem struct {
 	CellCount int    `json:"cell_count"`
 }
 
+type CategoryCentroidItem struct {
+	Value     string   `json:"value"`
+	Color     string   `json:"color"`
+	Index     int      `json:"index"`
+	BinCount  int      `json:"bin_count"`
+	CellCount int      `json:"cell_count"`
+	X         *float64 `json:"x"`
+	Y         *float64 `json:"y"`
+}
+
 // GetCategoryLegend returns legend data for a category column.
 func (s *TileService) GetCategoryLegend(column string) ([]CategoryLegendItem, error) {
 	catInfo, ok := s.zarr.Metadata().Categories[column]
@@ -423,6 +437,102 @@ func (s *TileService) GetCategoryLegend(column string) ([]CategoryLegendItem, er
 	}
 
 	return legend, nil
+}
+
+func (s *TileService) GetCategoryCentroids(column string) ([]CategoryCentroidItem, error) {
+	s.categoryCentroidsMu.Lock()
+	if cached, ok := s.categoryCentroidsCache[column]; ok {
+		s.categoryCentroidsMu.Unlock()
+		return cached, nil
+	}
+	s.categoryCentroidsMu.Unlock()
+
+	md := s.zarr.Metadata()
+	if md == nil {
+		return nil, fmt.Errorf("metadata not available")
+	}
+
+	catInfo, ok := md.Categories[column]
+	if !ok {
+		return nil, fmt.Errorf("category not found: %s", column)
+	}
+
+	colors, err := s.GetCategoryColors(column)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.loadBins(); err != nil {
+		return nil, err
+	}
+	catAll, err := s.categoryForColumn(column)
+	if err != nil {
+		return nil, err
+	}
+
+	nCats := len(catInfo.Values)
+	sumX := make([]float64, nCats)
+	sumY := make([]float64, nCats)
+	sumW := make([]float64, nCats)
+	binCounts := make([]int, nCats)
+	cellCounts := make([]int, nCats)
+
+	binsPerAxis := 1 << s.renderZoom
+	binSizeX := (md.Bounds.MaxX - md.Bounds.MinX) / float64(binsPerAxis)
+	binSizeY := (md.Bounds.MaxY - md.Bounds.MinY) / float64(binsPerAxis)
+
+	n := len(s.bins)
+	if len(catAll) < n {
+		n = len(catAll)
+	}
+	for i := 0; i < n; i++ {
+		catIdx := catAll[i]
+		if catIdx < 0 || catIdx >= nCats {
+			continue
+		}
+
+		w := float64(s.bins[i].CellCount)
+		if w <= 0 {
+			continue
+		}
+
+		binCounts[catIdx]++
+		cellCounts[catIdx] += int(s.bins[i].CellCount)
+
+		x := md.Bounds.MinX + (float64(s.bins[i].X)+0.5)*binSizeX
+		y := md.Bounds.MinY + (float64(s.bins[i].Y)+0.5)*binSizeY
+
+		sumX[catIdx] += x * w
+		sumY[catIdx] += y * w
+		sumW[catIdx] += w
+	}
+
+	out := make([]CategoryCentroidItem, nCats)
+	for idx, value := range catInfo.Values {
+		var cx *float64
+		var cy *float64
+		if sumW[idx] > 0 {
+			x := sumX[idx] / sumW[idx]
+			y := sumY[idx] / sumW[idx]
+			cx = &x
+			cy = &y
+		}
+		out[idx] = CategoryCentroidItem{
+			Value:     value,
+			Color:     colors[value],
+			Index:     idx,
+			BinCount:  binCounts[idx],
+			CellCount: cellCounts[idx],
+			X:         cx,
+			Y:         cy,
+		}
+	}
+
+	s.categoryCentroidsMu.Lock()
+	s.categoryCentroidsCache[column] = out
+	s.categoryCentroidsMu.Unlock()
+
+	return out, nil
 }
 
 // GetCategoryColors returns the color mapping for a category column.

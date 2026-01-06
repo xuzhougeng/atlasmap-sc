@@ -77,6 +77,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.Get("/genes/{gene}/category/{column}/means", datasetGeneCategoryMeansHandler)
 			r.Get("/categories", datasetCategoriesHandler)
 			r.Get("/categories/{column}/colors", datasetCategoryColorsHandler)
+			r.Get("/categories/{column}/centroids", datasetCategoryCentroidsHandler)
 			r.Get("/categories/{column}/legend", datasetCategoryLegendHandler)
 			r.Get("/stats", datasetStatsHandler)
 			r.Get("/soma/expression", datasetSomaExpressionHandler)
@@ -237,6 +238,15 @@ func datasetCategoryColorsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	categoryColorsHandler(svc)(w, r)
+}
+
+func datasetCategoryCentroidsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not found", http.StatusInternalServerError)
+		return
+	}
+	categoryCentroidsHandler(svc)(w, r)
 }
 
 func datasetCategoryLegendHandler(w http.ResponseWriter, r *http.Request) {
@@ -622,6 +632,25 @@ func categoryColorsHandler(svc *service.TileService) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(colors)
+	}
+}
+
+func categoryCentroidsHandler(svc *service.TileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		column := chi.URLParam(r, "column")
+
+		centroids, err := svc.GetCategoryCentroids(column)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if strings.Contains(err.Error(), "not found") {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(centroids)
 	}
 }
 

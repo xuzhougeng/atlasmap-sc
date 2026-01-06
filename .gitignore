@@ -24,6 +24,7 @@ vendor/
 
 # Data files (large)
 /data
+*.rds
 *.h5ad
 *.zarr/
 *.soma/
