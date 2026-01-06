@@ -234,6 +234,16 @@ async function init() {
     let currentCategoryFilter: string[] | null = null;
     let showCategoryLabels = true;
 
+    const labelsBtn = document.getElementById('btn-labels') as HTMLButtonElement | null;
+    if (labelsBtn) {
+        labelsBtn.classList.toggle('active', showCategoryLabels);
+        labelsBtn.addEventListener('click', () => {
+            showCategoryLabels = !showCategoryLabels;
+            labelsBtn.classList.toggle('active', showCategoryLabels);
+            void refreshCategoryLabels();
+        });
+    }
+
     const refreshCategoryLabels = async (): Promise<void> => {
         mapController.setCategoryLabelsVisible(showCategoryLabels);
         if (!showCategoryLabels) {
@@ -313,23 +323,6 @@ async function init() {
         categoryColumnSelector.setSelectedCategory(defaultCategory);
         currentCategoryColumn = defaultCategory;
     }
-
-    const categoryLabelToggleContainer = document.createElement('div');
-    categoryLabelToggleContainer.className = 'category-label-toggle';
-    categoryLabelToggleContainer.innerHTML = `
-        <label class="toggle-row" title="Show/hide category labels on the map">
-            <input type="checkbox" id="toggle-category-labels" checked />
-            <span>Show labels</span>
-        </label>
-    `;
-    categoryContainer.appendChild(categoryLabelToggleContainer);
-    const showLabelsCheckbox = categoryLabelToggleContainer.querySelector(
-        '#toggle-category-labels'
-    ) as HTMLInputElement | null;
-    showLabelsCheckbox?.addEventListener('change', () => {
-        showCategoryLabels = !!showLabelsCheckbox.checked;
-        void refreshCategoryLabels();
-    });
 
     // Create category legend container
     const categoryLegendContainer = document.createElement('div');
