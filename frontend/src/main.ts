@@ -65,6 +65,51 @@ async function fetchDatasets(): Promise<DatasetsResponse> {
     return response.json();
 }
 
+// Resolve gene_id to matching datasets
+interface GeneLookupResponse {
+    gene_id: string;
+    datasets: string[];
+}
+
+async function lookupGene(geneId: string): Promise<GeneLookupResponse> {
+    const response = await fetch(`/api/gene_lookup?gene_id=${encodeURIComponent(geneId)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to lookup gene: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+// Show gene dataset selection dialog when gene matches multiple datasets
+function showGeneDatasetSelector(geneId: string, datasets: string[]): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'gene-dataset-overlay';
+    overlay.innerHTML = `
+        <div class="gene-dataset-modal">
+            <h2>Select Dataset</h2>
+            <p>Gene <strong>${geneId}</strong> found in multiple datasets:</p>
+            <div class="gene-dataset-list">
+                ${datasets.map(ds => `
+                    <button class="gene-dataset-btn" data-dataset="${ds}">${ds}</button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    overlay.querySelectorAll('.gene-dataset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dataset = (btn as HTMLElement).dataset.dataset;
+            if (dataset) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('dataset', dataset);
+                url.searchParams.set('gene', geneId);
+                window.location.href = url.toString();
+            }
+        });
+    });
+    
+    document.body.appendChild(overlay);
+}
+
 // Create dataset selector dropdown
 function createDatasetSelector(
     container: HTMLElement,
@@ -235,9 +280,40 @@ async function init() {
         document.title = datasetsInfo.title;
     }
 
-    // Determine which dataset to use
+    // Check for gene auto-resolution: if gene is provided but dataset is missing/invalid
+    const urlParams = new URLSearchParams(window.location.search);
+    const geneFromUrl = urlParams.get('gene');
     const urlDataset = getCurrentDatasetFromUrl();
     const validDatasetIds = datasetsInfo.datasets.map(d => d.id);
+
+    // If gene is provided but dataset is missing or invalid, try to auto-resolve
+    if (geneFromUrl && (!urlDataset || !validDatasetIds.includes(urlDataset))) {
+        try {
+            console.log('Auto-resolving dataset for gene:', geneFromUrl);
+            const lookup = await lookupGene(geneFromUrl);
+            
+            if (lookup.datasets.length === 1) {
+                // Single match: redirect automatically
+                const url = new URL(window.location.href);
+                url.searchParams.set('dataset', lookup.datasets[0]);
+                url.searchParams.set('gene', geneFromUrl);
+                window.location.href = url.toString();
+                return;
+            } else if (lookup.datasets.length > 1) {
+                // Multiple matches: show selection dialog
+                showGeneDatasetSelector(geneFromUrl, lookup.datasets);
+                return;
+            } else {
+                // No match: show warning but continue with default dataset
+                console.warn(`Gene ${geneFromUrl} not found in any dataset`);
+            }
+        } catch (error) {
+            console.error('Failed to lookup gene:', error);
+            // Continue with normal flow
+        }
+    }
+
+    // Determine which dataset to use
     let currentDataset: string;
 
     if (urlDataset && validDatasetIds.includes(urlDataset)) {
@@ -639,25 +715,25 @@ async function init() {
     });
 
     // Handle gene parameter from URL (e.g., from DE results page)
-    const urlParams = new URLSearchParams(window.location.search);
-    const geneFromUrl = urlParams.get('gene');
-    if (geneFromUrl) {
-        console.log('Gene from URL:', geneFromUrl);
-        state.setState({ colorMode: 'expression', colorGene: geneFromUrl });
+    const geneUrlParams = new URLSearchParams(window.location.search);
+    const geneParamFromUrl = geneUrlParams.get('gene');
+    if (geneParamFromUrl) {
+        console.log('Gene from URL:', geneParamFromUrl);
+        state.setState({ colorMode: 'expression', colorGene: geneParamFromUrl });
         tabPanel.switchTab('expression');
         mapController.setExpressionGene(
-            geneFromUrl,
+            geneParamFromUrl,
             state.getState().colorScale,
             expressionRangeSelector?.getRange() ?? null
         );
         categoryLegend.hide();
         void refreshExpressionColorbar();
-        cellQueryPanel?.setGene(geneFromUrl);
+        cellQueryPanel?.setGene(geneParamFromUrl);
 
         // Update gene input to show the selected gene
         const geneInput = document.getElementById('gene-input') as HTMLInputElement | null;
         if (geneInput) {
-            geneInput.value = geneFromUrl;
+            geneInput.value = geneParamFromUrl;
         }
     }
 
@@ -946,6 +1022,13 @@ function setupToolbar(
             url.pathname = '/de.html';
             url.searchParams.set('dataset', datasetId);
             window.location.href = url.toString();
+        });
+    }
+
+    const blastpBtn = document.getElementById('btn-blastp') as HTMLButtonElement | null;
+    if (blastpBtn) {
+        blastpBtn.addEventListener('click', () => {
+            window.location.href = '/blastp.html';
         });
     }
 }

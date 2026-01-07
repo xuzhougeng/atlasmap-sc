@@ -153,6 +153,10 @@ func main() {
 		if ds.H5ADPath != "" {
 			registry.SetH5ADPath(datasetID, ds.H5ADPath)
 		}
+		if ds.BlastPPath != "" {
+			registry.SetBlastPPath(datasetID, ds.BlastPPath)
+			log.Printf("  [%s] BLASTP database: %s", datasetID, ds.BlastPPath)
+		}
 	}
 
 	// Initialize job manager for DE jobs (SQLite persistence)
@@ -175,11 +179,32 @@ func main() {
 	jobManager.Start()
 	defer jobManager.Stop()
 
+	// Initialize BLAST job manager (using same config as DE for simplicity)
+	blastJobManager, err := api.NewBlastJobManager(api.BlastJobManagerConfig{
+		MaxConcurrent: cfg.DE.MaxConcurrent,
+		SQLitePath:    "./data/blast_jobs.sqlite",
+		RetentionDays: cfg.DE.RetentionDays,
+		CleanupPeriod: 1 * time.Hour,
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize BLAST job manager: %v", err)
+	}
+	log.Printf("BLAST job manager: max_concurrent=%d, retention_days=%d",
+		cfg.DE.MaxConcurrent, cfg.DE.RetentionDays)
+
+	// Wire up BLAST service as job executor
+	blastService := service.NewBlastService(registry)
+	blastJobManager.Executor = blastService.ExecuteBlastJob
+
+	blastJobManager.Start()
+	defer blastJobManager.Stop()
+
 	// Set up HTTP router
 	router := api.NewRouter(api.RouterConfig{
-		Registry:    registry,
-		CORSOrigins: cfg.Server.CORSOrigins,
-		JobManager:  jobManager,
+		Registry:        registry,
+		CORSOrigins:     cfg.Server.CORSOrigins,
+		JobManager:      jobManager,
+		BlastJobManager: blastJobManager,
 	})
 
 	// Create HTTP server

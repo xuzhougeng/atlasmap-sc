@@ -79,9 +79,11 @@ data:
   pbmc:
     zarr_path: "/data/pbmc/zarr/bins.zarr"
     soma_path: "/data/pbmc/soma"
+    blastp_path: "/data/pbmc/blast/proteins"  # 可选：BLASTP 数据库路径前缀
   liver:
     zarr_path: "/data/liver/zarr/bins.zarr"
     soma_path: "/data/liver/soma"
+    blastp_path: "/data/liver/blast/proteins"
 
 cache:
   tile_size_mb: 512
@@ -98,6 +100,28 @@ de:
 ```
 
 多数据集时，前端会显示数据集选择下拉框，用户可以切换不同的数据集。
+
+### BLASTP 数据库配置
+
+`blastp_path` 指定 BLASTP 数据库的路径前缀（不含 `.phr`、`.pin`、`.psq` 等扩展名）。该路径直接用于 `blastp -db` 参数。
+
+**要求**：
+- 系统 PATH 中需有 `blastp` 可执行文件（NCBI BLAST+）
+- 数据库需使用 `makeblastdb` 预先构建
+- BLAST 输出的 `sseqid` 字段应与数据集中的 `gene_id` 一致
+
+**示例：构建 BLASTP 数据库**
+
+```bash
+# 假设 proteins.fasta 中序列 ID 格式为 >Afi_001234
+makeblastdb -in proteins.fasta -dbtype prot -out /data/pbmc/blast/proteins
+```
+
+**多数据集共享同一数据库**
+
+如果多个数据集配置了相同的 `blastp_path`，后端会：
+1. 对该数据库只执行一次 `blastp` 命令（去重执行，节省资源）
+2. 将结果展开到所有关联的数据集（结果表中会出现多行，每个数据集一行）
 
 ## 多坐标系（coord，可选）
 

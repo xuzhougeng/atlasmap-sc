@@ -8,9 +8,10 @@ import (
 
 // DatasetInfo contains information about a dataset for the API response.
 type DatasetInfo struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	HasH5AD bool   `json:"has_h5ad,omitempty"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	HasH5AD   bool   `json:"has_h5ad,omitempty"`
+	HasBlastP bool   `json:"has_blastp,omitempty"`
 }
 
 // DatasetRegistry holds tile services for all configured datasets.
@@ -20,6 +21,7 @@ type DatasetRegistry struct {
 	datasetOrder   []string
 	title          string
 	h5adPaths      map[string]string
+	blastpPaths    map[string]string
 }
 
 type datasetServices struct {
@@ -35,6 +37,7 @@ func NewDatasetRegistry(defaultDataset string, order []string, title string) *Da
 		datasetOrder:   order,
 		title:          title,
 		h5adPaths:      make(map[string]string),
+		blastpPaths:    make(map[string]string),
 	}
 }
 
@@ -96,6 +99,46 @@ func (r *DatasetRegistry) HasH5AD(datasetID string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// SetBlastPPath sets the BLASTP database path for a dataset.
+// An empty path disables BLASTP for the dataset.
+func (r *DatasetRegistry) SetBlastPPath(datasetID string, path string) {
+	if path == "" {
+		delete(r.blastpPaths, datasetID)
+		return
+	}
+	r.blastpPaths[datasetID] = path
+}
+
+// BlastPPath returns the configured BLASTP database path for a dataset (may be empty).
+func (r *DatasetRegistry) BlastPPath(datasetID string) string {
+	return r.blastpPaths[datasetID]
+}
+
+// HasBlastP reports whether the dataset has a configured BLASTP database.
+// Checks if at least one of the expected BLAST DB files exists (e.g., .phr, .pin, .psq).
+func (r *DatasetRegistry) HasBlastP(datasetID string) bool {
+	path := r.blastpPaths[datasetID]
+	if path == "" {
+		return false
+	}
+	// Check for common BLAST DB file extensions
+	for _, ext := range []string{".phr", ".pin", ".psq", ".pal"} {
+		if _, err := os.Stat(path + ext); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// BlastPPaths returns a map of all configured BLASTP paths (datasetID -> path).
+func (r *DatasetRegistry) BlastPPaths() map[string]string {
+	result := make(map[string]string, len(r.blastpPaths))
+	for k, v := range r.blastpPaths {
+		result[k] = v
+	}
+	return result
 }
 
 // Get returns the tile service for a dataset, or nil if not found.
@@ -164,9 +207,10 @@ func (r *DatasetRegistry) Datasets() []DatasetInfo {
 	for _, id := range r.datasetOrder {
 		// Use the config ID as the display name (user-defined in server.yaml)
 		infos = append(infos, DatasetInfo{
-			ID:      id,
-			Name:    id,
-			HasH5AD: r.HasH5AD(id),
+			ID:        id,
+			Name:      id,
+			HasH5AD:   r.HasH5AD(id),
+			HasBlastP: r.HasBlastP(id),
 		})
 	}
 	return infos

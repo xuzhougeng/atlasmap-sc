@@ -1064,3 +1064,68 @@
         -1px 0 0 rgba(0, 0, 0, 0.9),
         0 0 6px rgba(0, 0, 0, 0.6);
 }
+
+/* Gene Dataset Selector Modal */
+.gene-dataset-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(4px);
+}
+
+.gene-dataset-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px 32px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.gene-dataset-modal h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+}
+
+.gene-dataset-modal p {
+    color: var(--text-secondary);
+    margin: 0 0 20px 0;
+    font-size: 0.9rem;
+}
+
+.gene-dataset-modal p strong {
+    color: var(--accent-primary);
+    font-family: monospace;
+}
+
+.gene-dataset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gene-dataset-btn {
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.gene-dataset-btn:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}

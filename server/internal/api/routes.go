@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/soma-tiles/server/internal/blaststore"
 	"github.com/soma-tiles/server/internal/data/soma"
 	"github.com/soma-tiles/server/internal/destore"
 	"github.com/soma-tiles/server/internal/service"
@@ -27,9 +28,10 @@ import (
 
 // RouterConfig contains router configuration.
 type RouterConfig struct {
-	Registry    *DatasetRegistry
-	CORSOrigins []string
-	JobManager  *JobManager
+	Registry        *DatasetRegistry
+	CORSOrigins     []string
+	JobManager      *JobManager
+	BlastJobManager *BlastJobManager
 }
 
 // NewRouter creates a new HTTP router.
@@ -59,6 +61,17 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 
 	// Global datasets endpoint (not dataset-scoped)
 	r.Get("/api/datasets", datasetsHandler(cfg.Registry))
+
+	// Global gene_lookup endpoint (resolves gene_id -> matching datasets)
+	r.Get("/api/gene_lookup", geneLookupHandler(cfg.Registry))
+
+	// Global BLASTP job endpoints (not dataset-scoped)
+	r.Route("/api/blastp/jobs", func(r chi.Router) {
+		r.Post("/", blastJobSubmitHandler(cfg.BlastJobManager))
+		r.Get("/{job_id}", blastJobStatusHandler(cfg.BlastJobManager))
+		r.Get("/{job_id}/result", blastJobResultHandler(cfg.BlastJobManager))
+		r.Delete("/{job_id}", blastJobCancelHandler(cfg.BlastJobManager))
+	})
 
 	// Dataset-scoped routes: /d/{dataset}/...
 	r.Route("/d/{dataset}", func(r chi.Router) {
@@ -149,6 +162,38 @@ func datasetsHandler(registry *DatasetRegistry) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// geneLookupHandler resolves a gene_id to the list of datasets containing it.
+func geneLookupHandler(registry *DatasetRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		geneID := strings.TrimSpace(r.URL.Query().Get("gene_id"))
+		if geneID == "" {
+			http.Error(w, "missing required query param: gene_id", http.StatusBadRequest)
+			return
+		}
+
+		var matchingDatasets []string
+		for _, dsID := range registry.DatasetIDs() {
+			svc := registry.Get(dsID)
+			if svc == nil {
+				continue
+			}
+			md := svc.Metadata()
+			if md.GeneIndex == nil {
+				continue
+			}
+			if _, ok := md.GeneIndex[geneID]; ok {
+				matchingDatasets = append(matchingDatasets, dsID)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"gene_id":  geneID,
+			"datasets": matchingDatasets,
+		})
 	}
 }
 
@@ -1148,4 +1193,183 @@ func datasetSomaObsValuesHandler(w http.ResponseWriter, r *http.Request) {
 		"column": column,
 		"values": values,
 	})
+}
+
+// BLAST Job handlers
+
+type blastJobSubmitRequest struct {
+	Sequence   string   `json:"sequence"`
+	MaxHits    int      `json:"max_hits"`
+	Evalue     float64  `json:"evalue"`
+	Datasets   []string `json:"datasets"`
+	NumThreads int      `json:"num_threads"`
+}
+
+func blastJobSubmitHandler(jm *BlastJobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "blast job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		var req blastJobSubmitRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate required fields
+		if strings.TrimSpace(req.Sequence) == "" {
+			http.Error(w, "sequence is required", http.StatusBadRequest)
+			return
+		}
+
+		// Apply defaults
+		if req.MaxHits <= 0 {
+			req.MaxHits = 10
+		}
+		if req.MaxHits > 100 {
+			req.MaxHits = 100
+		}
+		if req.Evalue <= 0 {
+			req.Evalue = 1e-5
+		}
+		if req.NumThreads <= 0 {
+			req.NumThreads = 1
+		}
+		if req.NumThreads > 4 {
+			req.NumThreads = 4
+		}
+
+		params := blaststore.BlastJobParams{
+			Sequence:   req.Sequence,
+			MaxHits:    req.MaxHits,
+			Evalue:     req.Evalue,
+			Datasets:   req.Datasets,
+			NumThreads: req.NumThreads,
+		}
+
+		job, err := jm.Submit(params)
+		if err != nil {
+			http.Error(w, "failed to submit job: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id": job.ID,
+			"status": job.Status,
+		})
+	}
+}
+
+func blastJobStatusHandler(jm *BlastJobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "blast job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      job.ID,
+			"status":      job.Status,
+			"created_at":  job.CreatedAt,
+			"started_at":  job.StartedAt,
+			"finished_at": job.FinishedAt,
+			"progress":    job.Progress,
+			"error":       job.Error,
+		})
+	}
+}
+
+func blastJobResultHandler(jm *BlastJobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "blast job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		if job.Status != blaststore.JobStatusCompleted {
+			http.Error(w, "job not completed (status: "+string(job.Status)+")", http.StatusBadRequest)
+			return
+		}
+
+		// Parse pagination and order params
+		offset := 0
+		limit := 100
+		orderBy := r.URL.Query().Get("order_by")
+		if orderBy == "" {
+			orderBy = "bitscore"
+		}
+		if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+			if v, err := strconv.Atoi(offsetStr); err == nil && v >= 0 {
+				offset = v
+			}
+		}
+		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+				limit = v
+				if limit > 500 {
+					limit = 500
+				}
+			}
+		}
+
+		// Query results from SQLite
+		items, total, err := jm.Store().QueryResults(jobID, orderBy, offset, limit)
+		if err != nil {
+			http.Error(w, "failed to query results: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"params":   job.Params,
+			"total":    total,
+			"offset":   offset,
+			"limit":    limit,
+			"order_by": orderBy,
+			"items":    items,
+		})
+	}
+}
+
+func blastJobCancelHandler(jm *BlastJobManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if jm == nil {
+			http.Error(w, "blast job manager not configured", http.StatusNotImplemented)
+			return
+		}
+
+		jobID := chi.URLParam(r, "job_id")
+		job := jm.Get(jobID)
+		if job == nil {
+			http.Error(w, "job not found", http.StatusNotFound)
+			return
+		}
+
+		jm.Cancel(jobID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":    jobID,
+			"cancelled": true,
+		})
+	}
 }

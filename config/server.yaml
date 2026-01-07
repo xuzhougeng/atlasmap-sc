@@ -14,16 +14,21 @@ server:
 # Multi-dataset format:
 data:
   blood:
-    zarr_path: "/data/xzg_data/software/soma-tiles/data/blood/zarr/bins.zarr"
-    soma_path: "/data/xzg_data/software/soma-tiles/data/blood/soma"
-  retina:
-    zarr_path: "/data/xzg_data/software/soma-tiles/data/retina/zarr/bins.zarr"
-    soma_path: "/data/xzg_data/software/soma-tiles/data/retina/soma"
+    zarr_path: "/data/xzg_data/software/soma-tiles/data/Afi_anno_251214/zarr/bins.zarr"
+    # Optional: BLASTP database path (prefix, without .phr/.pin/.psq extensions)
+    # blastp_path: "/path/to/blast/db/proteins"
 # The first dataset in the list becomes the default.
 
+# Example with BLASTP and SOMA:
 # data:
-#   zarr_path: "/data/xzg_data/software/soma-tiles/data/pbmc/zarr/bins.zarr"
-#   soma_path: "/data/xzg_data/software/soma-tiles/data/pbmc/soma"
+#   pbmc:
+#     zarr_path: "/data/pbmc/zarr/bins.zarr"
+#     soma_path: "/data/pbmc/soma"
+#     blastp_path: "/data/pbmc/blast/proteins"
+#   liver:
+#     zarr_path: "/data/liver/zarr/bins.zarr"
+#     soma_path: "/data/liver/soma"
+#     blastp_path: "/data/liver/blast/proteins"
 
 cache:
   tile_size_mb: 512

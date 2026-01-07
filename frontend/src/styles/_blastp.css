@@ -1,0 +1,177 @@
+/* BLASTP Page Styles */
+
+.blastp-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.blastp-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.blastp-form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.blastp-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.blastp-textarea {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.875rem;
+    resize: vertical;
+    min-height: 150px;
+}
+
+.blastp-textarea:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.blastp-textarea::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.blastp-input {
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.blastp-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.blastp-dataset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+}
+
+.blastp-dataset-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.blastp-dataset-item:hover {
+    border-color: var(--accent-primary);
+}
+
+.blastp-dataset-item input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+}
+
+.blastp-dataset-item span {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.blastp-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.blastp-notice svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    stroke: #f0ad4e;
+}
+
+.blastp-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 8px;
+}
+
+.blastp-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.blastp-submit-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.blastp-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.blastp-submit-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* BLASTP Result Table */
+.blastp-table-panel {
+    width: 100%;
+}
+
+.blastp-result-table {
+    width: 100%;
+}
+
+.blastp-dataset-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent-primary);
+}
+
+/* Result page without volcano plot */
+.blastp-result-page .de-result-main {
+    display: block;
+}
+
+.blastp-result-page .de-result-table-panel {
+    flex: none;
+    max-height: none;
+}
+

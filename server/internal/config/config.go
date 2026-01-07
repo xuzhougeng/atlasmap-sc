@@ -32,6 +32,10 @@ type DatasetConfig struct {
 	// Optional: path to downloadable H5AD file for this dataset.
 	// If unset, the UI will not show a download button.
 	H5ADPath string `yaml:"h5ad_path"`
+	// Optional: path/prefix to BLASTP database for this dataset.
+	// Used directly with `blastp -db <blastp_path>`.
+	// The sseqid from BLAST output is expected to match gene_id in the dataset.
+	BlastPPath string `yaml:"blastp_path"`
 }
 
 // DataConfig contains data source settings (supports legacy single or multi-dataset).

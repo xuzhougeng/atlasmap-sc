@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOMA-Tiles - BLASTP Results</title>
+</head>
+<body class="de-page blastp-result-page">
+    <div id="app">
+        <header class="header">
+            <a class="header-title" href="/">SOMA-Tiles</a>
+            <div class="header-info" id="dataset-info"></div>
+        </header>
+
+        <main class="page-main">
+            <div class="page-card">
+                <div class="page-card-header">
+                    <div>
+                        <h2 class="page-title">BLASTP Results</h2>
+                        <div class="page-subtitle">Click on a gene to view its expression pattern in the selected dataset.</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <a class="de-result-btn" id="btn-job" href="#">Job Status</a>
+                        <a class="de-result-btn" id="btn-back" href="/">Back to Map</a>
+                    </div>
+                </div>
+                <div id="blastp-result-root"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/src/blastp_result.ts"></script>
+</body>
+</html>
+

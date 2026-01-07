@@ -13,6 +13,13 @@
 ### 数据集（全局）
 
 - `GET /api/datasets`：列出可用数据集与默认数据集（该接口不加 `/d/{dataset}`）
+  - Response 包含 `has_blastp` 字段标识是否配置了 BLASTP 数据库
+
+### 基因查找（全局）
+
+- `GET /api/gene_lookup?gene_id={gene_id}`：查找包含指定基因的数据集列表（用于跨数据集导航）
+  - Response: `{ "gene_id": "...", "datasets": ["dataset1", "dataset2", ...] }`
+  - 当 URL 只提供 `gene` 参数时，前端会自动调用此接口定位数据集
 
 ### API（JSON）
 
@@ -144,6 +151,67 @@ curl 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785/result | 
 - **TTL 清理**：完成的任务默认保留 **7 天**（`de.retention_days`），到期自动清理
 - 每组最多采样 20000 细胞（`max_cells_per_group`）
 - 默认同时运行最多 1 个 DE 任务（可通过配置 `de.max_concurrent` 调整），其余排队
+
+### BLASTP 蛋白序列检索（全局）
+
+> 用于跨数据集检索同源基因。BLASTP 搜索各数据集配置的蛋白数据库，返回 hit 列表。
+
+#### 提交 BLASTP 任务
+
+- `POST /api/blastp/jobs`
+  - Body（JSON）：
+    - `sequence`: string（蛋白序列，FASTA 格式或纯序列）
+    - `max_hits`: int（每个数据库最大命中数，默认 10，上限 100）
+    - `evalue`: float（E-value 阈值，默认 1e-5）
+    - `datasets`: string[]（可选，限定搜索的数据集；空表示搜索所有配置了 blastp_path 的数据集）
+    - `num_threads`: int（每个 blastp 进程的线程数，默认 1，上限 4）
+  - Response: `{ "job_id": "...", "status": "queued" }`
+
+示例：
+
+```bash
+curl -X POST 'http://localhost:8080/api/blastp/jobs' \
+  -H 'Content-Type: application/json' \
+  -d '{"sequence":">query\nMSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGK","max_hits":10}'
+```
+
+#### 查询状态
+
+- `GET /api/blastp/jobs/{job_id}`
+  - Response: `{ job_id, status, created_at, started_at, finished_at, progress:{phase,done,total}, error }`
+  - `status`: `queued|running|completed|failed|cancelled`
+
+#### 拉取结果
+
+- `GET /api/blastp/jobs/{job_id}/result?offset=&limit=&order_by=`
+  - 仅当 `status=completed` 时可用
+  - Query 参数：
+    - `offset`：起始位置（默认 0）
+    - `limit`：返回条数（默认 100，上限 500）
+    - `order_by`：排序方式，可选值：`bitscore`（默认）、`evalue`、`pident`、`length`
+  - Response:
+    ```json
+    {
+      "params": {...},
+      "total": 25,
+      "offset": 0, "limit": 100,
+      "order_by": "bitscore",
+      "items": [
+        {"dataset_id":"blood", "gene_id":"Afi_001234", "pident":95.5, "length":250, "evalue":1e-50, "bitscore":450},
+        ...
+      ]
+    }
+    ```
+
+#### 取消任务
+
+- `DELETE /api/blastp/jobs/{job_id}`
+
+#### 共享数据库处理
+
+当多个数据集配置了相同的 `blastp_path` 时：
+- 后端对每个唯一的 `blastp_path` 只运行一次 `blastp` 命令（去重执行）
+- 结果会为每个使用该数据库的数据集生成一行（即相同基因会在结果中出现多次，分别对应不同数据集）
 
 ### Tiles（PNG）
 
