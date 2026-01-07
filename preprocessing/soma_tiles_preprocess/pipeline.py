@@ -176,8 +176,10 @@ class PreprocessingPipeline:
 
         # Determine which columns to include
         columns = self.config.category_columns.copy()
-        if not columns and self.config.default_category in self.adata.obs.columns:
-            columns = [self.config.default_category]
+        # If user didn't specify any category columns, default to ALL obs columns.
+        # (Numeric columns will be handled separately as numeric_medians.)
+        if not columns:
+            columns = list(self.adata.obs.columns)
 
         for col in columns:
             if col not in self.adata.obs.columns:

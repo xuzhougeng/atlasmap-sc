@@ -85,7 +85,7 @@ def main():
     "--category", "-c",
     "categories",
     multiple=True,
-    help="Category columns to include (can specify multiple)",
+    help="Obs columns to include for aggregation (can specify multiple). If omitted, defaults to ALL obs columns.",
 )
 @click.option(
     "--chunk-size",

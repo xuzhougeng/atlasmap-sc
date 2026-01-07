@@ -95,7 +95,7 @@ soma-preprocess from-config -c config.yaml
 | `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
 | `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
 | `--no-soma` | | | 禁用 TileDBSOMA 存储（默认启用） |
-| `--category` | `-c` | | 要包含的类别列（可多次指定） |
+| `--category` | `-c` | 全部（obs 列） | 要包含的 obs 列（可多次指定）。不指定时默认包含所有 `adata.obs` 列（数值列会按 median 聚合，非数值列会按类别计数）。 |
 | `--chunk-size` | | `256` | Zarr chunk 大小 |
 | `--batch-size` | | `100000` | 处理批次大小 |
 | `--name` | | | 数据集名称 |
@@ -261,7 +261,7 @@ output/
 3. **基因选择**：
    - 默认模式：选择 top N 基因（HVG + 标记基因 + 高表达基因）
    - `--all-expressed` 模式：使用所有在至少 `--min-cells`（默认 3）个细胞中表达的基因
-4. **类别映射**：为指定的 obs 列构建类别到索引的映射
+4. **类别/数值列处理**：为指定的 obs 列构建类别到索引的映射；数值列会在 bin 内计算 median
 5. **多分辨率分箱**：
    - 对每个缩放级别，使用四叉树算法分配 bin
    - 聚合每个 bin 内的表达量（平均值、最大值）
