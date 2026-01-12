@@ -80,6 +80,33 @@ soma-preprocess init-config -o config.yaml
 soma-preprocess from-config -c config.yaml
 ```
 
+## 自动复用 Zarr 输出
+
+如果 `output_dir/zarr/metadata.json` 已存在，预处理会**自动检测并跳过 Zarr 生成**，直接复用现有的 Zarr 输出并继续后续步骤（如生成 SOMA）。
+
+**典型使用场景：** 先用 `--no-soma` 快速生成 Zarr，稍后再补写 SOMA。
+
+```bash
+# 第一次运行：只生成 Zarr（跳过 SOMA 以节省时间）
+soma-preprocess run -i data.h5ad -o ./output --no-soma
+
+# 第二次运行：自动复用 Zarr，只生成 SOMA
+soma-preprocess run -i data.h5ad -o ./output
+# 输出会提示：
+# ============================================================
+# Detected existing Zarr metadata at: ./output/zarr/metadata.json
+# Skipping Zarr generation and reusing existing metadata.
+# To regenerate Zarr, delete the output_dir/zarr/ directory.
+# ============================================================
+```
+
+**如何强制重新生成 Zarr：** 删除 `output_dir/zarr/` 目录即可。
+
+```bash
+rm -rf ./output/zarr/
+soma-preprocess run -i data.h5ad -o ./output
+```
+
 ## 命令行参数
 
 ### `soma-preprocess run`
@@ -256,6 +283,8 @@ output/
 
 ## 处理流程
 
+### 完整流程（首次运行）
+
 1. **加载数据**：读取 H5AD 文件
 2. **坐标处理**：从 `obsm` 提取指定坐标键（可多个）并归一化到 `[0, 256)` 范围
 3. **基因选择**：
@@ -267,7 +296,19 @@ output/
    - 聚合每个 bin 内的表达量（平均值、最大值）
    - 统计每个 bin 内的类别分布
 6. **写入 Zarr**：将分箱数据写入压缩的 Zarr 格式
-7. **生成元数据**：输出 `metadata.json` 和 `gene_index.json`
+7. **写入 SOMA**（可选）：使用 TileDBSOMA 存储完整表达矩阵
+8. **生成元数据**：输出 `metadata.json` 和 `gene_index.json`
+
+### 复用模式（检测到已有 Zarr 输出）
+
+如果 `output_dir/zarr/metadata.json` 存在，流程会自动简化：
+
+1. **加载数据**：读取 H5AD 文件
+2. **加载现有元数据**：从 `metadata.json` 读取基因列表、类别、配置参数
+3. **坐标处理**：仅处理默认坐标系（用于 SOMA）
+4. **跳过** 基因选择、类别映射、Zarr 分箱（复用已有输出）
+5. **写入 SOMA**（可选）：使用复用的基因列表和类别信息
+6. **更新元数据**：仅更新 `metadata.json` 中的 SOMA 相关标记
 
 ## 技术细节
 

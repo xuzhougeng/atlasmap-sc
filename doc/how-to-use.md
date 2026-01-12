@@ -108,7 +108,7 @@ soma-preprocess from-config -c config.yaml
 
 使用 `visualize` 命令生成静态图片，验证预处理输出是否正确：
 
-> 提示：这里的 `zoom` 表示“分箱分辨率”（越大越细）。以默认 `--zoom-levels 8` 为例：
+> 提示：这里的 `zoom` 表示"分箱分辨率"（越大越细）。以默认 `--zoom-levels 8` 为例：
 > - `zoom=0`：1×1 个 bin，画出来通常只有 1 个点/块（非常粗）
 > - `zoom=7`：128×128 个 bin，能看到完整的 UMAP 结构（建议作为默认检查/展示层）
 
@@ -133,6 +133,119 @@ figures/
     ├── GENE1_zoom_7.png
     └── GENE1_multi_zoom.png
 ```
+
+### 1.6) 构建 BLASTP 数据库（可选，用于多物种检索）
+
+如果需要使用 BLASTP 进行跨数据集的同源基因检索，需要为每个数据集构建蛋白序列数据库。
+
+#### 前置要求
+
+- 安装 NCBI BLAST+ 工具包（包含 `makeblastdb` 和 `blastp` 命令）
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install ncbi-blast+
+
+# macOS
+brew install blast
+
+# 或使用 conda
+conda install -c bioconda blast
+```
+
+#### 准备蛋白序列文件
+
+蛋白序列文件需要是 FASTA 格式，
+
+```fasta
+>Afi_001234
+MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPT
+LVTTFSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDT
+>Afi_005678
+MVHLTPEEKSAVTALWGKVNVDEVGGEALGRLLVVYPWTQRFFESFGDLSTPDAVMGNP
+KVKAHGKKVLGAFSDGLAHLDNLKGTFATLSELHCDKLHVDPENFRLLGNVLVCVLAHH
+>Afi_009999
+MALTVRIQAACLLLLLLAAALCPTHGAAAGGSTKEVVEEAENGRDAPANGNAENEENRQ
+```
+
+**重要提示**：
+- 序列 ID **必须**与数据集中的 `gene_id` 一致
+- 序列 ID（`>` 后面的部分）会作为 BLASTP 结果的 `sseqid` 字段
+- 这个 ID 必须能在数据集的 `gene_index.json` 中找到，否则前端无法跳转到表达视图
+- 建议使用数据集中的基因 ID 作为序列 ID，而非基因名称或其他标识符
+
+#### 构建数据库
+
+```bash
+# 基本用法
+makeblastdb -in proteins.fasta -dbtype prot -out /path/to/blast/db/proteins
+
+# 示例：为 human 数据集构建数据库
+mkdir -p data/preprocessed/blast
+makeblastdb -in data/raw/human_proteins.fasta \
+            -dbtype prot \
+            -out data/preprocessed/blast/human_proteins
+```
+
+这会生成以下文件：
+```
+data/preprocessed/blast/
+├── human_proteins.phr    # 头信息
+├── human_proteins.pin    # 索引
+├── human_proteins.psq    # 序列数据
+└── human_proteins.pal    # (可选) 别名
+```
+
+#### 在配置文件中指定数据库
+
+编辑 `config/server.yaml`，为每个数据集添加 `blastp_path`（**注意：路径前缀不含扩展名**）：
+
+```yaml
+data:
+  blood:
+    zarr_path: "/data/preprocessed/zarr/bins.zarr"
+    soma_path: "/data/preprocessed/soma"
+    blastp_path: "/data/preprocessed/blast/blood_proteins"  # 不含 .phr/.pin/.psq
+  
+  liver:
+    zarr_path: "/data/liver/zarr/bins.zarr"
+    soma_path: "/data/liver/soma"
+    blastp_path: "/data/preprocessed/blast/liver_proteins"
+```
+
+#### 多数据集共享数据库
+
+如果多个数据集的基因来自同一物种或同一基因集合，可以共享同一个 BLASTP 数据库：
+
+```yaml
+data:
+  tissue_a:
+    zarr_path: "/data/tissue_a/zarr/bins.zarr"
+    blastp_path: "/data/shared/blast/species_proteins"
+  
+  tissue_b:
+    zarr_path: "/data/tissue_b/zarr/bins.zarr"
+    blastp_path: "/data/shared/blast/species_proteins"  # 共享同一数据库
+```
+
+后端会自动去重执行（只运行一次 `blastp`），但结果会展开到所有使用该数据库的数据集。
+
+#### 验证数据库
+
+```bash
+# 检查数据库是否构建成功
+blastdbcmd -db /data/preprocessed/blast/blood_proteins -info
+
+# 测试查询（使用示例序列）
+echo ">test
+MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGK" | \
+  blastp -db /data/preprocessed/blast/blood_proteins \
+         -outfmt "6 sseqid pident length evalue bitscore" \
+         -evalue 1e-5 \
+         -max_target_seqs 5
+```
+
+配置完成后，前端工具栏会出现 🔍 按钮，点击即可进入 BLASTP 搜索页面。
 
 ### 2) 启动后端（Go）
 

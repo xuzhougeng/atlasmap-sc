@@ -81,3 +81,4 @@ temp/
 TODO
 
 server/data/de_jobs.sqlite*
+server/data/blast_jobs.sqlite*

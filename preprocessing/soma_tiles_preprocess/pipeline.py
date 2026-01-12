@@ -39,6 +39,7 @@ class PreprocessingPipeline:
         self.category_mapping: dict[str, dict[str, int]] = {}
         self.numeric_columns: list[str] = []  # 存储检测到的数值列
         self.column_name_mapping: dict[str, str] = {}  # 原始列名 -> 清理后列名
+        self.reusing_zarr: bool = False  # 标记是否在复用 zarr 输出
 
     def run(self) -> None:
         """Execute the full preprocessing pipeline."""
@@ -47,26 +48,127 @@ class PreprocessingPipeline:
         # Step 1: Load H5AD
         self._load_data()
 
-        # Step 2: Extract and normalize coordinates
-        self._process_coordinates()
+        # Check if Zarr output already exists
+        if self._zarr_exists():
+            logger.info("=" * 60)
+            logger.info(f"Detected existing Zarr metadata at: {self._zarr_metadata_path()}")
+            logger.info("Skipping Zarr generation and reusing existing metadata.")
+            logger.info("To regenerate Zarr, delete the output_dir/zarr/ directory.")
+            logger.info("=" * 60)
+            
+            self.reusing_zarr = True
+            
+            # Load existing metadata and align config
+            self._load_existing_zarr_metadata()
+            
+            # Still need to compute normalized coordinates for SOMA
+            self._process_coordinates()
+            
+            # Skip gene selection, category mapping, and bin building
+            # (metadata provides gene list and category info)
+        else:
+            # Full pipeline: generate everything
+            self.reusing_zarr = False
+            
+            # Step 2: Extract and normalize coordinates
+            self._process_coordinates()
 
-        # Step 3: Select genes for pre-aggregation
-        self._select_genes()
+            # Step 3: Select genes for pre-aggregation
+            self._select_genes()
 
-        # Step 4: Build category mappings
-        self._build_category_mappings()
+            # Step 4: Build category mappings
+            self._build_category_mappings()
 
-        # Step 5: Build multi-resolution bins and write to Zarr
-        self._build_and_write_bins()
+            # Step 5: Build multi-resolution bins and write to Zarr
+            self._build_and_write_bins()
 
         # Step 6: Write SOMA store (if enabled)
         if self.config.enable_soma:
             self._write_soma_store()
 
-        # Step 7: Write metadata
-        self._write_metadata()
+        # Step 7: Write/update metadata
+        if self.reusing_zarr:
+            self._update_existing_metadata_soma_flags()
+        else:
+            self._write_metadata()
 
         logger.info("Pipeline completed successfully")
+
+    def _zarr_metadata_path(self) -> Path:
+        """Return the path to zarr/metadata.json."""
+        return self.config.output_dir / "zarr" / "metadata.json"
+
+    def _zarr_exists(self) -> bool:
+        """Check if Zarr output already exists."""
+        return self._zarr_metadata_path().exists()
+
+    def _load_existing_zarr_metadata(self) -> None:
+        """Load existing Zarr metadata and configure pipeline state for reuse.
+        
+        This method:
+        - Reads metadata.json
+        - Sets selected_genes, category_mapping, numeric_columns from metadata
+        - Aligns config settings (zoom_levels, coordinate_range, coord keys) with metadata
+        - Builds column_name_mapping for consistency
+        """
+        metadata_path = self._zarr_metadata_path()
+        logger.info(f"Loading existing Zarr metadata from: {metadata_path}")
+        
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        
+        # Extract gene list
+        self.selected_genes = metadata.get("preaggregated_genes", [])
+        logger.info(f"Reusing {len(self.selected_genes)} pre-aggregated genes")
+        
+        # Extract numeric columns
+        self.numeric_columns = metadata.get("numeric_columns", [])
+        if self.numeric_columns:
+            logger.info(f"Reusing {len(self.numeric_columns)} numeric columns")
+        
+        # Extract category columns (sanitized names)
+        categories_meta = metadata.get("categories", {})
+        category_columns = list(categories_meta.keys())
+        
+        # Rebuild category_mapping from metadata
+        for col, cat_info in categories_meta.items():
+            self.category_mapping[col] = cat_info.get("mapping", {})
+        
+        if category_columns:
+            logger.info(f"Reusing {len(category_columns)} category columns: {category_columns}")
+        
+        # Override config settings to match existing metadata
+        self.config.zoom_levels = metadata.get("zoom_levels", self.config.zoom_levels)
+        self.config.coordinate_range = metadata.get("coordinate_range", self.config.coordinate_range)
+        
+        # Use the default coordinate system from metadata
+        default_coord = metadata.get("default_coordinate_system") or metadata.get("umap_key")
+        if default_coord:
+            self.config.umap_key = default_coord
+        
+        # Only process the default coordinate system (needed for SOMA)
+        self.config.coordinate_keys = [self.config.umap_key]
+        
+        logger.info(f"Config aligned: zoom_levels={self.config.zoom_levels}, "
+                   f"coordinate_range={self.config.coordinate_range}, "
+                   f"default_coord={self.config.umap_key}")
+        
+        # Build column_name_mapping using the same sanitize rule
+        # Map sanitized -> original column name
+        all_columns = list(category_columns) + self.numeric_columns
+        for sanitized_col in all_columns:
+            # Try to find the original column in adata.obs
+            # Reverse the sanitize rule: sanitized has _ where original had .
+            # Simple approach: iterate obs columns and check if sanitized matches
+            for orig_col in self.adata.obs.columns:
+                if self._sanitize_column_name(orig_col) == sanitized_col:
+                    self.column_name_mapping[sanitized_col] = orig_col
+                    break
+            else:
+                # Fallback: assume sanitized == original
+                self.column_name_mapping[sanitized_col] = sanitized_col
+        
+        logger.info(f"Column name mapping built with {len(self.column_name_mapping)} entries")
 
     def _load_data(self) -> None:
         """Load H5AD file."""
@@ -333,6 +435,32 @@ class PreprocessingPipeline:
 
         writer.finalize()
         logger.info(f"SOMA store written to: {soma_path}")
+
+    def _update_existing_metadata_soma_flags(self) -> None:
+        """Update only SOMA-related fields in existing metadata.json.
+        
+        This is called when reusing Zarr output to update only:
+        - soma_enabled
+        - soma_path
+        - all_genes_queryable
+        """
+        metadata_path = self._zarr_metadata_path()
+        logger.info("Updating SOMA flags in existing metadata")
+        
+        # Load existing metadata
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        
+        # Update only SOMA-related fields
+        metadata["soma_enabled"] = self.config.enable_soma
+        metadata["soma_path"] = "soma/experiment.soma" if self.config.enable_soma else None
+        metadata["all_genes_queryable"] = self.config.enable_soma
+        
+        # Write back
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        logger.info(f"Updated SOMA flags in: {metadata_path}")
 
     def _write_metadata(self) -> None:
         """Write metadata files."""
