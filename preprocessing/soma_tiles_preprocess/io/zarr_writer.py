@@ -21,6 +21,7 @@ class ZarrBinWriter:
         n_genes: int,
         n_categories: dict[str, int],
         numeric_columns: list[str] | None = None,
+        write_cell_ids: bool = False,
         compressor: str = "zstd",
         compression_level: int = 3,
     ):
@@ -33,6 +34,7 @@ class ZarrBinWriter:
             n_genes: Number of pre-aggregated genes
             n_categories: Dict mapping category column names to number of categories
             numeric_columns: List of numeric column names
+            write_cell_ids: Whether to write per-bin cell id lists (off by default)
             compressor: Compression algorithm ("zstd" or "blosc")
             compression_level: Compression level
         """
@@ -42,6 +44,7 @@ class ZarrBinWriter:
         self.n_genes = n_genes
         self.n_categories = n_categories
         self.numeric_columns = numeric_columns or []
+        self.write_cell_ids_enabled = write_cell_ids
         self.compression_level = compression_level
 
         # Create root directory
@@ -61,6 +64,121 @@ class ZarrBinWriter:
         # Create groups for each zoom level
         for z in range(zoom_levels):
             self.root.create_group(f"zoom_{z}")
+
+    def write_zoom_level_base(
+        self,
+        zoom: int,
+        *,
+        bin_coords: np.ndarray,
+        cell_count: np.ndarray,
+        expression_mean: np.ndarray,
+        expression_max: np.ndarray,
+    ) -> None:
+        """Write non-category arrays for a zoom level."""
+        if bin_coords.size == 0:
+            logger.warning(f"No bins for zoom level {zoom}")
+            return
+
+        n_bins = bin_coords.shape[0]
+        group = self.root[f"zoom_{zoom}"]
+
+        group.create_array(
+            "bin_coords",
+            data=bin_coords.astype(np.int32, copy=False),
+            chunks=(min(1000, n_bins), 2),
+        )
+        group.create_array(
+            "cell_count",
+            data=cell_count.astype(np.uint32, copy=False),
+            chunks=(min(1000, n_bins),),
+        )
+        group.create_array(
+            "expression_mean",
+            data=expression_mean.astype(np.float32, copy=False),
+            chunks=(min(1000, n_bins), min(100, self.n_genes)),
+        )
+        group.create_array(
+            "expression_max",
+            data=expression_max.astype(np.float32, copy=False),
+            chunks=(min(1000, n_bins), min(100, self.n_genes)),
+        )
+
+        # Ensure groups exist for optional products
+        group.create_group("category_counts")
+        if self.numeric_columns:
+            group.create_group("numeric_medians")
+
+        # Store zoom-level metadata
+        n_bins_per_axis = 2 ** zoom
+        group.attrs["n_bins"] = n_bins
+        group.attrs["n_bins_per_axis"] = n_bins_per_axis
+        group.attrs["bin_size"] = 256.0 / n_bins_per_axis
+
+        logger.info(f"Wrote base arrays for {n_bins:,} bins (zoom {zoom})")
+
+    def write_category_counts_column(
+        self,
+        zoom: int,
+        *,
+        column: str,
+        data: np.ndarray,
+    ) -> None:
+        """Write category counts for a single column at a zoom level."""
+        group = self.root[f"zoom_{zoom}"]
+        cat_group = group["category_counts"]
+        cat_group.create_array(
+            column,
+            data=data.astype(np.uint32, copy=False),
+            chunks=(min(1000, data.shape[0]), data.shape[1]),
+        )
+
+    def write_numeric_medians_column(
+        self,
+        zoom: int,
+        *,
+        column: str,
+        data: np.ndarray,
+    ) -> None:
+        """Write numeric aggregate for a single column at a zoom level."""
+        group = self.root[f"zoom_{zoom}"]
+        num_group = group["numeric_medians"]
+        num_group.create_array(
+            column,
+            data=data.astype(np.float32, copy=False),
+            chunks=(min(1000, data.shape[0]),),
+        )
+
+    def write_cell_ids(
+        self,
+        zoom: int,
+        *,
+        cell_ids: list[np.ndarray],
+    ) -> None:
+        """Write per-bin cell ids (ragged) for a zoom level."""
+        if not self.write_cell_ids_enabled:
+            return
+        if not cell_ids:
+            logger.warning(f"No cell_ids for zoom level {zoom}")
+            return
+
+        group = self.root[f"zoom_{zoom}"]
+        cell_ids_group = group.create_group("cell_ids")
+        n_bins = len(cell_ids)
+
+        chunk_size = 100
+        for chunk_start in range(0, n_bins, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, n_bins)
+            chunk_cell_ids = cell_ids[chunk_start:chunk_end]
+
+            offsets = np.array([0] + [len(ids) for ids in chunk_cell_ids], dtype=np.uint64)
+            offsets = np.cumsum(offsets)
+            flat_ids = (
+                np.concatenate(chunk_cell_ids) if chunk_cell_ids else np.array([], dtype=np.uint32)
+            )
+
+            chunk_group = cell_ids_group.create_group(f"chunk_{chunk_start}")
+            chunk_group.create_array("offsets", data=offsets)
+            chunk_group.create_array("cell_ids", data=flat_ids)
 
     def write_zoom_level(self, zoom: int, bins_data: list[dict[str, Any]]) -> None:
         """Write bin data for a single zoom level.
@@ -102,86 +220,40 @@ class ZarrBinWriter:
             dtype=np.float32,
         )
 
-        # Write coordinate and count arrays using zarr v3 API
-        group.create_array(
-            "bin_coords",
-            data=bin_coords,
-            chunks=(min(1000, n_bins), 2),
-        )
-        group.create_array(
-            "cell_count",
-            data=cell_counts,
-            chunks=(min(1000, n_bins),),
-        )
-
-        # Write expression arrays
-        group.create_array(
-            "expression_mean",
-            data=expression_mean,
-            chunks=(min(1000, n_bins), min(100, self.n_genes)),
-        )
-        group.create_array(
-            "expression_max",
-            data=expression_max,
-            chunks=(min(1000, n_bins), min(100, self.n_genes)),
+        self.write_zoom_level_base(
+            zoom,
+            bin_coords=bin_coords,
+            cell_count=cell_counts,
+            expression_mean=expression_mean,
+            expression_max=expression_max,
         )
 
         # Write category counts
-        cat_group = group.create_group("category_counts")
         for col_name, n_cats in self.n_categories.items():
             cat_data = np.array(
-                [b["category_counts"].get(col_name, np.zeros(n_cats, dtype=np.uint32))
-                 for b in bins_data],
+                [
+                    b["category_counts"].get(col_name, np.zeros(n_cats, dtype=np.uint32))
+                    for b in bins_data
+                ],
                 dtype=np.uint32,
             )
-            cat_group.create_array(
-                col_name,
-                data=cat_data,
-                chunks=(min(1000, n_bins), n_cats),
-            )
+            self.write_category_counts_column(zoom, column=col_name, data=cat_data)
 
         # Write numeric medians
         if self.numeric_columns:
-            num_group = group.create_group("numeric_medians")
             for col_name in self.numeric_columns:
                 num_data = np.array(
-                    [b.get("numeric_medians", {}).get(col_name, np.nan)
-                     for b in bins_data],
+                    [b.get("numeric_medians", {}).get(col_name, np.nan) for b in bins_data],
                     dtype=np.float32,
                 )
-                num_group.create_array(
-                    col_name,
-                    data=num_data,
-                    chunks=(min(1000, n_bins),),
-                )
+                self.write_numeric_medians_column(zoom, column=col_name, data=num_data)
 
-        # Write cell IDs as variable-length data
-        # Store as object array with ragged arrays
-        cell_ids_group = group.create_group("cell_ids")
-
-        # For memory efficiency, store cell IDs in chunks
-        # Each chunk contains cell IDs for a range of bins
-        chunk_size = 100
-        for chunk_start in range(0, n_bins, chunk_size):
-            chunk_end = min(chunk_start + chunk_size, n_bins)
-            chunk_cell_ids = [bins_data[i]["cell_ids"] for i in range(chunk_start, chunk_end)]
-
-            # Flatten and store with offsets
-            offsets = np.array([0] + [len(ids) for ids in chunk_cell_ids], dtype=np.uint64)
-            offsets = np.cumsum(offsets)
-            flat_ids = np.concatenate(chunk_cell_ids) if chunk_cell_ids else np.array([], dtype=np.uint32)
-
-            chunk_group = cell_ids_group.create_group(f"chunk_{chunk_start}")
-            chunk_group.create_array("offsets", data=offsets)
-            chunk_group.create_array("cell_ids", data=flat_ids)
-
-        # Store zoom-level metadata
-        n_bins_per_axis = 2 ** zoom
-        group.attrs["n_bins"] = n_bins
-        group.attrs["n_bins_per_axis"] = n_bins_per_axis
-        group.attrs["bin_size"] = 256.0 / n_bins_per_axis
-
-        logger.info(f"Wrote {n_bins:,} bins for zoom level {zoom}")
+        # Optional per-bin cell id lists
+        if self.write_cell_ids_enabled:
+            self.write_cell_ids(
+                zoom,
+                cell_ids=[b["cell_ids"] for b in bins_data],
+            )
 
     def finalize(self) -> None:
         """Finalize the Zarr store."""

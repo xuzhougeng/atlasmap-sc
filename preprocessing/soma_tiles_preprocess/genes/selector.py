@@ -21,6 +21,24 @@ class GeneSelector:
         self.adata = adata
         self.gene_names = list(adata.var_names)
 
+    def _subsample_for_hvg(self, max_cells: int = 200_000) -> sc.AnnData:
+        """Return a lightweight copy for HVG computation.
+
+        Scanpy's HVG utilities mutate AnnData in-place; copying the full dataset
+        is prohibitive at multi-million cell scale, so we subsample cells.
+        """
+        n_obs = int(self.adata.n_obs)
+        if n_obs == 0:
+            return self.adata.copy()
+
+        if n_obs <= max_cells:
+            return self.adata.copy()
+
+        rng = np.random.default_rng(0)
+        idx = rng.choice(n_obs, size=max_cells, replace=False)
+        idx.sort()
+        return self.adata[idx].copy()
+
     def select(
         self,
         n_genes: int = 500,
@@ -118,7 +136,11 @@ class GeneSelector:
 
         # Compute HVG if not present
         logger.info("Computing highly variable genes...")
-        adata_copy = self.adata.copy()
+        adata_copy = self._subsample_for_hvg()
+        if adata_copy.n_obs != self.adata.n_obs:
+            logger.info(
+                f"HVG subsampling: using {adata_copy.n_obs:,} / {self.adata.n_obs:,} cells"
+            )
 
         try:
             # Normalize if needed

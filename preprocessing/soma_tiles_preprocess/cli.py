@@ -91,7 +91,7 @@ def main():
     "--numeric",
     "numeric_columns",
     multiple=True,
-    help="Obs columns to treat as numeric (per-bin median aggregation). Opt-in; ignored by default.",
+    help="Obs columns to treat as numeric (per-bin mean aggregation). Opt-in; ignored by default.",
 )
 @click.option(
     "--exclude-numeric",
@@ -104,6 +104,12 @@ def main():
     default=256,
     type=int,
     help="Zarr chunk size",
+)
+@click.option(
+    "--write-cell-ids",
+    is_flag=True,
+    default=False,
+    help="Write per-bin cell id lists to Zarr (large; usually not needed).",
 )
 @click.option(
     "--batch-size",
@@ -140,6 +146,7 @@ def run(
     numeric_columns: tuple[str, ...],
     exclude_numeric_columns: tuple[str, ...],
     chunk_size: int,
+    write_cell_ids: bool,
     batch_size: int,
     no_soma: bool,
     name: str | None,
@@ -171,6 +178,7 @@ def run(
         numeric_columns=list(numeric_columns),
         exclude_numeric_columns=list(exclude_numeric_columns),
         chunk_size=chunk_size,
+        write_cell_ids=write_cell_ids,
         batch_size=batch_size,
         enable_soma=not no_soma,
         dataset_name=name,

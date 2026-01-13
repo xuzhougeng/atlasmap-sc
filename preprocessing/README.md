@@ -122,8 +122,11 @@ soma-preprocess run -i data.h5ad -o ./output
 | `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
 | `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
 | `--no-soma` | | | 禁用 TileDBSOMA 存储（默认启用） |
-| `--category` | `-c` | 全部（obs 列） | 要包含的 obs 列（可多次指定）。不指定时默认包含所有 `adata.obs` 列（数值列会按 median 聚合，非数值列会按类别计数）。 |
+| `--category` | `-c` | 非数值（含 bool）obs 列 | 要包含的 obs 列（可多次指定）。不指定时默认包含所有非数值（含 bool）`adata.obs` 列（按类别计数）；数值列默认忽略。 |
+| `--numeric` | | | 要按数值聚合（mean）的 `adata.obs` 列（可多次指定；opt-in）。 |
+| `--exclude-numeric` | | | 从数值聚合中排除的 `adata.obs` 列（覆盖 `--numeric`）。 |
 | `--chunk-size` | | `256` | Zarr chunk 大小 |
+| `--write-cell-ids` | | | 写出每个 bin 的 cell 索引列表到 Zarr（非常占空间；默认关闭）。 |
 | `--batch-size` | | `100000` | 处理批次大小 |
 | `--name` | | | 数据集名称 |
 | `--verbose` | `-v` | | 启用详细日志 |
@@ -290,7 +293,8 @@ output/
 3. **基因选择**：
    - 默认模式：选择 top N 基因（HVG + 标记基因 + 高表达基因）
    - `--all-expressed` 模式：使用所有在至少 `--min-cells`（默认 3）个细胞中表达的基因
-4. **类别/数值列处理**：为指定的 obs 列构建类别到索引的映射；数值列会在 bin 内计算 median
+4. **类别列处理**：为指定的 obs 列构建类别到索引的映射（默认仅处理非数值/布尔列）
+   - 可选：通过 `--numeric` 指定需要在 bin 内计算 median 的数值列
 5. **多分辨率分箱**：
    - 对每个缩放级别，使用四叉树算法分配 bin
    - 聚合每个 bin 内的表达量（平均值、最大值）
@@ -333,8 +337,9 @@ output/
 - `expression_mean`：bin 内所有细胞的平均表达量
 - `expression_max`：bin 内最大表达量
 - `cell_count`：bin 内细胞数量
-- `cell_ids`：bin 内细胞索引列表
 - `category_counts`：各类别的细胞计数
+- `numeric_medians`：数值列聚合结果（当前实现为 per-bin mean；仅在 `--numeric` 指定时写出）
+- `cell_ids`：bin 内细胞索引列表（可选；仅在 `--write-cell-ids` 时写出）
 
 ## 依赖项
 

@@ -1,6 +1,7 @@
 """Main preprocessing pipeline for SOMA-Tiles."""
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 import json
@@ -20,6 +21,25 @@ from .io.soma_writer import SomaWriter
 from .genes.selector import GeneSelector
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _CoarsenPlan:
+    """Coarsen mapping from zoom z -> z-1."""
+
+    order: np.ndarray  # indices to sort child bins by parent id
+    starts: np.ndarray  # start indices (in sorted order) for each parent bin
+
+
+@dataclass(frozen=True)
+class _BinPyramid:
+    """Bin pyramid derived from max zoom assignments."""
+
+    max_zoom: int
+    bin_index_per_cell_max: np.ndarray  # int32[n_cells] -> [0..n_bins_max)
+    bin_coords_by_zoom: list[np.ndarray]  # per zoom: int32[n_bins,2]
+    cell_count_by_zoom: list[np.ndarray]  # per zoom: uint32[n_bins]
+    coarsen_plans: list[Optional[_CoarsenPlan]]  # index z: plan from z -> z-1 (z>0)
 
 
 class PreprocessingPipeline:
@@ -302,9 +322,9 @@ class PreprocessingPipeline:
                 # 数值列：跳过分类映射
                 self.numeric_columns.append(sanitized_col)
                 if sanitized_col != col:
-                    logger.info(f"  {col} -> {sanitized_col}: numeric (will aggregate with median)")
+                    logger.info(f"  {col} -> {sanitized_col}: numeric (will aggregate with mean)")
                 else:
-                    logger.info(f"  {col}: numeric (will aggregate with median)")
+                    logger.info(f"  {col}: numeric (will aggregate with mean)")
             else:
                 # 分类列：使用清理后的列名作为 key
                 categories = self.adata.obs[col].astype(str).unique()
@@ -313,6 +333,81 @@ class PreprocessingPipeline:
                     logger.info(f"  {col} -> {sanitized_col}: {len(categories)} categories")
                 else:
                     logger.info(f"  {col}: {len(categories)} categories")
+
+    def _build_bin_pyramid(self, coords: np.ndarray, binner: QuadtreeBinner) -> _BinPyramid:
+        """Compute bin assignments once (at max zoom) and coarsen to all zooms."""
+        zoom_levels = self.config.zoom_levels
+        max_zoom = zoom_levels - 1
+
+        bin_assignments = binner.assign_bins(coords, max_zoom)
+        n_bins_per_axis = binner.get_n_bins_per_axis(max_zoom)
+        total_bins = n_bins_per_axis * n_bins_per_axis
+
+        bin_id = (
+            bin_assignments[:, 0].astype(np.int64) * n_bins_per_axis
+            + bin_assignments[:, 1].astype(np.int64)
+        )
+
+        counts_full = np.bincount(bin_id, minlength=total_bins)
+        nonzero_bin_ids = np.flatnonzero(counts_full)
+
+        cell_count_max = counts_full[nonzero_bin_ids].astype(np.uint32, copy=False)
+        bin_coords_max = np.column_stack(
+            (nonzero_bin_ids // n_bins_per_axis, nonzero_bin_ids % n_bins_per_axis),
+        ).astype(np.int32, copy=False)
+
+        # Map each cell to its non-empty bin index at max zoom.
+        bin_id_to_idx = np.full(total_bins, -1, dtype=np.int32)
+        bin_id_to_idx[nonzero_bin_ids] = np.arange(nonzero_bin_ids.size, dtype=np.int32)
+        bin_index_per_cell_max = bin_id_to_idx[bin_id].astype(np.int32, copy=False)
+
+        bin_coords_by_zoom: list[np.ndarray] = [np.empty((0, 2), dtype=np.int32) for _ in range(zoom_levels)]
+        cell_count_by_zoom: list[np.ndarray] = [np.empty((0,), dtype=np.uint32) for _ in range(zoom_levels)]
+        coarsen_plans: list[Optional[_CoarsenPlan]] = [None for _ in range(zoom_levels)]
+
+        bin_coords_by_zoom[max_zoom] = bin_coords_max
+        cell_count_by_zoom[max_zoom] = cell_count_max
+
+        cur_coords = bin_coords_max
+        cur_counts = cell_count_max
+
+        for zoom in range(max_zoom, 0, -1):
+            parent_zoom = zoom - 1
+            parent_bins_per_axis = binner.get_n_bins_per_axis(parent_zoom)
+
+            parent_coords = (cur_coords // 2).astype(np.int32, copy=False)
+            parent_bin_id = (
+                parent_coords[:, 0].astype(np.int64) * parent_bins_per_axis
+                + parent_coords[:, 1].astype(np.int64)
+            )
+
+            order = np.argsort(parent_bin_id, kind="stable")
+            parent_bin_id_sorted = parent_bin_id[order]
+            boundaries = np.flatnonzero(np.diff(parent_bin_id_sorted)) + 1
+            starts = np.concatenate(([0], boundaries)).astype(np.int64, copy=False)
+            unique_parent_ids = parent_bin_id_sorted[starts]
+
+            parent_coords_unique = np.column_stack(
+                (unique_parent_ids // parent_bins_per_axis, unique_parent_ids % parent_bins_per_axis),
+            ).astype(np.int32, copy=False)
+
+            counts_sorted = cur_counts[order].astype(np.uint64, copy=False)
+            parent_counts = np.add.reduceat(counts_sorted, starts).astype(np.uint32, copy=False)
+
+            coarsen_plans[zoom] = _CoarsenPlan(order=order, starts=starts)
+            bin_coords_by_zoom[parent_zoom] = parent_coords_unique
+            cell_count_by_zoom[parent_zoom] = parent_counts
+
+            cur_coords = parent_coords_unique
+            cur_counts = parent_counts
+
+        return _BinPyramid(
+            max_zoom=max_zoom,
+            bin_index_per_cell_max=bin_index_per_cell_max,
+            bin_coords_by_zoom=bin_coords_by_zoom,
+            cell_count_by_zoom=cell_count_by_zoom,
+            coarsen_plans=coarsen_plans,
+        )
 
     def _build_and_write_bins(self) -> None:
         """Build multi-resolution bins and write to Zarr (per coordinate system)."""
@@ -353,65 +448,156 @@ class PreprocessingPipeline:
                 n_genes=len(self.selected_genes),
                 n_categories={col: len(cats) for col, cats in self.category_mapping.items()},
                 numeric_columns=self.numeric_columns,
+                write_cell_ids=getattr(self.config, "write_cell_ids", False),
                 compressor=self.config.zarr_compressor,
                 compression_level=self.config.zarr_compression_level,
             )
 
             coords = self.normalized_coords[coord_key]
 
-            # Process each zoom level
-            for zoom in tqdm(range(self.config.zoom_levels), desc=f"Zoom levels ({coord_key})"):
-                logger.info(f"Processing '{coord_key}' zoom level {zoom}")
+            pyramid = self._build_bin_pyramid(coords, binner)
+            max_zoom = pyramid.max_zoom
+            n_bins_max = pyramid.bin_coords_by_zoom[max_zoom].shape[0]
 
-                # Compute bin assignments for all cells
-                bin_assignments = binner.assign_bins(coords, zoom)
+            logger.info(
+                f"Computed bin pyramid for '{coord_key}': "
+                f"zoom {max_zoom} has {n_bins_max:,} non-empty bins"
+            )
 
-                # Get unique bins
-                unique_bins = np.unique(bin_assignments, axis=0)
-                logger.info(f"  Zoom {zoom}: {len(unique_bins):,} bins")
+            # Expression aggregation: compute once at max zoom, then coarsen.
+            expr_sum, expr_max = aggregator.aggregate_sum_max_by_bin(
+                pyramid.bin_index_per_cell_max,
+                n_bins=n_bins_max,
+            )
 
-                # Aggregate data per bin
-                bins_data = []
-                for bin_x, bin_y in tqdm(unique_bins, desc=f"  Aggregating bins", leave=False):
-                    mask = (bin_assignments[:, 0] == bin_x) & (bin_assignments[:, 1] == bin_y)
-                    cell_indices = np.where(mask)[0]
+            cur_sum = expr_sum
+            cur_max = expr_max
+            for zoom in tqdm(range(max_zoom, -1, -1), desc=f"Writing zoom levels ({coord_key})"):
+                bin_coords_zoom = pyramid.bin_coords_by_zoom[zoom]
+                cell_count_zoom = pyramid.cell_count_by_zoom[zoom]
+                if bin_coords_zoom.size == 0:
+                    continue
 
-                    if len(cell_indices) == 0:
-                        continue
+                expr_mean = (cur_sum / cell_count_zoom[:, None]).astype(np.float32, copy=False)
+                writer.write_zoom_level_base(
+                    zoom,
+                    bin_coords=bin_coords_zoom,
+                    cell_count=cell_count_zoom,
+                    expression_mean=expr_mean,
+                    expression_max=cur_max,
+                )
 
-                    # Aggregate expression
-                    expr_mean, expr_max = aggregator.aggregate(cell_indices)
+                if zoom > 0:
+                    plan = pyramid.coarsen_plans[zoom]
+                    assert plan is not None
+                    cur_sum = np.add.reduceat(cur_sum[plan.order], plan.starts, axis=0)
+                    cur_max = np.maximum.reduceat(cur_max[plan.order], plan.starts, axis=0)
 
-                    # Aggregate categories
-                    category_counts = {}
-                    for sanitized_col, mapping in self.category_mapping.items():
-                        orig_col = self.column_name_mapping[sanitized_col]
-                        cats = self.adata.obs[orig_col].iloc[cell_indices].astype(str)
-                        counts = np.zeros(len(mapping), dtype=np.uint32)
-                        for cat, idx in mapping.items():
-                            counts[idx] = (cats == cat).sum()
-                        category_counts[sanitized_col] = counts
+            # Category counts: encode once per column, then coarsen using the same plans.
+            for sanitized_col, mapping in tqdm(
+                list(self.category_mapping.items()),
+                desc=f"Writing categories ({coord_key})",
+                leave=False,
+            ):
+                orig_col = self.column_name_mapping[sanitized_col]
+                categories = list(mapping.keys())
+                n_cats = len(categories)
+                if n_cats == 0:
+                    continue
 
-                    # Aggregate numeric columns (median)
-                    numeric_medians = {}
-                    for sanitized_col in self.numeric_columns:
-                        orig_col = self.column_name_mapping[sanitized_col]
-                        values = self.adata.obs[orig_col].iloc[cell_indices].values
-                        numeric_medians[sanitized_col] = float(np.median(values))
+                codes = pd.Categorical(
+                    self.adata.obs[orig_col].astype(str),
+                    categories=categories,
+                ).codes.astype(np.int32, copy=False)
 
-                    bins_data.append({
-                        "bin_x": int(bin_x),
-                        "bin_y": int(bin_y),
-                        "cell_count": len(cell_indices),
-                        "cell_ids": cell_indices.astype(np.uint32),
-                        "expression_mean": expr_mean,
-                        "expression_max": expr_max,
-                        "category_counts": category_counts,
-                        "numeric_medians": numeric_medians,
-                    })
+                valid = codes >= 0
+                if not np.any(valid):
+                    continue
 
-                # Write bins for this zoom level
-                writer.write_zoom_level(zoom, bins_data)
+                bin_idx = pyramid.bin_index_per_cell_max[valid].astype(np.int64, copy=False)
+                idx = bin_idx * n_cats + codes[valid].astype(np.int64, copy=False)
+                counts_flat = np.bincount(idx, minlength=n_bins_max * n_cats)
+                cur_counts = counts_flat.reshape((n_bins_max, n_cats)).astype(np.uint32, copy=False)
+
+                for zoom in range(max_zoom, -1, -1):
+                    writer.write_category_counts_column(zoom, column=sanitized_col, data=cur_counts)
+                    if zoom > 0:
+                        plan = pyramid.coarsen_plans[zoom]
+                        assert plan is not None
+                        cur_counts = np.add.reduceat(
+                            cur_counts[plan.order].astype(np.uint64, copy=False),
+                            plan.starts,
+                            axis=0,
+                        ).astype(np.uint32, copy=False)
+
+            # Numeric columns: aggregate by mean (faster than median) and coarsen.
+            for sanitized_col in tqdm(
+                list(self.numeric_columns),
+                desc=f"Writing numeric ({coord_key})",
+                leave=False,
+            ):
+                orig_col = self.column_name_mapping[sanitized_col]
+                values = np.asarray(self.adata.obs[orig_col].values, dtype=np.float64)
+                finite = np.isfinite(values)
+
+                if not np.any(finite):
+                    for zoom in range(max_zoom, -1, -1):
+                        writer.write_numeric_medians_column(
+                            zoom,
+                            column=sanitized_col,
+                            data=np.full(
+                                (pyramid.bin_coords_by_zoom[zoom].shape[0],),
+                                np.nan,
+                                dtype=np.float32,
+                            ),
+                        )
+                    continue
+
+                bin_idx_finite = pyramid.bin_index_per_cell_max[finite]
+                sum_per_bin = np.bincount(
+                    bin_idx_finite,
+                    weights=values[finite],
+                    minlength=n_bins_max,
+                ).astype(np.float64, copy=False)
+                n_per_bin = np.bincount(bin_idx_finite, minlength=n_bins_max).astype(np.uint32, copy=False)
+
+                cur_sum = sum_per_bin
+                cur_n = n_per_bin
+                for zoom in range(max_zoom, -1, -1):
+                    with np.errstate(invalid="ignore", divide="ignore"):
+                        mean = cur_sum / cur_n
+                    mean = np.where(cur_n == 0, np.nan, mean).astype(np.float32, copy=False)
+                    writer.write_numeric_medians_column(zoom, column=sanitized_col, data=mean)
+
+                    if zoom > 0:
+                        plan = pyramid.coarsen_plans[zoom]
+                        assert plan is not None
+                        cur_sum = np.add.reduceat(cur_sum[plan.order], plan.starts)
+                        cur_n = np.add.reduceat(cur_n[plan.order].astype(np.uint64), plan.starts).astype(
+                            np.uint32,
+                            copy=False,
+                        )
+
+            # Optional per-bin cell ids (expensive; off by default).
+            if getattr(self.config, "write_cell_ids", False):
+                for zoom in tqdm(
+                    range(max_zoom, -1, -1),
+                    desc=f"Writing cell_ids ({coord_key})",
+                    leave=False,
+                ):
+                    bin_assignments = binner.assign_bins(coords, zoom)
+                    n_bins_axis = binner.get_n_bins_per_axis(zoom)
+                    bin_id = (
+                        bin_assignments[:, 0].astype(np.int64) * n_bins_axis
+                        + bin_assignments[:, 1].astype(np.int64)
+                    )
+                    order = np.argsort(bin_id, kind="stable")
+                    bin_id_sorted = bin_id[order]
+                    boundaries = np.flatnonzero(np.diff(bin_id_sorted)) + 1
+                    starts = np.concatenate(([0], boundaries))
+                    ends = np.concatenate((boundaries, [order.size]))
+                    cell_ids = [order[s:e].astype(np.uint32, copy=False) for s, e in zip(starts, ends)]
+                    writer.write_cell_ids(zoom, cell_ids=cell_ids)
 
             writer.finalize()
             logger.info(f"Zarr data written to: {zarr_path}")

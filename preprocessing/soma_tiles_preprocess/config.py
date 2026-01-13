@@ -46,6 +46,7 @@ class PreprocessConfig:
     zarr_compressor: str = "zstd"
     zarr_compression_level: int = 3
     chunk_size: int = 256
+    write_cell_ids: bool = False  # Optional: store per-bin cell id lists (expensive)
 
     # Memory settings
     batch_size: int = 100000  # Cells to process at once
@@ -95,6 +96,7 @@ class PreprocessConfig:
             "zarr_compressor": self.zarr_compressor,
             "zarr_compression_level": self.zarr_compression_level,
             "chunk_size": self.chunk_size,
+            "write_cell_ids": self.write_cell_ids,
             "batch_size": self.batch_size,
             "enable_soma": self.enable_soma,
             "soma_compression": self.soma_compression,
