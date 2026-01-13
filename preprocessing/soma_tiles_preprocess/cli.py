@@ -85,7 +85,19 @@ def main():
     "--category", "-c",
     "categories",
     multiple=True,
-    help="Obs columns to include for aggregation (can specify multiple). If omitted, defaults to ALL obs columns.",
+    help="Obs columns to include for aggregation (can specify multiple). If omitted, defaults to non-numeric obs columns.",
+)
+@click.option(
+    "--numeric",
+    "numeric_columns",
+    multiple=True,
+    help="Obs columns to treat as numeric (per-bin median aggregation). Opt-in; ignored by default.",
+)
+@click.option(
+    "--exclude-numeric",
+    "exclude_numeric_columns",
+    multiple=True,
+    help="Obs columns to exclude from numeric aggregation (overrides --numeric).",
 )
 @click.option(
     "--chunk-size",
@@ -125,6 +137,8 @@ def run(
     use_all_expressed: bool,
     min_cells: int,
     categories: tuple[str, ...],
+    numeric_columns: tuple[str, ...],
+    exclude_numeric_columns: tuple[str, ...],
     chunk_size: int,
     batch_size: int,
     no_soma: bool,
@@ -154,6 +168,8 @@ def run(
         use_all_expressed=use_all_expressed,
         min_cells_expressed=min_cells,
         category_columns=list(categories),
+        numeric_columns=list(numeric_columns),
+        exclude_numeric_columns=list(exclude_numeric_columns),
         chunk_size=chunk_size,
         batch_size=batch_size,
         enable_soma=not no_soma,

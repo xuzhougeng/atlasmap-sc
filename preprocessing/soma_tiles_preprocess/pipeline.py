@@ -266,11 +266,8 @@ class PreprocessingPipeline:
         # 显式排除
         if col in self.config.exclude_numeric_columns:
             return False
-        # 显式指定
-        if col in self.config.numeric_columns:
-            return True
-        # 自动检测
-        return pd.api.types.is_numeric_dtype(self.adata.obs[col])
+        # 默认不做自动推断：仅当用户显式指定时才作为数值列处理
+        return col in self.config.numeric_columns
 
     def _build_category_mappings(self) -> None:
         """Build mappings from category names to integer indices."""
@@ -278,10 +275,19 @@ class PreprocessingPipeline:
 
         # Determine which columns to include
         columns = self.config.category_columns.copy()
-        # If user didn't specify any category columns, default to ALL obs columns.
-        # (Numeric columns will be handled separately as numeric_medians.)
+        # If user didn't specify any category columns, default to categorical-only columns.
+        # Numeric columns are ignored unless explicitly listed in config.numeric_columns.
         if not columns:
-            columns = list(self.adata.obs.columns)
+            columns = []
+            for col in self.adata.obs.columns:
+                series = self.adata.obs[col]
+                if pd.api.types.is_bool_dtype(series) or not pd.api.types.is_numeric_dtype(series):
+                    columns.append(col)
+
+        # Opt-in numeric columns (median aggregation)
+        for col in self.config.numeric_columns:
+            if col in self.adata.obs.columns and col not in columns:
+                columns.append(col)
 
         for col in columns:
             if col not in self.adata.obs.columns:
