@@ -1,4 +1,4 @@
-"""Main preprocessing pipeline for SOMA-Tiles."""
+"""Main preprocessing pipeline for AtlasMap."""
 
 import logging
 from dataclasses import dataclass

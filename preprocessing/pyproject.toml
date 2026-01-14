@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "soma-tiles-preprocess"
+name = "atlasmap-preprocess"
 version = "0.1.0"
-description = "Preprocessing pipeline for SOMA-Tiles: H5AD to multi-resolution Zarr bins"
+description = "Preprocessing pipeline for AtlasMap: H5AD to multi-resolution Zarr bins"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "SOMA-Tiles Team"}
+    {name = "AtlasMap Team"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -48,11 +48,11 @@ dev = [
 ]
 
 [project.scripts]
-soma-preprocess = "soma_tiles_preprocess.cli:main"
+atlasmap-preprocess = "atlasmap_preprocess.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["soma_tiles_preprocess*"]
+include = ["atlasmap_preprocess*"]
 
 [tool.black]
 line-length = 100
@@ -72,4 +72,4 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=soma_tiles_preprocess --cov-report=term-missing"
+addopts = "-v --cov=atlasmap_preprocess --cov-report=term-missing"

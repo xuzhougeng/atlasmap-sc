@@ -1,4 +1,4 @@
-# SOMA-Tiles Preprocessing Dockerfile
+# AtlasMap Preprocessing Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy package files
 COPY pyproject.toml ./
-COPY soma_tiles_preprocess/ ./soma_tiles_preprocess/
+COPY atlasmap_preprocess/ ./atlasmap_preprocess/
 
 # Install Python package
 RUN pip install --no-cache-dir -e .
 
 # Set entrypoint
-ENTRYPOINT ["soma-preprocess"]
+ENTRYPOINT ["atlasmap-preprocess"]
 CMD ["--help"]

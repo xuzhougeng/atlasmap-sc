@@ -1,4 +1,4 @@
-"""SOMA-Tiles Preprocessing Pipeline.
+"""AtlasMap Preprocessing Pipeline.
 
 Convert H5AD single-cell data to multi-resolution Zarr bins for high-performance visualization.
 """

@@ -1,6 +1,6 @@
-# SOMA-Tiles Preprocess
+# AtlasMap Preprocess
 
-将 H5AD 单细胞数据转换为多分辨率 Zarr bins，为 SOMA-Tiles 可视化提供高性能数据支持。
+将 H5AD 单细胞数据转换为多分辨率 Zarr bins，为 AtlasMap 可视化提供高性能数据支持。
 
 ## 功能特性
 
@@ -40,20 +40,20 @@ pip install -e .
 
 ```bash
 wget -O blood.h5ad https://datasets.cellxgene.cziscience.com/c3d1a5e6-780b-4fe9-a39b-1864f927e87b.h5ad
-soma-preprocess run -i blood.h5ad -o ./data/blood
+atlasmap-preprocess run -i blood.h5ad -o ./data/blood
 ```
 
 使用所有的表达基因
 
 ```bash
 wget -O retina.h5ad https://datasets.cellxgene.cziscience.com/fc4b5c6c-26ae-4c65-9798-51f604b69ba6.h5ad
-soma-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --category cell_type
+atlasmap-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --category cell_type
 ```
 
 完整参数
 
 ```bash
-soma-preprocess run \
+atlasmap-preprocess run \
     -i data.h5ad \
     -o ./output \
     --umap-key X_umap \
@@ -74,10 +74,10 @@ soma-preprocess run \
 
 ```bash
 # 生成示例配置文件
-soma-preprocess init-config -o config.yaml
+atlasmap-preprocess init-config -o config.yaml
 
 # 使用配置文件运行
-soma-preprocess from-config -c config.yaml
+atlasmap-preprocess from-config -c config.yaml
 ```
 
 ## 自动复用 Zarr 输出
@@ -88,10 +88,10 @@ soma-preprocess from-config -c config.yaml
 
 ```bash
 # 第一次运行：只生成 Zarr（跳过 SOMA 以节省时间）
-soma-preprocess run -i data.h5ad -o ./output --no-soma
+atlasmap-preprocess run -i data.h5ad -o ./output --no-soma
 
 # 第二次运行：自动复用 Zarr，只生成 SOMA
-soma-preprocess run -i data.h5ad -o ./output
+atlasmap-preprocess run -i data.h5ad -o ./output
 # 输出会提示：
 # ============================================================
 # Detected existing Zarr metadata at: ./output/zarr/metadata.json
@@ -104,12 +104,12 @@ soma-preprocess run -i data.h5ad -o ./output
 
 ```bash
 rm -rf ./output/zarr/
-soma-preprocess run -i data.h5ad -o ./output
+atlasmap-preprocess run -i data.h5ad -o ./output
 ```
 
 ## 命令行参数
 
-### `soma-preprocess run`
+### `atlasmap-preprocess run`
 
 | 参数 | 简写 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -131,7 +131,7 @@ soma-preprocess run -i data.h5ad -o ./output
 | `--name` | | | 数据集名称 |
 | `--verbose` | `-v` | | 启用详细日志 |
 
-### `soma-preprocess visualize`
+### `atlasmap-preprocess visualize`
 
 验证预处理输出，生成静态可视化图片。
 
@@ -141,16 +141,16 @@ soma-preprocess run -i data.h5ad -o ./output
 
 ```bash
 # 基本用法（默认会画 3,5,7 三个 zoom，便于对比；随机选择 3 个基因）
-soma-preprocess visualize -i ./output/zarr -o ./figures
+atlasmap-preprocess visualize -i ./output/zarr -o ./figures
 
 # 推荐：只看最高分辨率（最接近前端打开时的全局效果）
-soma-preprocess visualize -i ./output/zarr -o ./figures -z 7
+atlasmap-preprocess visualize -i ./output/zarr -o ./figures -z 7
 
 # 指定 zoom 级别和基因
-soma-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
+atlasmap-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
 
 # 指定格式和分辨率
-soma-preprocess visualize -i ./output/zarr -o ./figures -f svg --dpi 300
+atlasmap-preprocess visualize -i ./output/zarr -o ./figures -f svg --dpi 300
 ```
 
 | 参数 | 简写 | 默认值 | 说明 |

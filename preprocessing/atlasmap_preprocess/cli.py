@@ -1,4 +1,4 @@
-"""Command-line interface for SOMA-Tiles preprocessing."""
+"""Command-line interface for AtlasMap preprocessing."""
 
 import click
 from pathlib import Path
@@ -22,7 +22,7 @@ def setup_logging(verbose: bool) -> None:
 @click.group()
 @click.version_option(version="0.1.0")
 def main():
-    """SOMA-Tiles Preprocessing CLI.
+    """AtlasMap Preprocessing CLI.
 
     Convert H5AD single-cell data to multi-resolution Zarr bins
     for high-performance visualization.
@@ -155,7 +155,7 @@ def run(
     """Run the preprocessing pipeline.
 
     Example:
-        soma-preprocess run -i data.h5ad -o ./preprocessed -g 500 -z 8
+        atlasmap-preprocess run -i data.h5ad -o ./preprocessed -g 500 -z 8
     """
     setup_logging(verbose)
     logger = logging.getLogger(__name__)
@@ -221,7 +221,7 @@ def from_config(config_path: Path, verbose: bool):
     """Run preprocessing from a YAML configuration file.
 
     Example:
-        soma-preprocess from-config -c config.yaml
+        atlasmap-preprocess from-config -c config.yaml
     """
     setup_logging(verbose)
     logger = logging.getLogger(__name__)
@@ -256,7 +256,7 @@ def init_config(output_path: Path):
     """Generate an example configuration file.
 
     Example:
-        soma-preprocess init-config -o config.yaml
+        atlasmap-preprocess init-config -o config.yaml
     """
     config = PreprocessConfig(
         input_path=Path("data.h5ad"),
@@ -351,8 +351,8 @@ def visualize(
     across multiple zoom levels.
 
     Example:
-        soma-preprocess visualize -i ./output/zarr -o ./figures
-        soma-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
+        atlasmap-preprocess visualize -i ./output/zarr -o ./figures
+        atlasmap-preprocess visualize -i ./output/zarr -o ./figures -z 3,5,7 -g CD3D -g CD8A
     """
     setup_logging(verbose)
     logger = logging.getLogger(__name__)
