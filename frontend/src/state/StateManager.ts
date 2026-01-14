@@ -1,4 +1,4 @@
-// State Manager for SOMA-Tiles
+// State Manager for AtlasMap
 
 export interface AppState {
     // View state

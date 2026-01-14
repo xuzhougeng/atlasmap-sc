@@ -1,4 +1,4 @@
-// SOMA-Tiles Frontend Entry Point
+// AtlasMap Frontend Entry Point
 
 // Import CSS (Leaflet must come first so app styles can override)
 import 'leaflet/dist/leaflet.css';
@@ -257,7 +257,7 @@ function setupThemeToggle() {
 
 // Initialize application
 async function init() {
-    console.log('Initializing SOMA-Tiles...');
+    console.log('Initializing AtlasMap...');
     setupThemeToggle();
 
     // Fetch available datasets
@@ -771,7 +771,7 @@ async function init() {
         new SidebarResizer(sidebarResizer, sidebar);
     }
 
-    console.log('SOMA-Tiles initialized successfully');
+    console.log('AtlasMap initialized successfully');
 }
 
 function updateDatasetInfo(metadata: any) {

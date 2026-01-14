@@ -2,7 +2,7 @@
 
 export type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'soma-tiles-theme';
+const STORAGE_KEY = 'atlasmap-theme';
 
 export class ThemeManager {
     private theme: Theme;

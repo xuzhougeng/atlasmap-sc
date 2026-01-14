@@ -6,7 +6,7 @@ export class SidebarResizer {
     private sidebar: HTMLElement;
     private minWidth = 200;
     private maxWidth = 500;
-    private storageKey = 'soma-tiles-sidebar-width';
+    private storageKey = 'atlasmap-sidebar-width';
 
     constructor(resizer: HTMLElement, sidebar: HTMLElement) {
         this.resizer = resizer;

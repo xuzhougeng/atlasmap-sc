@@ -1,4 +1,4 @@
-# SOMA-Tiles 前端
+# AtlasMap 前端
 
 基于 TypeScript + Vite + Leaflet 的单细胞空间转录组可视化前端。
 

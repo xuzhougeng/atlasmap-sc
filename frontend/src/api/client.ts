@@ -1,4 +1,4 @@
-// API Client for SOMA-Tiles backend
+// API Client for AtlasMap backend
 
 export interface Metadata {
     dataset_name: string;

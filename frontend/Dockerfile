@@ -1,4 +1,4 @@
-# SOMA-Tiles Frontend Dockerfile
+# AtlasMap Frontend Dockerfile
 # Multi-stage build
 
 # Build stage
