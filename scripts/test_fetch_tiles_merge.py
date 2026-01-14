@@ -46,7 +46,7 @@ class Meta:
 
 
 def http_get_bytes(url: str, timeout_s: float) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "soma-tiles-test/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "atlasmap-test/1.0"})
     with urllib.request.urlopen(req, timeout=timeout_s) as resp:
         return resp.read()
 

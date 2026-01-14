@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script: validate a TileDB-SOMA Experiment produced by soma-tiles preprocessing.
+Test script: validate a TileDB-SOMA Experiment produced by atlasmap preprocessing.
 
 What it does:
   - Opens an Experiment at --soma (experiment.soma directory)
