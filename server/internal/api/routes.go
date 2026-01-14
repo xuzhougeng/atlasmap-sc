@@ -1,4 +1,4 @@
-// Package api provides HTTP handlers for the SOMA-Tiles server.
+// Package api provides HTTP handlers for the AtlasMap server.
 package api
 
 import (
@@ -20,10 +20,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/soma-tiles/server/internal/blaststore"
-	"github.com/soma-tiles/server/internal/data/soma"
-	"github.com/soma-tiles/server/internal/destore"
-	"github.com/soma-tiles/server/internal/service"
+	"github.com/atlasmap-sc/server/internal/blaststore"
+	"github.com/atlasmap-sc/server/internal/data/soma"
+	"github.com/atlasmap-sc/server/internal/destore"
+	"github.com/atlasmap-sc/server/internal/service"
 )
 
 // RouterConfig contains router configuration.

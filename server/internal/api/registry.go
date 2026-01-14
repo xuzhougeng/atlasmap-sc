@@ -3,7 +3,7 @@ package api
 import (
 	"os"
 
-	"github.com/soma-tiles/server/internal/service"
+	"github.com/atlasmap-sc/server/internal/service"
 )
 
 // DatasetInfo contains information about a dataset for the API response.
@@ -198,7 +198,7 @@ func (r *DatasetRegistry) Title() string {
 	if r.title != "" {
 		return r.title
 	}
-	return "SOMA-Tiles"
+	return "AtlasMap"
 }
 
 // Datasets returns dataset info for all registered datasets.

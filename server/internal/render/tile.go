@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/fogleman/gg"
-	"github.com/soma-tiles/server/internal/data/zarr"
-	"github.com/soma-tiles/server/pkg/colormap"
+	"github.com/atlasmap-sc/server/internal/data/zarr"
+	"github.com/atlasmap-sc/server/pkg/colormap"
 )
 
 // Config contains renderer configuration.

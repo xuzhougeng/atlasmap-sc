@@ -1,4 +1,4 @@
-// Package config handles configuration loading for the SOMA-Tiles server.
+// Package config handles configuration loading for the AtlasMap server.
 package config
 
 import (

@@ -1,4 +1,4 @@
-# SOMA-Tiles Server Dockerfile
+# AtlasMap Server Dockerfile
 # Multi-stage build for smaller final image
 
 # Build stage

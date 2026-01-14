@@ -1,4 +1,4 @@
-module github.com/soma-tiles/server
+module github.com/atlasmap-sc/server
 
 go 1.24.0
 

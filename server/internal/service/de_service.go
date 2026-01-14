@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/soma-tiles/server/internal/data/soma"
-	"github.com/soma-tiles/server/internal/destore"
+	"github.com/atlasmap-sc/server/internal/data/soma"
+	"github.com/atlasmap-sc/server/internal/destore"
 )
 
 // DEService handles differential expression analysis.

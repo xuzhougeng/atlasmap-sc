@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/soma-tiles/server/internal/blaststore"
+	"github.com/atlasmap-sc/server/internal/blaststore"
 )
 
 // BlastServiceRegistry provides access to dataset metadata for gene validation.

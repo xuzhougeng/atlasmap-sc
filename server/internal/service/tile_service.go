@@ -6,10 +6,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/soma-tiles/server/internal/cache"
-	"github.com/soma-tiles/server/internal/data/soma"
-	"github.com/soma-tiles/server/internal/data/zarr"
-	"github.com/soma-tiles/server/internal/render"
+	"github.com/atlasmap-sc/server/internal/cache"
+	"github.com/atlasmap-sc/server/internal/data/soma"
+	"github.com/atlasmap-sc/server/internal/data/zarr"
+	"github.com/atlasmap-sc/server/internal/render"
 )
 
 // TileServiceConfig contains tile service configuration.

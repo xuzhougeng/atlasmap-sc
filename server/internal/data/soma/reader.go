@@ -1,6 +1,6 @@
 // Package soma provides minimal, read-only access to a TileDB-SOMA experiment using TileDB arrays.
 //
-// This is intentionally small: we only support what SOMA-Tiles needs today:
+// This is intentionally small: we only support what AtlasMap needs today:
 //   - map gene_id -> gene soma_joinid (from ms/RNA/var)
 //   - read sparse X for (cells subset) x (one gene) (from ms/RNA/X/data)
 package soma

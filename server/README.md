@@ -1,6 +1,6 @@
-# SOMA-Tiles Server（Go）API 文档
+# AtlasMap Server（Go）API 文档
 
-本目录是 SOMA-Tiles 的 Go 后端：读取预处理产物（Zarr v3 store）并按需渲染 PNG tiles，同时提供数据集元信息、基因与分类相关的 JSON API。
+本目录是 AtlasMap 的 Go 后端：读取预处理产物（Zarr v3 store）并按需渲染 PNG tiles，同时提供数据集元信息、基因与分类相关的 JSON API。
 
 ## 快速启动
 

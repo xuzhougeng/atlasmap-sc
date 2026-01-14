@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soma-tiles/server/internal/cache"
-	"github.com/soma-tiles/server/internal/data/zarr"
-	"github.com/soma-tiles/server/internal/render"
-	"github.com/soma-tiles/server/internal/service"
+	"github.com/atlasmap-sc/server/internal/cache"
+	"github.com/atlasmap-sc/server/internal/data/zarr"
+	"github.com/atlasmap-sc/server/internal/render"
+	"github.com/atlasmap-sc/server/internal/service"
 )
 
 func localTestZarrPath(t *testing.T) string {

@@ -1,4 +1,4 @@
-// Package api provides HTTP handlers for the SOMA-Tiles server.
+// Package api provides HTTP handlers for the AtlasMap server.
 package api
 
 import (
@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soma-tiles/server/internal/cache"
-	"github.com/soma-tiles/server/internal/data/zarr"
-	"github.com/soma-tiles/server/internal/render"
-	"github.com/soma-tiles/server/internal/service"
+	"github.com/atlasmap-sc/server/internal/cache"
+	"github.com/atlasmap-sc/server/internal/data/zarr"
+	"github.com/atlasmap-sc/server/internal/render"
+	"github.com/atlasmap-sc/server/internal/service"
 )
 
 // Test data path - adjust this to point to your test data

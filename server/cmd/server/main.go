@@ -1,4 +1,4 @@
-// Package main is the entry point for the SOMA-Tiles server.
+// Package main is the entry point for the AtlasMap server.
 package main
 
 import (
@@ -13,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/soma-tiles/server/internal/api"
-	"github.com/soma-tiles/server/internal/cache"
-	"github.com/soma-tiles/server/internal/config"
-	"github.com/soma-tiles/server/internal/data/soma"
-	"github.com/soma-tiles/server/internal/data/zarr"
-	"github.com/soma-tiles/server/internal/render"
-	"github.com/soma-tiles/server/internal/service"
+	"github.com/atlasmap-sc/server/internal/api"
+	"github.com/atlasmap-sc/server/internal/cache"
+	"github.com/atlasmap-sc/server/internal/config"
+	"github.com/atlasmap-sc/server/internal/data/soma"
+	"github.com/atlasmap-sc/server/internal/data/zarr"
+	"github.com/atlasmap-sc/server/internal/render"
+	"github.com/atlasmap-sc/server/internal/service"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Printf("Starting SOMA-Tiles server on port %d", cfg.Server.Port)
+	log.Printf("Starting AtlasMap server on port %d", cfg.Server.Port)
 
 	// Initialize components
 	ctx := context.Background()

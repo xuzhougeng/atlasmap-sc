@@ -1,4 +1,4 @@
-// Package api provides HTTP handlers for the SOMA-Tiles server.
+// Package api provides HTTP handlers for the AtlasMap server.
 package api
 
 import (
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soma-tiles/server/internal/destore"
+	"github.com/atlasmap-sc/server/internal/destore"
 )
 
 // JobManagerConfig contains configuration for the job manager.
