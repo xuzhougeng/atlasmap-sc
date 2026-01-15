@@ -1,4 +1,6 @@
-# SOMA-Tiles
+# AtlasMap
+
+**AtlasMap: enabling low-cost, map-style exploration of million-cell single-cell atlases**
 
 High-performance single-cell visualization system for 10M+ cells.
 
@@ -6,7 +8,7 @@ Detailed usage/deployment guide: `doc/how-to-use.md`.
 
 ## Architecture
 
-SOMA-Tiles is a two-stage pipeline: **offline preprocessing** turns an `.h5ad` into a tile-friendly,
+AtlasMap is a two-stage pipeline: **offline preprocessing** turns an `.h5ad` into a tile-friendly,
 multi-zoom bin store, and an **online Go server** renders Leaflet-compatible PNG tiles on demand.
 A static TypeScript frontend consumes the JSON + tile endpoints.
 
@@ -15,7 +17,7 @@ A static TypeScript frontend consumes the JSON + tile endpoints.
 ```text
 ┌──────────────────────────────────────────────┐
 │               Offline (Python)               │
-│  preprocessing/ (soma-preprocess CLI)        │
+│  preprocessing/ (atlasmap-preprocess CLI)    │
 │  - normalize UMAP coords to [0,256)          │
 │  - select preaggregated genes                │
 │  - quadtree binning for zoom=0..Z-1          │
@@ -33,7 +35,7 @@ A static TypeScript frontend consumes the JSON + tile endpoints.
 │    zoom_{z}/expression_mean   float32 [N,G] (preaggregated genes)       │
 │    zoom_{z}/expression_max    float32 [N,G]                              │
 │    zoom_{z}/category_counts/* uint32 [N,C] (per column)                 │
-│    zoom_{z}/cell_ids/*        ragged cell indices (optional)            │
+│    zoom_{z}/cell_ids/*        ragged cell indices (optional; off by default) │
 │                                                                        │
 │  soma/experiment.soma (optional; TileDB-SOMA full matrix + obs/var)     │
 └───────────────────────────┬────────────────────────────────────────────┘
@@ -85,8 +87,8 @@ A static TypeScript frontend consumes the JSON + tile endpoints.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/soma-tiles.git
-cd soma-tiles
+git clone https://github.com/your-org/atlasmap-sc.git
+cd atlasmap-sc
 
 # Install all dependencies
 make install
@@ -101,7 +103,7 @@ make preprocess INPUT=path/to/data.h5ad
 # Or use the CLI directly
 cd preprocessing
 pip install -e .
-soma-preprocess run -i data.h5ad -o ../data/preprocessed -g 500 -z 8
+atlasmap-preprocess run -i data.h5ad -o ../data/preprocessed -g 500 -z 8
 ```
 
 ### Development
@@ -133,9 +135,9 @@ docker-compose run --rm preprocess run \
 ## Project Structure
 
 ```
-soma-tiles/
+atlasmap-sc/
 ├── preprocessing/          # Python preprocessing pipeline
-│   ├── soma_tiles_preprocess/
+│   ├── atlasmap_preprocess/
 │   │   ├── pipeline.py     # Main pipeline
 │   │   ├── binning/        # Quadtree binning
 │   │   └── io/             # Zarr & SOMA I/O

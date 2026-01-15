@@ -67,6 +67,7 @@ temp/
 # Type checking
 .mypy_cache/
 .ruff_cache/
+.numba_cache/
 
 # Lock files (optional - uncomment if not tracking)
 # package-lock.json
@@ -82,3 +83,6 @@ TODO
 
 server/data/de_jobs.sqlite*
 server/data/blast_jobs.sqlite*
+
+benchmark_runs
+.cursor

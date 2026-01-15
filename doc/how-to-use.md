@@ -1,6 +1,6 @@
-# SOMA-Tiles 使用指南（how-to-use）
+# AtlasMap 使用指南（how-to-use）
 
-SOMA-Tiles 的典型工作流分两步：
+AtlasMap 的典型工作流分两步：
 
 1. **离线预处理（Python）**：把 `.h5ad` 转成多分辨率的 `Zarr`（`bins.zarr`）+ 元数据（`metadata.json`/`gene_index.json`）。
 2. **在线服务（Go + 前端）**：Go 服务器按需读取 `Zarr` 并渲染 PNG tiles；前端通过 `/api` 和 `/tiles` 展示交互式 UMAP。
@@ -81,10 +81,10 @@ make preprocess INPUT=path/to/input.h5ad
 ```bash
 cd preprocessing
 pip install -e .
-soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 10 -g 500
+atlasmap-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 10 -g 500
 ```
 
-常用参数（与代码一致，见 `preprocessing/soma_tiles_preprocess/cli.py`）：
+常用参数（与代码一致，见 `preprocessing/atlasmap_preprocess/cli.py`）：
 
 - `--coord-key`：`.h5ad` 里 `adata.obsm[...]` 的坐标键（可多次指定，生成多套坐标系 tiles）
 - `--umap-key`：默认坐标键（旧参数名；用于指定默认/主坐标系，默认 `X_umap`）
@@ -99,9 +99,9 @@ soma-preprocess run -i path/to/input.h5ad -o ../data/preprocessed -z 10 -g 500
 
 ```bash
 cd preprocessing
-soma-preprocess init-config -o config.yaml
+atlasmap-preprocess init-config -o config.yaml
 # 编辑 config.yaml（如 marker_genes / category_columns 等）
-soma-preprocess from-config -c config.yaml
+atlasmap-preprocess from-config -c config.yaml
 ```
 
 ### 1.5) 验证预处理结果（可选）
@@ -114,13 +114,13 @@ soma-preprocess from-config -c config.yaml
 
 ```bash
 # 基本用法（默认会画 3,5,7 三个 zoom，便于对比；随机选择 3 个基因）
-soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures
+atlasmap-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures
 
 # 推荐：只看最高分辨率（最接近前端打开时的全局效果）
-soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 7
+atlasmap-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 7
 
 # 指定 zoom 级别和基因
-soma-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 3,5,7 -g CD3D -g CD8A
+atlasmap-preprocess visualize -i ../data/preprocessed/zarr -o ../data/figures -z 3,5,7 -g CD3D -g CD8A
 ```
 
 输出结构：

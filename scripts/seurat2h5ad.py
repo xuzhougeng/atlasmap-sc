@@ -224,8 +224,8 @@ def attach_var_features(adata, prefix):
     return adata
 
 
-def generate_soma_preprocess_hint(h5ad_path, columns):
-    """Generate a suggested soma-preprocess command."""
+def generate_atlasmap_preprocess_hint(h5ad_path, columns):
+    """Generate a suggested atlasmap-preprocess command."""
     if not columns:
         return None
 
@@ -234,7 +234,7 @@ def generate_soma_preprocess_hint(h5ad_path, columns):
     output_dir = f"data/{base_name}"
 
     c_flags = ' '.join(f"-c '{col}'" for col in columns)
-    cmd = f"soma-preprocess run --input {h5ad_path} --output {output_dir} --zoom-levels 11 -a --name \"{base_name}\" {c_flags}"
+    cmd = f"atlasmap-preprocess run --input {h5ad_path} --output {output_dir} --zoom-levels 11 -a --name \"{base_name}\" {c_flags}"
 
     return cmd
 
@@ -385,11 +385,11 @@ Examples:
         shutil.rmtree(tmpdir, ignore_errors=True)
         sys.stderr.write(f"[info] 已清理临时目录: {tmpdir}\n")
 
-    # Print soma-preprocess hint
+    # Print atlasmap-preprocess hint
     if merged_columns:
-        hint_cmd = generate_soma_preprocess_hint(out_h5ad, merged_columns)
+        hint_cmd = generate_atlasmap_preprocess_hint(out_h5ad, merged_columns)
         if hint_cmd:
-            print(f"\n[hint] 下一步可运行 soma-preprocess：")
+            print(f"\n[hint] 下一步可运行 atlasmap-preprocess：")
             print(f"  {hint_cmd}")
 
 

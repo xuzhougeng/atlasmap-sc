@@ -59,7 +59,7 @@ preprocess:
 		echo "Usage: make preprocess INPUT=path/to/data.h5ad"; \
 		exit 1; \
 	fi
-	cd $(PREPROCESS_DIR) && python -m soma_tiles_preprocess.cli run \
+	cd $(PREPROCESS_DIR) && python -m atlasmap_preprocess.cli run \
 		--input $(INPUT) \
 		--output ../$(DATA_DIR)/preprocessed \
 		--zoom-levels 8 \
@@ -114,7 +114,7 @@ fmt:
 
 # Help
 help:
-	@echo "SOMA-Tiles Makefile"
+	@echo "AtlasMap Makefile"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make build          - Build all components"
