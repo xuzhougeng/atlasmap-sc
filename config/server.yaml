@@ -3,21 +3,19 @@ server:
   cors_origins:
     - "http://localhost:3000"
     - "http://localhost:5173"
-  # Custom title displayed in the header (optional, defaults to "SOMA-Tiles")
-  title: "Human Cell Atlas"
+  # Custom title displayed in the header (optional, defaults to "AtlasMap")
+  title: "AtlasMap"
 
 # Single dataset (legacy format - still supported):
 # data:
 #   zarr_path: "/path/to/zarr/bins.zarr"
 #   soma_path: "/path/to/soma"
 
-# Multi-dataset format:
+# Multi-dataset format (the first dataset becomes the default):
 data:
-  blood:
-    zarr_path: "/data/xzg_data/software/soma-tiles/data/Afi_anno_251214/zarr/bins.zarr"
-    # Optional: BLASTP database path (prefix, without .phr/.pin/.psq extensions)
-    # blastp_path: "/path/to/blast/db/proteins"
-# The first dataset in the list becomes the default.
+  dataset_a:
+    zarr_path: "../data/dataset_a/zarr/bins.zarr"
+    # soma_path: "../data/dataset_a/soma"  # optional
 
 # Example with BLASTP and SOMA:
 # data:

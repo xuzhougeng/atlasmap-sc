@@ -8,6 +8,7 @@ Please refer to the following guides:
 
 - [Quick Start](./doc/quick-start.md)
 - [Detailed Tutorial](./doc/how-to-use.md)
+- [Deployment](./doc/deploy.md)
 
 If you use **AtlasMap** in your work, please cite:
 
