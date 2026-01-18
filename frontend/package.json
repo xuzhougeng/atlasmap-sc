@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:cloudflare": "npm run build && node scripts/cloudflare-postbuild.mjs",
+    "build-cloudflare": "npm run build:cloudflare",
     "preview": "vite preview",
     "lint": "eslint src --ext ts",
     "type-check": "tsc --noEmit"

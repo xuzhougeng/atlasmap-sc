@@ -66,3 +66,33 @@ server {
     }
 }
 ```
+
+## Cloudflare Pages + Workers
+
+在frontend生成用于发布的静态文件
+
+```bash
+UPSTREAM_ORIGIN=http://your.backend.server npm run build:cloudflare
+```
+
+此时会在frontend目录下生成两个子目录:
+
+- dist: 静态资源站点
+- functionns : 基于worker实现方向代理
+
+使用cloudflare wrangler进行发布
+
+````bash
+# 1) 登录
+npx wrangler login
+
+# 2) （可选）创建 Pages 项目
+npx wrangler pages project create <PROJECT_NAME>
+
+# 3) 部署：在项目根目录执行（根目录要有 functions/）
+npx wrangler pages deploy dist --project-name <PROJECT_NAME>
+```
+
+注: 后台服务器 nginx 转发设置保持不变，同 [NIGNX 托管静态页面，转发API到HTTP后台 (推荐)](#nignx-托管静态页面转发api到http后台推荐).
+
+可选: 自定义域名
