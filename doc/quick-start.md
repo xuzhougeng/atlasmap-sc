@@ -5,7 +5,8 @@ Two common ways to run this project:
 - **Without Docker**: Recommended for local development and debugging
 - **With Docker**: Recommended for deployment/demo — consistent environment, minimal dependencies
 
-For more detailed usage, see [how-to-use.md](./how-to-use.md).
+For more detailed usage, see [how-to-use.md](./how-to-use.md).  
+For project deployment and server launch, please refer to [deploy.md](./deploy.md).
 
 ## Without Docker (Local Development)
 
