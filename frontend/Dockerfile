@@ -24,8 +24,12 @@ FROM nginx:alpine
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Default backend target (can override at `docker run -e ...`)
+ENV BACKEND_HOST=server
+ENV BACKEND_PORT=8080
+
+# Copy nginx config template (rendered by nginx docker entrypoint)
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
 
