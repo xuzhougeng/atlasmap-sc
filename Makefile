@@ -13,8 +13,10 @@ PREPROCESS_VENV_DIR := $(PREPROCESS_DIR)/.venv
 PREPROCESS_PYTHON ?= 3.11
 UV_LINK_MODE ?= copy
 
-# Preprocess output directory (relative to repo root, unless absolute path)
+# Preprocess input/output paths (relative to repo root, unless absolute path)
+# When running from preprocessing/, we need to prepend ../ for relative paths
 OUTPUT ?= $(DATA_DIR)/preprocessed
+PREPROCESS_INPUT := $(if $(filter /%,$(INPUT)),$(INPUT),../$(INPUT))
 PREPROCESS_OUTPUT := $(if $(filter /%,$(OUTPUT)),$(OUTPUT),../$(OUTPUT))
 
 # Go bootstrap (only used when system Go is missing)
@@ -79,7 +81,7 @@ preprocess: preprocess-venv
 		exit 1; \
 	fi
 	cd $(PREPROCESS_DIR) && UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
-		--input $(INPUT) \
+		--input $(PREPROCESS_INPUT) \
 		--output $(PREPROCESS_OUTPUT) \
 		--zoom-levels 8 \
 		--n-genes 500
