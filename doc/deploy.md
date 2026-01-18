@@ -1,99 +1,68 @@
-# 容器部署（Docker Compose）
+# 前后端分离部署
 
-本项目提供 `docker-compose.yml`，包含：
+鉴于高性能的云服务器价格高昂，我们推荐通过前后端分离的方式进行项目的部署。
 
-- `server`：Go 后端（`8080`）
-- `frontend`：Nginx 静态站点 + 反向代理到后端（宿主机 `3000` -> 容器 `80`）
-- `preprocess`：可选的预处理容器（默认在 `tools` profile 下，手动运行）
+部署的时候需要注意如下两个问题:
 
-### 0) 前置条件
+1. 当页面通过 HTTPS 加载时（https://），前端 JavaScript 不能再去请求不安全的 HTTP 资源（http://），包括 API 接口，浏览器会直接拦截请求，表现为 fetch/XHR 报错。
+1. 跨域访问仍可能受到 CORS、证书有效性、Cookie Secure 属性等因素影响
 
-- 已安装 Docker 与 Docker Compose（`docker compose`）
-- 已准备好预处理产物（`bins.zarr` + `metadata.json` + `gene_index.json`），或计划在容器内运行预处理
+## NIGNX 托管静态页面，转发API到HTTP后台 (推荐)
 
-### 1) 准备数据目录
-
-`docker-compose.yml` 会把宿主机的 `./data` 挂载到容器内的 `/data`：
-
-- 后端：`./data:/data:ro`
-- 预处理：`./data:/data`（可写）
-
-推荐多数据集结构：
-
-```text
-data/
-  dataset_a/
-    zarr/metadata.json
-    zarr/gene_index.json
-    zarr/bins.zarr/...
-    soma/...(可选)
-  dataset_b/
-    ...
-```
-
-### 2) 配置后端路径（容器内路径）
-
-`server` 容器通过 `./config:/app/config:ro` 挂载配置文件，因此需要保证 `config/server.yaml` 里使用的是**容器内路径**（`/data/...`），例如：
-
-```yaml
-data:
-  dataset_a:
-    zarr_path: "/data/dataset_a/zarr/bins.zarr"
-    soma_path: "/data/dataset_a/soma"
-  dataset_b:
-    zarr_path: "/data/dataset_b/zarr/bins.zarr"
-    soma_path: "/data/dataset_b/soma"
-```
-
-### 3) 启动服务
-
-在仓库根目录执行：
+前端服务器，通过docker进行部署。
 
 ```bash
-docker compose up -d --build
+docker run -d --name hoptoper/atlasmap-frontend:latest \
+  -p 3000:80 \
+  -e BACKEND_HOST=<YOUR_BACKEND_SERVER_NAME> \
+  -e BACKEND_PORT=<YOUR_PORT> \
+  --restart unless-stopped \
+  hoptoper/atlasmap-frontend:latest
 ```
 
-访问：
+后端处理好数据，配置server.yaml，然后启动服务
 
-- 前端：`http://localhost:3000`
-- 后端健康检查：`http://localhost:8080/health`
-
-说明：生产环境通常只需要对外暴露 `frontend`（`3000` 或 `80/443`）；`frontend` 会把 `/api` 与 `/d/...` 反向代理到后端。
-
-查看日志：
-
-```bash
-docker compose logs -f server
-docker compose logs -f frontend
+```
+server/bin/server -config "data/server.yaml"
 ```
 
-停止并清理：
+设置后台服务器nginx转发
 
-```bash
-docker compose down
 ```
+server {
+    listen <YOUR_PORT>;
+    server_name <YOUR_BACKEND_SERVER_NAME>;
 
-### 4) （可选）在容器内运行预处理
+    # 可选：如果 tile/结果较大
+    client_max_body_size 50m;
 
-`preprocess` 服务在 `tools` profile 下，示例：
+    # /api (no trailing slash) -> /api/
+    location = /api { return 301 /api/; }
 
-```bash
-mkdir -p data/raw data/dataset_a
-# 把 input.h5ad 放到 data/raw/input.h5ad
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
 
-docker compose --profile tools run --rm preprocess run \
-  -i /data/raw/input.h5ad \
-  -o /data/dataset_a \
-  -z 8 -g 500
+    # /d (no trailing slash) -> /d/
+    location = /d { return 301 /d/; }
+
+    location /d/ {
+        proxy_pass http://127.0.0.1:8080/d/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # 可选：健康检查直通
+    location /health {
+        proxy_pass http://127.0.0.1:8080/health;
+    }
+}
 ```
-
-预处理完成后，更新 `config/server.yaml` 指向对应 `/data/...` 路径，并重启后端：
-
-```bash
-docker compose restart server
-```
-
-### 5) 对外提供服务（可选）
-
-- 修改 `docker-compose.yml` 的端口映射，将 `frontend` 暴露到 `80/443`，或在外部反向代理（Nginx/Traefik）前置。
-- 若浏览器直接访问后端（不经 `frontend` 代理），需要在 `config/server.yaml` 的 `server.cors_origins` 中加入实际前端域名来源。

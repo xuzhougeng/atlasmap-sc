@@ -14,25 +14,37 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy API requests to backend
+    # /api (no trailing slash) -> /api/
+    location = /api {
+        return 301 /api/;
+    }
+
+    # Proxy API requests to backend (HTTP)
     # Use ^~ so regex locations (e.g. \.png$) won't steal these requests.
     location ^~ /api/ {
-        proxy_pass http://server:8080/api/;
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/api/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
     }
 
-    # Proxy dataset-scoped API + tiles to backend
+    # /d (no trailing slash) -> /d/
+    location = /d {
+        return 301 /d/;
+    }
+
+    # Proxy dataset-scoped API + tiles to backend (HTTP)
     # Use ^~ so regex locations (e.g. \.png$) won't steal tile image requests.
     location ^~ /d/ {
-        proxy_pass http://server:8080/d/;
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/d/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
         # Large tile responses can take time on cold cache
         proxy_read_timeout 300s;
@@ -44,3 +56,4 @@ server {
         add_header Cache-Control "public, immutable";
     }
 }
+
