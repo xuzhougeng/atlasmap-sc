@@ -82,7 +82,7 @@ UPSTREAM_ORIGIN=http://your.backend.server npm run build:cloudflare
 
 使用cloudflare wrangler进行发布
 
-````bash
+```bash
 # 1) 登录
 npx wrangler login
 

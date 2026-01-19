@@ -1,0 +1,7 @@
+bin/
+data/
+*.sqlite
+*.db
+*.zarr
+*.h5ad
+*.h5
