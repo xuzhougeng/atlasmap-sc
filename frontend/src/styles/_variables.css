@@ -14,6 +14,11 @@
     --radius: 8px;
     --header-height: 60px;
     --sidebar-width: 300px;
+
+    /* Mobile-specific variables */
+    --header-height-mobile: 50px;
+    --sidebar-height-mobile: 38dvh;
+    --touch-target-min: 44px;
 }
 
 [data-theme="light"] {

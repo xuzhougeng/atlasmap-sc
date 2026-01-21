@@ -1129,3 +1129,369 @@
     border-color: var(--accent-primary);
     color: white;
 }
+
+/* ============================================
+   Mobile Responsive Components (max-width: 768px)
+   ============================================ */
+@media (max-width: 768px) {
+    /* Panel: tighter padding */
+    .panel {
+        padding: 12px;
+    }
+
+    .panel-title {
+        font-size: 0.8rem;
+        margin-bottom: 10px;
+    }
+
+    /* Toolbar: auto-fit grid with minimum 44px touch targets */
+    .toolbar {
+        grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+        gap: 6px;
+    }
+
+    /* Tool buttons: ensure 44px minimum touch target */
+    .tool-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .tool-text {
+        font-size: 0.7rem;
+    }
+
+    /* Tool popover: responsive width */
+    .tool-popover {
+        padding: 8px 10px;
+    }
+
+    .tool-popover__row input[type="range"] {
+        width: 140px;
+    }
+
+    .tool-range-value {
+        min-width: 40px;
+        font-size: 0.8rem;
+    }
+
+    .download-status {
+        font-size: 0.7rem;
+    }
+
+    /* Gene selector: keep 16px font-size to prevent iOS auto-zoom on focus */
+    .gene-input {
+        padding: 8px 10px;
+        font-size: 16px;
+    }
+
+    .gene-dropdown {
+        max-height: 200px;
+    }
+
+    .gene-item {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
+    /* Category filters: tighter spacing */
+    .category-group {
+        margin-bottom: 12px;
+    }
+
+    .category-group-title {
+        font-size: 0.7rem;
+    }
+
+    .category-item {
+        font-size: 0.8rem;
+        padding: 6px 4px;
+    }
+
+    .category-color {
+        width: 10px;
+        height: 10px;
+    }
+
+    .category-actions {
+        gap: 8px;
+        margin-top: 6px;
+    }
+
+    /* Tab panel: compact */
+    .tab-panel-container {
+        margin-bottom: 8px;
+    }
+
+    .tab-header {
+        gap: 4px;
+    }
+
+    .tab-btn {
+        padding: 8px 12px;
+        font-size: 0.75rem;
+    }
+
+    .tab-content {
+        padding: 10px;
+    }
+
+    .tab-section-title {
+        font-size: 0.7rem;
+        margin: 10px 0 6px 0;
+    }
+
+    /* Legend: compact */
+    .legend-header {
+        padding: 6px 10px;
+    }
+
+    .legend-title {
+        font-size: 0.7rem;
+    }
+
+    .legend-items {
+        max-height: 200px;
+    }
+
+    .legend-item {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+    }
+
+    .legend-color {
+        width: 10px;
+        height: 10px;
+    }
+
+    /* Buttons: ensure touch targets */
+    .btn-link {
+        font-size: 0.7rem;
+        padding: 4px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        min-height: 44px;
+    }
+
+    /* Colormap/scale selectors */
+    .colormap-selector,
+    .colorscale-selector {
+        gap: 6px;
+    }
+
+    /* Keep 16px font-size on inputs/selects to prevent iOS auto-zoom on focus */
+    .colormap-selector select,
+    .colorscale-selector select {
+        padding: 6px 8px;
+        font-size: 16px;
+    }
+
+    /* Expression range selector */
+    .expression-range-selector label {
+        font-size: 0.75rem;
+    }
+
+    .expression-range-selector input[type="number"] {
+        padding: 6px 8px;
+        font-size: 16px;
+    }
+
+    /* Cell query panel */
+    .cell-query-panel {
+        font-size: 0.8rem;
+    }
+
+    /* Gene dataset modal: mobile friendly */
+    .gene-dataset-modal {
+        padding: 20px 24px;
+        max-width: 90%;
+    }
+
+    .gene-dataset-modal h2 {
+        font-size: 1.1rem;
+    }
+
+    .gene-dataset-modal p {
+        font-size: 0.85rem;
+    }
+
+    .gene-dataset-btn {
+        padding: 14px 16px;
+        font-size: 0.85rem;
+    }
+
+    /* ============================================
+       Mobile Floating UI (FABs + Cards)
+       ============================================ */
+
+    /* Backdrop overlay */
+    .mobile-backdrop {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.4);
+        z-index: 1100;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .mobile-backdrop.open {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Floating Action Buttons container */
+    .mobile-fabs {
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 1200;
+    }
+
+    /* Individual FAB button */
+    .mobile-fab-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: none;
+        background-color: var(--accent-primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .mobile-fab-btn:active {
+        transform: scale(0.95);
+    }
+
+    .mobile-fab-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Floating Card */
+    .mobile-card {
+        position: fixed;
+        right: 12px;
+        bottom: 80px; /* Above FABs */
+        width: min(360px, calc(100vw - 24px));
+        /* Use vh (not dvh) so size stays stable when keyboard appears */
+        max-height: min(65vh, calc(100vh - 160px));
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        z-index: 1300;
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(20px) scale(0.95);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+    }
+
+    .mobile-card.open {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
+    }
+
+    .mobile-card__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--bg-tertiary);
+        flex-shrink: 0;
+    }
+
+    .mobile-card__title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .mobile-card__close {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: background-color 0.15s ease;
+    }
+
+    .mobile-card__close:hover {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+    .mobile-card__body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        min-height: 0;
+    }
+
+    /* Tools card: allow popover to overflow */
+    .mobile-card--tools .mobile-card__body {
+        overflow: visible;
+    }
+
+    .mobile-card--tools {
+        overflow: visible;
+    }
+
+    /* Adjust tools panel inside mobile card */
+    .mobile-card--tools .panel {
+        padding: 0;
+        background: transparent;
+    }
+
+    .mobile-card--tools .panel-title {
+        display: none; /* Title is in card header */
+    }
+
+    /* Position popover correctly inside mobile tools card */
+    .mobile-card--tools .tool-popover {
+        position: fixed;
+        z-index: 1400;
+    }
+
+    /* Tab panel adjustments inside mobile card */
+    .mobile-card--tabs .tab-panel-container {
+        height: 100%;
+    }
+
+    .mobile-card--tabs .tab-panel {
+        height: 100%;
+        background: transparent;
+    }
+
+    .mobile-card--tabs .tab-content {
+        padding: 0;
+    }
+
+    .mobile-card--tabs .tab-pane {
+        padding: 0;
+    }
+}

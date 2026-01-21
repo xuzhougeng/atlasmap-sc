@@ -199,3 +199,106 @@
     border: 1px solid var(--border-color);
     background: linear-gradient(to top, #440154 0%, #fde725 100%);
 }
+
+/* ============================================
+   Mobile Responsive Layout (max-width: 768px)
+   ============================================ */
+@media (max-width: 768px) {
+    /* Header: compact and wrap-friendly */
+    .header {
+        height: auto;
+        min-height: var(--header-height-mobile, 50px);
+        padding: 8px 12px;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .header-title {
+        font-size: 1.25rem;
+    }
+
+    .header-info {
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-left: 0;
+        width: 100%;
+        order: 1;
+    }
+
+    .dataset-selector {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .dataset-selector label {
+        font-size: 0.75rem;
+    }
+
+    .dataset-select {
+        padding: 4px 8px;
+        font-size: 0.8rem;
+    }
+
+    .dataset-info-items {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .info-item {
+        font-size: 0.75rem;
+    }
+
+    /* Main content: map takes full space on mobile */
+    .main-content {
+        flex-direction: column;
+    }
+
+    /* Map takes full available height */
+    .map-container {
+        flex: 1;
+        min-height: 0;
+        order: 0;
+    }
+
+    /* Hide sidebar on mobile - content will be moved to floating cards via JS */
+    .sidebar {
+        display: none;
+    }
+
+    /* Hide sidebar resizer on mobile */
+    .sidebar-resizer {
+        display: none;
+    }
+
+    /* Expression colorbar: smaller on mobile */
+    .expression-colorbar-container {
+        top: 8px;
+        right: 8px;
+    }
+
+    .expression-colorbar {
+        padding: 6px 8px;
+        gap: 6px;
+        min-width: 56px;
+    }
+
+    .expression-colorbar-title {
+        font-size: 0.7rem;
+        max-width: 100px;
+    }
+
+    .expression-colorbar-bar {
+        width: 10px;
+        height: 80px;
+    }
+
+    .expression-colorbar-label {
+        font-size: 0.6rem;
+    }
+
+    /* Zoom info: smaller */
+    .zoom-info {
+        padding: 4px 8px;
+        font-size: 0.65rem;
+    }
+}

@@ -10,6 +10,8 @@ html, body {
     height: 100%;
     width: 100%;
     overflow: hidden;
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior: none;
 }
 
 body {
@@ -17,12 +19,19 @@ body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.5;
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #app {
     display: flex;
     flex-direction: column;
+    /* Fallback for browsers that don't support dvh */
     height: 100vh;
+    /* Modern viewport units that account for mobile browser UI */
+    height: 100dvh;
+    min-height: 100dvh;
 }
 
 /* Scrollbar */

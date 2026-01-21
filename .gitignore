@@ -10,6 +10,7 @@ venv/
 .uv/
 
 # Build outputs
+functions/
 dist/
 build/
 *.so

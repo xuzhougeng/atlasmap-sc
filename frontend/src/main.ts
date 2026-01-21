@@ -771,6 +771,35 @@ async function init() {
         new SidebarResizer(sidebarResizer, sidebar);
     }
 
+    // Handle viewport resize for mobile (debounced via requestAnimationFrame)
+    let resizeRafId: number | null = null;
+    const handleResize = () => {
+        if (resizeRafId !== null) return;
+        resizeRafId = requestAnimationFrame(() => {
+            resizeRafId = null;
+            mapController.getMap().invalidateSize({ pan: false });
+        });
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Also handle orientation change on mobile devices
+    window.addEventListener('orientationchange', () => {
+        // Delay invalidateSize to let the browser settle after orientation change
+        setTimeout(() => {
+            mapController.getMap().invalidateSize({ pan: false });
+        }, 100);
+    });
+
+    // Initial invalidateSize after layout paint (helps on mobile Safari)
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            mapController.getMap().invalidateSize({ pan: false });
+        });
+    });
+
+    // Setup mobile floating UI (only activates on mobile viewports)
+    setupMobileUI(tabPanel);
+
     console.log('AtlasMap initialized successfully');
 }
 
@@ -1041,6 +1070,151 @@ function showError(message: string) {
         error.textContent = message;
         app.prepend(error);
     }
+}
+
+// Mobile UI: floating action buttons + floating cards
+function setupMobileUI(tabPanel: TabPanel): void {
+    const mobileQuery = window.matchMedia('(max-width: 768px)');
+    if (!mobileQuery.matches) return;
+
+    const mapContainer = document.getElementById('map-container');
+    const tabPanelContainer = document.getElementById('tab-panel-container');
+    const toolsPanel = document.getElementById('tools-panel');
+    if (!mapContainer || !tabPanelContainer || !toolsPanel) return;
+
+    // Track which card is open: 'tabs' | 'tools' | null
+    let openCard: 'tabs' | 'tools' | null = null;
+
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'mobile-backdrop';
+    mapContainer.appendChild(backdrop);
+
+    // Create FABs container
+    const fabsContainer = document.createElement('div');
+    fabsContainer.className = 'mobile-fabs';
+    fabsContainer.innerHTML = `
+        <button class="mobile-fab-btn" data-action="category" title="Category">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        </button>
+        <button class="mobile-fab-btn" data-action="expression" title="Expression">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </button>
+        <button class="mobile-fab-btn" data-action="tools" title="Tools">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
+        </button>
+    `;
+    mapContainer.appendChild(fabsContainer);
+
+    // Create tabs card
+    const tabsCard = document.createElement('div');
+    tabsCard.className = 'mobile-card mobile-card--tabs';
+    tabsCard.innerHTML = `
+        <div class="mobile-card__header">
+            <span class="mobile-card__title"></span>
+            <button class="mobile-card__close" aria-label="Close">&times;</button>
+        </div>
+        <div class="mobile-card__body"></div>
+    `;
+    mapContainer.appendChild(tabsCard);
+
+    // Create tools card
+    const toolsCard = document.createElement('div');
+    toolsCard.className = 'mobile-card mobile-card--tools';
+    toolsCard.innerHTML = `
+        <div class="mobile-card__header">
+            <span class="mobile-card__title">Tools</span>
+            <button class="mobile-card__close" aria-label="Close">&times;</button>
+        </div>
+        <div class="mobile-card__body"></div>
+    `;
+    mapContainer.appendChild(toolsCard);
+
+    // Reparent content into cards
+    const tabsCardBody = tabsCard.querySelector('.mobile-card__body')!;
+    const toolsCardBody = toolsCard.querySelector('.mobile-card__body')!;
+    tabsCardBody.appendChild(tabPanelContainer);
+    toolsCardBody.appendChild(toolsPanel);
+
+    // Card title element for tabs card
+    const tabsCardTitle = tabsCard.querySelector('.mobile-card__title') as HTMLElement;
+
+    const updateTabsCardTitle = () => {
+        const currentTab = tabPanel.getCurrentTab();
+        tabsCardTitle.textContent = currentTab === 'category' ? 'Category' : 'Expression';
+    };
+
+    const closeAllCards = () => {
+        tabsCard.classList.remove('open');
+        toolsCard.classList.remove('open');
+        backdrop.classList.remove('open');
+        openCard = null;
+    };
+
+    const openTabsCard = (tab: 'category' | 'expression') => {
+        tabPanel.switchTab(tab);
+        updateTabsCardTitle();
+        toolsCard.classList.remove('open');
+        tabsCard.classList.add('open');
+        backdrop.classList.add('open');
+        openCard = 'tabs';
+    };
+
+    const openToolsCard = () => {
+        tabsCard.classList.remove('open');
+        toolsCard.classList.add('open');
+        backdrop.classList.add('open');
+        openCard = 'tools';
+    };
+
+    // FAB click handlers
+    fabsContainer.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('.mobile-fab-btn') as HTMLElement | null;
+        if (!btn) return;
+        const action = btn.dataset.action;
+        if (action === 'category') {
+            if (openCard === 'tabs' && tabPanel.getCurrentTab() === 'category') {
+                closeAllCards();
+            } else {
+                openTabsCard('category');
+            }
+        } else if (action === 'expression') {
+            if (openCard === 'tabs' && tabPanel.getCurrentTab() === 'expression') {
+                closeAllCards();
+            } else {
+                openTabsCard('expression');
+            }
+        } else if (action === 'tools') {
+            if (openCard === 'tools') {
+                closeAllCards();
+            } else {
+                openToolsCard();
+            }
+        }
+    });
+
+    // Close button handlers
+    tabsCard.querySelector('.mobile-card__close')!.addEventListener('click', closeAllCards);
+    toolsCard.querySelector('.mobile-card__close')!.addEventListener('click', closeAllCards);
+
+    // Backdrop click closes cards
+    backdrop.addEventListener('click', closeAllCards);
+
+    // Escape key closes cards
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && openCard) {
+            closeAllCards();
+        }
+    });
+
+    // Hide .tab-header inside mobile card (tabs are controlled by FABs)
+    const style = document.createElement('style');
+    style.textContent = `
+        .mobile-card--tabs .tab-header { display: none; }
+        .mobile-card--tabs .tab-pane { display: block !important; padding: 0; }
+        .mobile-card--tabs .tab-pane:not(.active) { display: none !important; }
+    `;
+    document.head.appendChild(style);
 }
 
 function formatNumber(n: number): string {
