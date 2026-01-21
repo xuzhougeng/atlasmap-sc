@@ -1337,12 +1337,16 @@
         z-index: 1100;
         opacity: 0;
         visibility: hidden;
+        pointer-events: none;
         transition: opacity 0.2s ease, visibility 0.2s ease;
     }
 
     .mobile-backdrop.open {
         opacity: 1;
         visibility: visible;
+        pointer-events: auto;
+        /* Block all touch events from reaching the map */
+        touch-action: none;
     }
 
     /* Floating Action Buttons container */
@@ -1398,6 +1402,7 @@
         flex-direction: column;
         opacity: 0;
         visibility: hidden;
+        pointer-events: none;
         transform: translateY(20px) scale(0.95);
         transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
     }
@@ -1406,6 +1411,9 @@
         opacity: 1;
         visibility: visible;
         transform: translateY(0) scale(1);
+        pointer-events: auto;
+        /* Allow vertical scrolling, block horizontal to prevent map drag */
+        touch-action: pan-y;
     }
 
     .mobile-card__header {
@@ -1450,6 +1458,10 @@
         overflow-y: auto;
         padding: 12px;
         min-height: 0;
+        /* Enable smooth scrolling and prevent scroll chaining to map */
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
     }
 
     /* Tools card: allow popover to overflow */

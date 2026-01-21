@@ -798,7 +798,7 @@ async function init() {
     });
 
     // Setup mobile floating UI (only activates on mobile viewports)
-    setupMobileUI(tabPanel);
+    setupMobileUI(tabPanel, mapController);
 
     console.log('AtlasMap initialized successfully');
 }
@@ -1073,7 +1073,7 @@ function showError(message: string) {
 }
 
 // Mobile UI: floating action buttons + floating cards
-function setupMobileUI(tabPanel: TabPanel): void {
+function setupMobileUI(tabPanel: TabPanel, mapController: MapController): void {
     const mobileQuery = window.matchMedia('(max-width: 768px)');
     if (!mobileQuery.matches) return;
 
@@ -1084,6 +1084,7 @@ function setupMobileUI(tabPanel: TabPanel): void {
 
     // Track which card is open: 'tabs' | 'tools' | null
     let openCard: 'tabs' | 'tools' | null = null;
+    const leafletMap = mapController.getMap();
 
     // Create backdrop
     const backdrop = document.createElement('div');
@@ -1149,6 +1150,9 @@ function setupMobileUI(tabPanel: TabPanel): void {
         toolsCard.classList.remove('open');
         backdrop.classList.remove('open');
         openCard = null;
+        // Re-enable map dragging when cards are closed
+        leafletMap.dragging.enable();
+        leafletMap.touchZoom.enable();
     };
 
     const openTabsCard = (tab: 'category' | 'expression') => {
@@ -1158,6 +1162,9 @@ function setupMobileUI(tabPanel: TabPanel): void {
         tabsCard.classList.add('open');
         backdrop.classList.add('open');
         openCard = 'tabs';
+        // Disable map dragging to prevent touch events from moving the map
+        leafletMap.dragging.disable();
+        leafletMap.touchZoom.disable();
     };
 
     const openToolsCard = () => {
@@ -1165,6 +1172,9 @@ function setupMobileUI(tabPanel: TabPanel): void {
         toolsCard.classList.add('open');
         backdrop.classList.add('open');
         openCard = 'tools';
+        // Disable map dragging to prevent touch events from moving the map
+        leafletMap.dragging.disable();
+        leafletMap.touchZoom.disable();
     };
 
     // FAB click handlers
