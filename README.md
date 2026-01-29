@@ -10,6 +10,8 @@ Please refer to the following guides:
 - [Detailed Tutorial](./doc/how-to-use.md)
 - [Deployment](./doc/deploy.md)
 
+You can view the AtlasMap browser in action at <https://explorer.plantcellatlas.com/>.
+
 If you use **AtlasMap** in your work, please cite:
 
 > **AtlasMap: enabling low-cost, map-style exploration of million-cell single-cell atlases**  
