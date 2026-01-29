@@ -1,84 +1,84 @@
-## 常用接口（后端）
+## API Reference (Backend)
 
-代码位置：`server/internal/api/routes.go`
+Code location: `server/internal/api/routes.go`
 
-通用说明：
-- 所有 API 与 Tiles 接口均需在路径前加 `/d/{dataset}`，例如 `/d/pbmc/api/metadata`、`/d/pbmc/tiles/0/0/0.png`
-- `{dataset}` 为数据集 ID，可通过 `GET /api/datasets` 获取可用列表及默认值
+General notes:
+- All API and Tiles endpoints require the `/d/{dataset}` prefix, e.g., `/d/pbmc/api/metadata`, `/d/pbmc/tiles/0/0/0.png`
+- `{dataset}` is the dataset ID, which can be obtained via `GET /api/datasets`
 
 ### Health
 
-- `GET /health`：健康检查
+- `GET /health`: Health check endpoint
 
-### 数据集（全局）
+### Datasets (Global)
 
-- `GET /api/datasets`：列出可用数据集与默认数据集（该接口不加 `/d/{dataset}`）
-  - Response 包含 `has_blastp` 字段标识是否配置了 BLASTP 数据库
+- `GET /api/datasets`: List available datasets and default dataset (this endpoint does not require `/d/{dataset}` prefix)
+  - Response includes `has_blastp` field indicating whether BLASTP database is configured
 
-### 基因查找（全局）
+### Gene Lookup (Global)
 
-- `GET /api/gene_lookup?gene_id={gene_id}`：查找包含指定基因的数据集列表（用于跨数据集导航）
+- `GET /api/gene_lookup?gene_id={gene_id}`: Find datasets containing the specified gene (for cross-dataset navigation)
   - Response: `{ "gene_id": "...", "datasets": ["dataset1", "dataset2", ...] }`
-  - 当 URL 只提供 `gene` 参数时，前端会自动调用此接口定位数据集
+  - When the URL only provides a `gene` parameter, the frontend automatically calls this endpoint to locate the dataset
 
-### API（JSON）
+### API (JSON)
 
-- `GET /d/{dataset}/api/metadata`：数据集元数据（前端启动依赖）
-- `GET /d/{dataset}/api/stats`：统计信息（如 n_cells、n_genes、zoom_levels、dataset_name）
-- `GET /d/{dataset}/api/genes`：预聚合基因列表
-- `GET /d/{dataset}/api/genes/{gene}`：基因信息（如 index/preaggregated）
-- `GET /d/{dataset}/api/genes/{gene}/stats?zoom={z}`：基因统计（`zoom` 可选，默认 0）
-- `GET /d/{dataset}/api/genes/{gene}/bins?threshold=&offset=&limit=`：查询表达该基因的 bins（limit 默认 100，最大 1000）
-- `GET /d/{dataset}/api/genes/{gene}/category/{column}/means`：该基因在指定分类上的均值（用于类别对比）
-- `GET /d/{dataset}/api/categories`：可用分类字段与取值
-- `GET /d/{dataset}/api/categories/{column}/colors`：分类颜色映射
-- `GET /d/{dataset}/api/categories/{column}/centroids`：分类中心点（按 `cell_count` 加权的 `(x,y)`）
-- `GET /d/{dataset}/api/categories/{column}/legend`：分类图例
+- `GET /d/{dataset}/api/metadata`: Dataset metadata (required for frontend initialization)
+- `GET /d/{dataset}/api/stats`: Statistics (e.g., n_cells, n_genes, zoom_levels, dataset_name)
+- `GET /d/{dataset}/api/genes`: Pre-aggregated gene list
+- `GET /d/{dataset}/api/genes/{gene}`: Gene information (e.g., index/preaggregated)
+- `GET /d/{dataset}/api/genes/{gene}/stats?zoom={z}`: Gene statistics (`zoom` is optional, defaults to 0)
+- `GET /d/{dataset}/api/genes/{gene}/bins?threshold=&offset=&limit=`: Query bins expressing the gene (limit defaults to 100, max 1000)
+- `GET /d/{dataset}/api/genes/{gene}/category/{column}/means`: Mean expression of the gene by category (for category comparison)
+- `GET /d/{dataset}/api/categories`: Available category columns and values
+- `GET /d/{dataset}/api/categories/{column}/colors`: Category color mapping
+- `GET /d/{dataset}/api/categories/{column}/centroids`: Category centroids (weighted by `cell_count` `(x,y)`)
+- `GET /d/{dataset}/api/categories/{column}/legend`: Category legend
 
-### SOMA（实验级表达查询，TileDB-SOMA）
+### SOMA (Experiment-level Expression Query, TileDB-SOMA)
 
-> 注意：该接口需要后端以 `-tags soma` 构建，并且运行环境安装 TileDB C 库（`libtiledb` + headers）；否则会返回 `501`（not implemented）。
+> Note: This endpoint requires the backend to be built with `-tags soma`, and the runtime environment must have the TileDB C library installed (`libtiledb` + headers); otherwise, it returns `501` (not implemented).
 
 - `GET /d/{dataset}/api/soma/expression?gene={gene}&cells={c1,c2,...}&mode={sparse|dense}`
-  - `gene`：基因名（`ms/RNA/var.gene_id`；注意不是 `gene_name`）
-  - `cells`：细胞 `soma_joinid`（整数，逗号分隔；不是 `cell_id` 字符串）
-  - `mode`：
-    - `sparse`（默认）：返回非零项 `items=[{cell_joinid,value}, ...]`
-    - `dense`：返回与输入 `cells` 对齐的 `values=[...]`（缺失视为 0）
-  - 限制：`cells` 最多 10000 个（超出会 400）
+  - `gene`: Gene name (`ms/RNA/var.gene_id`; note: not `gene_name`)
+  - `cells`: Cell `soma_joinid` (integers, comma-separated; not `cell_id` strings)
+  - `mode`:
+    - `sparse` (default): Returns non-zero items `items=[{cell_joinid,value}, ...]`
+    - `dense`: Returns values aligned with input `cells` `values=[...]` (missing values are 0)
+  - Limit: Maximum 10000 `cells` (exceeding returns 400)
 
-示例：
+Example:
 
 ```bash
 curl -sS 'http://localhost:8080/d/retina/api/soma/expression?gene=ENSMICG00000038116&cells=95,118,143&mode=dense'
 ```
 
-状态码说明（当前实现）：
+Status codes (current implementation):
 
-- 404：该 dataset 未配置 `soma_path` 或 experiment 不存在
-- 501：服务未以 `-tags soma` 构建
-- 400：参数错误 / gene 不存在 / TileDB 查询失败（错误体为纯文本）
+- 404: Dataset does not have `soma_path` configured or experiment does not exist
+- 501: Server not built with `-tags soma`
+- 400: Parameter error / gene does not exist / TileDB query failed (error body is plain text)
 
-### SOMA 差异表达分析（DE Job，TileDB-SOMA）
+### SOMA Differential Expression Analysis (DE Job, TileDB-SOMA)
 
-> 同样需要后端以 `-tags soma` 构建。
+> Also requires backend built with `-tags soma`.
 
-差异表达分析为异步任务：提交后返回 `job_id`，前端轮询状态，完成后拉取结果。
+Differential expression analysis is an asynchronous task: after submission, a `job_id` is returned; the frontend polls for status and retrieves results when complete.
 
-#### 提交任务
+#### Submit Job
 
 - `POST /d/{dataset}/api/soma/de/jobs`
-  - Body（JSON）：
-    - `groupby`: string（obs 列名，如 `cell_type`）
-    - `group1`: string[]（组1 类别，至少一个）
-    - `group2`: string[]（组2 类别；空表示 one-vs-rest）
-    - `tests`: string[]（`["ttest","ranksum"]`；默认两者都算）
-    - `max_cells_per_group`: int（每组最多采样细胞数；默认 2000，上限 20000）
-    - `seed`: int（采样随机种子；默认 0）
-    - `limit`: int（返回 top N 基因；默认 50，上限 500）
+  - Body (JSON):
+    - `groupby`: string (obs column name, e.g., `cell_type`)
+    - `group1`: string[] (group 1 categories, at least one)
+    - `group2`: string[] (group 2 categories; empty means one-vs-rest)
+    - `tests`: string[] (`["ttest","ranksum"]`; defaults to both)
+    - `max_cells_per_group`: int (max cells sampled per group; default 2000, max 20000)
+    - `seed`: int (sampling random seed; default 0)
+    - `limit`: int (return top N genes; default 50, max 500)
   - Response: `{ "job_id": "...", "status": "queued" }`
 
-示例：
+Example:
 
 ```bash
 curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
@@ -86,26 +86,26 @@ curl -X POST 'http://localhost:8080/d/retina/api/soma/de/jobs' \
   -d '{"groupby":"cell_type","group1":["retinal rod cell"],"group2":[]}'
 ```
 
-#### 查询状态
+#### Query Status
 
 - `GET /d/{dataset}/api/soma/de/jobs/{job_id}`
   - Response: `{ job_id, status, created_at, started_at, finished_at, progress:{phase,done,total}, error }`
   - `status`: `queued|running|completed|failed|cancelled`
 
-示例
+Example:
 
 ```bash
 curl -sS 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785' | jq
 ```
 
-#### 拉取结果
+#### Retrieve Results
 
 - `GET /d/{dataset}/api/soma/de/jobs/{job_id}/result?offset=&limit=&order_by=`
-  - 仅当 `status=completed` 时可用
-  - Query 参数：
-    - `offset`：起始位置（默认 0）
-    - `limit`：返回条数（默认 50，上限 500）
-    - `order_by`：排序方式，可选值：`fdr_ranksum`（默认）、`fdr_ttest`、`p_ranksum`、`p_ttest`、`abs_log2fc`
+  - Only available when `status=completed`
+  - Query parameters:
+    - `offset`: Starting position (default 0)
+    - `limit`: Number of results (default 50, max 500)
+    - `order_by`: Sort order, options: `fdr_ranksum` (default), `fdr_ttest`, `p_ranksum`, `p_ttest`, `abs_log2fc`
   - Response:
     ```json
     {
@@ -122,52 +122,51 @@ curl -sS 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785' | jq
     }
     ```
 
-示例
+Example:
 
 ```bash
 curl 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785/result | jq
 ```
 
-
-#### 取消任务
+#### Cancel Job
 
 - `DELETE /d/{dataset}/api/soma/de/jobs/{job_id}`
 
-#### obs 元数据查询（用于前端下拉）
+#### obs Metadata Query (for Frontend Dropdowns)
 
-- `GET /d/{dataset}/api/soma/obs/columns`：返回 obs 可用列名
-- `GET /d/{dataset}/api/soma/obs/{column}/values`：返回该列的唯一值
+- `GET /d/{dataset}/api/soma/obs/columns`: Returns available obs column names
+- `GET /d/{dataset}/api/soma/obs/{column}/values`: Returns unique values for the column
 
-#### 统计方法说明
+#### Statistical Methods
 
-- **t-test**：Welch t-test（不假设等方差），p-value 用 Student-t 分布 CDF
-- **ranksum**：Mann-Whitney U 检验（Wilcoxon rank-sum），带 tie 校正，正态近似 p-value
-- **FDR**：Benjamini-Hochberg 多重校正
+- **t-test**: Welch t-test (does not assume equal variance), p-value calculated using Student-t distribution CDF
+- **ranksum**: Mann-Whitney U test (Wilcoxon rank-sum), with tie correction, normal approximation p-value
+- **FDR**: Benjamini-Hochberg multiple testing correction
 
-#### 持久化与限制
+#### Persistence and Limits
 
-- **SQLite 持久化**：任务状态与结果存储在 SQLite 数据库（`de.sqlite_path`），服务重启后可继续查询历史结果
-- **重启恢复**：服务重启时，正在运行的任务会被标记为 `failed`；排队中的任务会重新入队
-- **TTL 清理**：完成的任务默认保留 **7 天**（`de.retention_days`），到期自动清理
-- 每组最多采样 20000 细胞（`max_cells_per_group`）
-- 默认同时运行最多 1 个 DE 任务（可通过配置 `de.max_concurrent` 调整），其余排队
+- **SQLite Persistence**: Job status and results are stored in SQLite database (`de.sqlite_path`), historical results can be queried after server restart
+- **Restart Recovery**: On server restart, running jobs are marked as `failed`; queued jobs are re-queued
+- **TTL Cleanup**: Completed jobs are retained for **7 days** by default (`de.retention_days`), then automatically cleaned up
+- Max 20000 cells per group (`max_cells_per_group`)
+- Default max 1 concurrent DE job (configurable via `de.max_concurrent`), others are queued
 
-### BLASTP 蛋白序列检索（全局）
+### BLASTP Protein Sequence Search (Global)
 
-> 用于跨数据集检索同源基因。BLASTP 搜索各数据集配置的蛋白数据库，返回 hit 列表。
+> Used for cross-dataset homologous gene search. BLASTP searches the protein databases configured for each dataset and returns a hit list.
 
-#### 提交 BLASTP 任务
+#### Submit BLASTP Job
 
 - `POST /api/blastp/jobs`
-  - Body（JSON）：
-    - `sequence`: string（蛋白序列，FASTA 格式或纯序列）
-    - `max_hits`: int（每个数据库最大命中数，默认 10，上限 100）
-    - `evalue`: float（E-value 阈值，默认 1e-5）
-    - `datasets`: string[]（可选，限定搜索的数据集；空表示搜索所有配置了 blastp_path 的数据集）
-    - `num_threads`: int（每个 blastp 进程的线程数，默认 1，上限 4）
+  - Body (JSON):
+    - `sequence`: string (protein sequence, FASTA format or plain sequence)
+    - `max_hits`: int (max hits per database, default 10, max 100)
+    - `evalue`: float (E-value threshold, default 1e-5)
+    - `datasets`: string[] (optional, limit search to specific datasets; empty searches all datasets with blastp_path configured)
+    - `num_threads`: int (threads per blastp process, default 1, max 4)
   - Response: `{ "job_id": "...", "status": "queued" }`
 
-示例：
+Example:
 
 ```bash
 curl -X POST 'http://localhost:8080/api/blastp/jobs' \
@@ -175,20 +174,20 @@ curl -X POST 'http://localhost:8080/api/blastp/jobs' \
   -d '{"sequence":">query\nMSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGK","max_hits":10}'
 ```
 
-#### 查询状态
+#### Query Status
 
 - `GET /api/blastp/jobs/{job_id}`
   - Response: `{ job_id, status, created_at, started_at, finished_at, progress:{phase,done,total}, error }`
   - `status`: `queued|running|completed|failed|cancelled`
 
-#### 拉取结果
+#### Retrieve Results
 
 - `GET /api/blastp/jobs/{job_id}/result?offset=&limit=&order_by=`
-  - 仅当 `status=completed` 时可用
-  - Query 参数：
-    - `offset`：起始位置（默认 0）
-    - `limit`：返回条数（默认 100，上限 500）
-    - `order_by`：排序方式，可选值：`bitscore`（默认）、`evalue`、`pident`、`length`
+  - Only available when `status=completed`
+  - Query parameters:
+    - `offset`: Starting position (default 0)
+    - `limit`: Number of results (default 100, max 500)
+    - `order_by`: Sort order, options: `bitscore` (default), `evalue`, `pident`, `length`
   - Response:
     ```json
     {
@@ -203,20 +202,20 @@ curl -X POST 'http://localhost:8080/api/blastp/jobs' \
     }
     ```
 
-#### 取消任务
+#### Cancel Job
 
 - `DELETE /api/blastp/jobs/{job_id}`
 
-#### 共享数据库处理
+#### Shared Database Handling
 
-当多个数据集配置了相同的 `blastp_path` 时：
-- 后端对每个唯一的 `blastp_path` 只运行一次 `blastp` 命令（去重执行）
-- 结果会为每个使用该数据库的数据集生成一行（即相同基因会在结果中出现多次，分别对应不同数据集）
+When multiple datasets are configured with the same `blastp_path`:
+- Backend runs only one `blastp` command per unique `blastp_path` (deduplicated execution)
+- Results are expanded to include a row for each dataset using that database (same gene appears multiple times, once per dataset)
 
-### Tiles（PNG）
+### Tiles (PNG)
 
-- `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`：基础 tile
-- `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=viridis`：基因表达着色（`colormap` 可选，默认 viridis）
-- `GET /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png?categories=...`：分类着色（可选过滤）
-  - 过滤（GET）：`categories` 可重复（`?categories=T&categories=B`），或 JSON 数组（`?categories=["T","B"]`），或逗号分隔（`?categories=T,B`）
-  - 过滤（POST）：`POST /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png`，body 支持 `["T","B"]` 或 `{"categories":["T","B"]}`（也兼容 form-encoded）
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}.png`: Base tile
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}/expression/{gene}.png?colormap=viridis`: Gene expression coloring (`colormap` is optional, defaults to viridis)
+- `GET /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png?categories=...`: Category coloring (optional filtering)
+  - Filter (GET): `categories` can be repeated (`?categories=T&categories=B`), or JSON array (`?categories=["T","B"]`), or comma-separated (`?categories=T,B`)
+  - Filter (POST): `POST /d/{dataset}/tiles/{z}/{x}/{y}/category/{column}.png`, body supports `["T","B"]` or `{"categories":["T","B"]}` (also supports form-encoded)
