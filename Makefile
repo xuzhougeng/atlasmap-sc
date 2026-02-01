@@ -29,6 +29,11 @@ PREPROCESS_N_GENES ?= 500
 # - PREPROCESS_MIN_CELLS=1: include genes expressed in >= N cells (only with all-expressed)
 PREPROCESS_ALL_EXPRESSED ?= 1
 PREPROCESS_MIN_CELLS ?= 1
+# - PREPROCESS_EXCLUDE_CATEGORIES: space-separated list of category columns to exclude
+#   Example: PREPROCESS_EXCLUDE_CATEGORIES="observation_joinid barcode"
+PREPROCESS_EXCLUDE_CATEGORIES ?=
+# - PREPROCESS_MAX_CATEGORY_CARDINALITY: max unique values for category columns (default 2000)
+PREPROCESS_MAX_CATEGORY_CARDINALITY ?= 2000
 
 # Preprocess input/output paths (relative to repo root, unless absolute path)
 # When running from preprocessing/, we need to prepend ../ for relative paths
@@ -128,13 +133,19 @@ preprocess: preprocess-venv
 	case "$(PREPROCESS_ALL_EXPRESSED)" in \
 		1|true|TRUE|yes|YES) ALL_EXPRESSED_FLAG="--all-expressed"; MIN_CELLS_ARGS="--min-cells $(PREPROCESS_MIN_CELLS)" ;; \
 	esac; \
-	echo "Preprocess: zoom_levels=$$ZOOM, all_expressed=$(PREPROCESS_ALL_EXPRESSED), min_cells=$(PREPROCESS_MIN_CELLS), n_genes=$(PREPROCESS_N_GENES), no_soma=$(PREPROCESS_NO_SOMA)"; \
+	EXCLUDE_CAT_ARGS=""; \
+	for col in $(PREPROCESS_EXCLUDE_CATEGORIES); do \
+		EXCLUDE_CAT_ARGS="$$EXCLUDE_CAT_ARGS --exclude-category $$col"; \
+	done; \
+	MAX_CAT_CARD_ARG="--max-category-cardinality $(PREPROCESS_MAX_CATEGORY_CARDINALITY)"; \
+	echo "Preprocess: zoom_levels=$$ZOOM, all_expressed=$(PREPROCESS_ALL_EXPRESSED), min_cells=$(PREPROCESS_MIN_CELLS), n_genes=$(PREPROCESS_N_GENES), no_soma=$(PREPROCESS_NO_SOMA), max_cat_card=$(PREPROCESS_MAX_CATEGORY_CARDINALITY)"; \
 	cd $(PREPROCESS_DIR) && PATH="$$HOME/.local/bin:$$PATH" UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
 		--input $(PREPROCESS_INPUT) \
 		--output $(PREPROCESS_OUTPUT) \
 		--zoom-levels "$$ZOOM" \
 		--n-genes "$(PREPROCESS_N_GENES)" \
 		$$ALL_EXPRESSED_FLAG $$MIN_CELLS_ARGS \
+		$$EXCLUDE_CAT_ARGS $$MAX_CAT_CARD_ARG \
 		$$NO_SOMA_FLAG
 
 # Create preprocessing venv (Python>=3.9 required by preprocessing/pyproject.toml)
