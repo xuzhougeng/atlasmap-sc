@@ -1,4 +1,5 @@
-.PHONY: all build run dev dev-soma test clean preprocess preprocess-venv ensure-go
+.PHONY: all build run dev dev-soma test clean preprocess preprocess-venv ensure-go \
+	check-node check-npm prepare-go prepare-python prepare-frontend prepare
 
 # Variables
 GO_SERVER_DIR := server
@@ -6,9 +7,14 @@ FRONTEND_DIR := frontend
 PREPROCESS_DIR := preprocessing
 DATA_DIR := data
 SERVER_CONFIG ?= ../config/server.yaml
+NODE ?= node
+NPM ?= npm
+TRASH_DIR ?= .Trash
 
 # Python (preprocessing) environment (uv)
+UV_BIN ?= $(HOME)/.local/bin/uv
 UV ?= uv
+UV_INSTALL_URL ?= https://astral.sh/uv/install.sh
 PREPROCESS_VENV_DIR := $(PREPROCESS_DIR)/.venv
 PREPROCESS_PYTHON ?= 3.11
 UV_LINK_MODE ?= copy
@@ -28,6 +34,12 @@ GO_TOOLS_DIR ?= .tools
 GO_BOOTSTRAP_DIR := $(abspath $(GO_TOOLS_DIR)/go$(GO_TOOLCHAIN_VERSION))
 GO_ENV := PATH="$(GO_BOOTSTRAP_DIR)/bin:$$PATH"
 
+# Node bootstrap (used when system Node is missing or unsupported)
+# Frontend requires Node ^18.0.0 or >=20.0.0 (Vite 5)
+NODE_TOOLCHAIN_VERSION ?= 20.11.1
+NODE_BOOTSTRAP_DIR := $(abspath $(GO_TOOLS_DIR)/node-v$(NODE_TOOLCHAIN_VERSION))
+NODE_ENV := PATH="$(NODE_BOOTSTRAP_DIR)/bin:$$PATH"
+
 # Default target
 all: build
 
@@ -35,43 +47,43 @@ all: build
 build: build-server build-frontend
 
 # Build Go server
-build-server:
+build-server: ensure-go
 	cd $(GO_SERVER_DIR) && $(GO_ENV) go build -o bin/server ./cmd/server
 
 # Build frontend
-build-frontend:
-	cd $(FRONTEND_DIR) && npm ci && npm run build
+build-frontend: prepare-frontend
+	cd $(FRONTEND_DIR) && $(NODE_ENV) npm run build
 
 # Run development servers
 dev:
 	@echo "Starting development servers..."
 	@$(MAKE) -j2 dev-server dev-frontend
 
-dev-server:
+dev-server: ensure-go
 	cd $(GO_SERVER_DIR) && $(GO_ENV) go run ./cmd/server -config "$(SERVER_CONFIG)"
 
 dev-soma:
 	@echo "Starting SOMA-enabled development servers..."
 	@$(MAKE) -j2 dev-soma-server dev-frontend
 
-dev-soma-server:
+dev-soma-server: ensure-go
 	cd $(GO_SERVER_DIR) && \
 		CGO_ENABLED=1 \
 		CGO_CFLAGS="-I$$CONDA_PREFIX/include" \
 		CGO_LDFLAGS="-L$$CONDA_PREFIX/lib -ltiledb -Wl,-rpath,$$CONDA_PREFIX/lib" \
 		$(GO_ENV) go run -tags soma ./cmd/server -config "$(SERVER_CONFIG)"
 
-dev-frontend:
-	cd $(FRONTEND_DIR) && npm run dev
+dev-frontend: prepare-frontend
+	cd $(FRONTEND_DIR) && $(NODE_ENV) npm run dev
 
 # Run tests
 test: test-server test-frontend
 
-test-server:
+test-server: ensure-go
 	cd $(GO_SERVER_DIR) && $(GO_ENV) go test ./...
 
-test-frontend:
-	cd $(FRONTEND_DIR) && npm test
+test-frontend: prepare-frontend
+	cd $(FRONTEND_DIR) && $(NODE_ENV) npm test
 
 # Run preprocessing
 preprocess: preprocess-venv
@@ -80,27 +92,48 @@ preprocess: preprocess-venv
 		echo "Usage: make preprocess INPUT=path/to/data.h5ad [OUTPUT=data/dataset_x]"; \
 		exit 1; \
 	fi
-	cd $(PREPROCESS_DIR) && UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
+	cd $(PREPROCESS_DIR) && PATH="$$HOME/.local/bin:$$PATH" UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
 		--input $(PREPROCESS_INPUT) \
 		--output $(PREPROCESS_OUTPUT) \
 		--zoom-levels 8 \
 		--n-genes 500
 
 # Create preprocessing venv (Python>=3.9 required by preprocessing/pyproject.toml)
-preprocess-venv:
-	@command -v "$(UV)" >/dev/null 2>&1 || { \
-		echo "uv not found. Install it first: https://docs.astral.sh/uv/"; \
-		exit 1; \
-	}
+ensure-uv:
+	@set -e; \
+	if command -v "$(UV)" >/dev/null 2>&1; then \
+		echo "Found uv: $$("$(UV)" --version)"; \
+	elif [ -x "$(UV_BIN)" ]; then \
+		echo "Found uv: $$("$(UV_BIN)" --version)"; \
+	else \
+		echo "uv not found. Installing via Astral installer..."; \
+		if command -v curl >/dev/null 2>&1; then \
+			curl -LsSf "$(UV_INSTALL_URL)" | sh; \
+		elif command -v wget >/dev/null 2>&1; then \
+			wget -qO- "$(UV_INSTALL_URL)" | sh; \
+		else \
+			echo "Neither curl nor wget is available to install uv."; \
+			exit 1; \
+		fi; \
+		if [ -x "$(UV_BIN)" ]; then \
+			echo "Installed uv: $$("$(UV_BIN)" --version)"; \
+		else \
+			echo "uv install finished, but $(UV_BIN) not found."; \
+			echo "Try: export PATH=\"$$HOME/.local/bin:$$PATH\""; \
+			exit 1; \
+		fi; \
+	fi
+
+preprocess-venv: ensure-uv
 	@cd $(PREPROCESS_DIR) && \
 		[ -d ".venv" ] || ( \
 			echo "Creating preprocessing venv with Python $(PREPROCESS_PYTHON)..." && \
-			$(UV) python install $(PREPROCESS_PYTHON) && \
-			$(UV) venv --python $(PREPROCESS_PYTHON) \
+			PATH="$$HOME/.local/bin:$$PATH" $(UV) python install $(PREPROCESS_PYTHON) && \
+			PATH="$$HOME/.local/bin:$$PATH" $(UV) venv --python $(PREPROCESS_PYTHON) \
 		)
 	@cd $(PREPROCESS_DIR) && \
 		echo "Installing preprocessing deps into .venv..." && \
-		UV_LINK_MODE=$(UV_LINK_MODE) $(UV) pip install -e ".[dev]" --link-mode=$(UV_LINK_MODE)
+		PATH="$$HOME/.local/bin:$$PATH" UV_LINK_MODE=$(UV_LINK_MODE) $(UV) pip install -e ".[dev]" --link-mode=$(UV_LINK_MODE)
 
 # Install Python dependencies
 install-python:
@@ -132,7 +165,11 @@ ensure-go:
 			exit 1; \
 		fi; \
 		tar -C "$$TMPDIR" -xzf "$$TMPDIR/go.tgz"; \
-		rm -rf "$(GO_BOOTSTRAP_DIR)"; \
+		if [ -e "$(GO_BOOTSTRAP_DIR)" ]; then \
+			mkdir -p "$(TRASH_DIR)"; \
+			TS=$$(date +%Y%m%d-%H%M%S); \
+			mv "$(GO_BOOTSTRAP_DIR)" "$(TRASH_DIR)/go$(GO_TOOLCHAIN_VERSION)-$$TS"; \
+		fi; \
 		mkdir -p "$(GO_BOOTSTRAP_DIR)"; \
 		mv "$$TMPDIR/go"/* "$(GO_BOOTSTRAP_DIR)/"; \
 		rm -rf "$$TMPDIR"; \
@@ -143,9 +180,77 @@ ensure-go:
 install-go: ensure-go
 	cd $(GO_SERVER_DIR) && $(GO_ENV) go mod download
 
+# Frontend runtime checks
+check-node:
+	@set -e; \
+	NEED_BOOTSTRAP=1; \
+	if command -v "$(NODE)" >/dev/null 2>&1; then \
+		NODEV=$$($(NODE) -v | sed 's/^v//'); \
+		MAJOR=$${NODEV%%.*}; \
+		if [ "$$MAJOR" -eq 18 ] || [ "$$MAJOR" -ge 20 ]; then \
+			echo "Found Node: v$$NODEV"; \
+			NEED_BOOTSTRAP=0; \
+		else \
+			echo "Unsupported Node version: v$$NODEV"; \
+			echo "Frontend requires Node ^18.0.0 or >=20.0.0 (Vite 5)."; \
+			echo "Will bootstrap Node $(NODE_TOOLCHAIN_VERSION) into $(NODE_BOOTSTRAP_DIR)"; \
+		fi; \
+	else \
+		echo "node not found. Will bootstrap Node $(NODE_TOOLCHAIN_VERSION) into $(NODE_BOOTSTRAP_DIR)"; \
+	fi; \
+	if [ "$$NEED_BOOTSTRAP" -eq 1 ]; then \
+		OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+		ARCH=$$(uname -m); \
+		case "$$OS" in \
+			linux|darwin) ;; \
+			*) echo "Unsupported OS for Node bootstrap: $$OS"; exit 1 ;; \
+		esac; \
+		case "$$ARCH" in \
+			x86_64|amd64) ARCH=x64 ;; \
+			aarch64|arm64) ARCH=arm64 ;; \
+			*) echo "Unsupported architecture for Node bootstrap: $$ARCH"; exit 1 ;; \
+		esac; \
+		URL="https://nodejs.org/dist/v$(NODE_TOOLCHAIN_VERSION)/node-v$(NODE_TOOLCHAIN_VERSION)-$$OS-$$ARCH.tar.xz"; \
+		TMPDIR=$$(mktemp -d); \
+		echo "Downloading $$URL"; \
+		if command -v curl >/dev/null 2>&1; then \
+			curl -fsSL "$$URL" -o "$$TMPDIR/node.tar.xz"; \
+		elif command -v wget >/dev/null 2>&1; then \
+			wget -qO "$$TMPDIR/node.tar.xz" "$$URL"; \
+		else \
+			echo "Neither curl nor wget is available. Please install one of them to bootstrap Node."; \
+			exit 1; \
+		fi; \
+		tar -C "$$TMPDIR" -xJf "$$TMPDIR/node.tar.xz"; \
+		if [ -e "$(NODE_BOOTSTRAP_DIR)" ]; then \
+			mkdir -p "$(TRASH_DIR)"; \
+			TS=$$(date +%Y%m%d-%H%M%S); \
+			mv "$(NODE_BOOTSTRAP_DIR)" "$(TRASH_DIR)/node-v$(NODE_TOOLCHAIN_VERSION)-$$TS"; \
+		fi; \
+		mkdir -p "$(NODE_BOOTSTRAP_DIR)"; \
+		mv "$$TMPDIR/node-v$(NODE_TOOLCHAIN_VERSION)-$$OS-$$ARCH"/* "$(NODE_BOOTSTRAP_DIR)/"; \
+		rm -rf "$$TMPDIR"; \
+		echo "Bootstrapped Node: $(NODE_BOOTSTRAP_DIR)/bin/node"; \
+		"$(NODE_BOOTSTRAP_DIR)/bin/node" -v; \
+		"$(NODE_BOOTSTRAP_DIR)/bin/npm" -v; \
+	fi
+
+check-npm:
+	@echo "Found npm: $$($(NODE_ENV) npm -v)"
+
 # Install frontend dependencies
-install-frontend:
-	cd $(FRONTEND_DIR) && npm ci
+install-frontend: check-node check-npm
+	cd $(FRONTEND_DIR) && $(NODE_ENV) npm ci
+
+# Prepare targets (recommended entrypoint for fresh clones / CI)
+prepare-go: install-go
+
+prepare-python: preprocess-venv
+
+prepare-frontend: install-frontend
+
+prepare: prepare-go prepare-python prepare-frontend
+	@echo "Prepared: Go toolchain + server deps, Python preprocessing venv, frontend deps."
 
 # Install all dependencies
 install: install-python install-go install-frontend
@@ -177,10 +282,10 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
 
 # Format code
-fmt:
+fmt: ensure-go
 	cd $(GO_SERVER_DIR) && $(GO_ENV) go fmt ./...
 	cd $(PREPROCESS_DIR) && UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run black .
-	cd $(FRONTEND_DIR) && npm run lint -- --fix
+	cd $(FRONTEND_DIR) && $(NODE_ENV) npm run lint -- --fix
 
 # Help
 help:
@@ -192,6 +297,7 @@ help:
 	@echo "  make dev-soma [SERVER_CONFIG=../config/server.yaml] - Start SOMA-enabled dev server (requires conda TileDB)"
 	@echo "  make test           - Run all tests"
 	@echo "  make install        - Install all dependencies"
+	@echo "  make prepare        - Prepare Go/Python/Node dependencies (recommended)"
 	@echo "  make preprocess INPUT=file.h5ad - Run preprocessing"
 	@echo "  make docker-build   - Build Docker images"
 	@echo "  make docker-up      - Start Docker containers"
