@@ -19,6 +19,17 @@ PREPROCESS_VENV_DIR := $(PREPROCESS_DIR)/.venv
 PREPROCESS_PYTHON ?= 3.11
 UV_LINK_MODE ?= copy
 
+# Preprocessing defaults (can be overridden, e.g. `make preprocess PREPROCESS_NO_SOMA=0`)
+# - PREPROCESS_NO_SOMA=1: skip writing TileDBSOMA store (faster, smaller output)
+# - PREPROCESS_ZOOM_LEVELS=auto: pick zoom levels based on input file size
+PREPROCESS_NO_SOMA ?= 1
+PREPROCESS_ZOOM_LEVELS ?= auto
+PREPROCESS_N_GENES ?= 500
+# - PREPROCESS_ALL_EXPRESSED=1: use all expressed genes (skip HVG/top-N)
+# - PREPROCESS_MIN_CELLS=1: include genes expressed in >= N cells (only with all-expressed)
+PREPROCESS_ALL_EXPRESSED ?= 1
+PREPROCESS_MIN_CELLS ?= 1
+
 # Preprocess input/output paths (relative to repo root, unless absolute path)
 # When running from preprocessing/, we need to prepend ../ for relative paths
 OUTPUT ?= $(DATA_DIR)/preprocessed
@@ -92,11 +103,39 @@ preprocess: preprocess-venv
 		echo "Usage: make preprocess INPUT=path/to/data.h5ad [OUTPUT=data/dataset_x]"; \
 		exit 1; \
 	fi
+	@set -e; \
+	ZOOM="$(PREPROCESS_ZOOM_LEVELS)"; \
+	if [ "$$ZOOM" = "auto" ]; then \
+		# Heuristic: larger datasets get more zoom levels (higher resolution) \
+		if stat -c%s "$(INPUT)" >/dev/null 2>&1; then \
+			SZ=$$(stat -c%s "$(INPUT)"); \
+		else \
+			SZ=$$(stat -f%z "$(INPUT)"); \
+		fi; \
+		if [ "$$SZ" -lt 50000000 ]; then ZOOM=8; \
+		elif [ "$$SZ" -lt 200000000 ]; then ZOOM=9; \
+		elif [ "$$SZ" -lt 1000000000 ]; then ZOOM=10; \
+		elif [ "$$SZ" -lt 4000000000 ]; then ZOOM=11; \
+		elif [ "$$SZ" -lt 16000000000 ]; then ZOOM=12; \
+		else ZOOM=11; fi; \
+	fi; \
+	NO_SOMA_FLAG=""; \
+	case "$(PREPROCESS_NO_SOMA)" in \
+		1|true|TRUE|yes|YES) NO_SOMA_FLAG="--no-soma" ;; \
+	esac; \
+	ALL_EXPRESSED_FLAG=""; \
+	MIN_CELLS_ARGS=""; \
+	case "$(PREPROCESS_ALL_EXPRESSED)" in \
+		1|true|TRUE|yes|YES) ALL_EXPRESSED_FLAG="--all-expressed"; MIN_CELLS_ARGS="--min-cells $(PREPROCESS_MIN_CELLS)" ;; \
+	esac; \
+	echo "Preprocess: zoom_levels=$$ZOOM, all_expressed=$(PREPROCESS_ALL_EXPRESSED), min_cells=$(PREPROCESS_MIN_CELLS), n_genes=$(PREPROCESS_N_GENES), no_soma=$(PREPROCESS_NO_SOMA)"; \
 	cd $(PREPROCESS_DIR) && PATH="$$HOME/.local/bin:$$PATH" UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
 		--input $(PREPROCESS_INPUT) \
 		--output $(PREPROCESS_OUTPUT) \
-		--zoom-levels 8 \
-		--n-genes 500
+		--zoom-levels "$$ZOOM" \
+		--n-genes "$(PREPROCESS_N_GENES)" \
+		$$ALL_EXPRESSED_FLAG $$MIN_CELLS_ARGS \
+		$$NO_SOMA_FLAG
 
 # Create preprocessing venv (Python>=3.9 required by preprocessing/pyproject.toml)
 ensure-uv:
