@@ -37,6 +37,9 @@ class PreprocessConfig:
     # Category settings
     category_columns: list[str] = field(default_factory=list)  # obs columns to include
     default_category: str = "cell_type"
+    exclude_category_columns: list[str] = field(default_factory=list)  # 显式排除的类别列
+    max_category_cardinality: int = 2000  # 超过此唯一值数的列自动跳过（避免内存爆炸）
+    max_category_matrix_elems: int = 50_000_000  # n_bins * n_cats 的上限
 
     # Numeric column settings
     numeric_columns: list[str] = field(default_factory=list)  # 显式指定的数值列
@@ -91,6 +94,9 @@ class PreprocessConfig:
             "min_cells_expressed": self.min_cells_expressed,
             "category_columns": self.category_columns,
             "default_category": self.default_category,
+            "exclude_category_columns": self.exclude_category_columns,
+            "max_category_cardinality": self.max_category_cardinality,
+            "max_category_matrix_elems": self.max_category_matrix_elems,
             "numeric_columns": self.numeric_columns,
             "exclude_numeric_columns": self.exclude_numeric_columns,
             "zarr_compressor": self.zarr_compressor,

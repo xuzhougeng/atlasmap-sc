@@ -293,7 +293,13 @@ class PreprocessingPipeline:
         """Build mappings from category names to integer indices."""
         logger.info("Building category mappings")
 
+        # Build set of excluded columns (from config)
+        exclude_set = set(self.config.exclude_category_columns)
+        # Also sanitize exclusion names for matching
+        exclude_sanitized = {self._sanitize_column_name(c) for c in exclude_set}
+
         # Determine which columns to include
+        user_specified = bool(self.config.category_columns)
         columns = self.config.category_columns.copy()
         # If user didn't specify any category columns, default to categorical-only columns.
         # Numeric columns are ignored unless explicitly listed in config.numeric_columns.
@@ -316,6 +322,12 @@ class PreprocessingPipeline:
 
             # 清理列名（替换不适合 URL 的字符）
             sanitized_col = self._sanitize_column_name(col)
+
+            # Check exclusion list (both original and sanitized names)
+            if col in exclude_set or sanitized_col in exclude_sanitized:
+                logger.info(f"  {col}: excluded by --exclude-category")
+                continue
+
             self.column_name_mapping[sanitized_col] = col  # 清理后 -> 原始
 
             if self._is_numeric_column(col):
@@ -326,6 +338,25 @@ class PreprocessingPipeline:
                 else:
                     logger.info(f"  {col}: numeric (will aggregate with mean)")
             else:
+                # 分类列：先检查基数（唯一值数量）
+                n_unique = self.adata.obs[col].nunique()
+
+                if n_unique > self.config.max_category_cardinality:
+                    if user_specified:
+                        # 用户显式指定了这个列，报错以提醒
+                        raise ValueError(
+                            f"Category column '{col}' has {n_unique:,} unique values, "
+                            f"exceeding max_category_cardinality={self.config.max_category_cardinality:,}. "
+                            f"High-cardinality columns (like cell IDs) are not suitable for per-bin category statistics. "
+                            f"Either use --exclude-category {col} or increase --max-category-cardinality."
+                        )
+                    else:
+                        # 自动选择的列，警告并跳过
+                        logger.warning(
+                            f"  {col}: skipped (cardinality {n_unique:,} > max {self.config.max_category_cardinality:,})"
+                        )
+                        continue
+
                 # 分类列：使用清理后的列名作为 key
                 categories = self.adata.obs[col].astype(str).unique()
                 self.category_mapping[sanitized_col] = {cat: idx for idx, cat in enumerate(sorted(categories))}
@@ -494,6 +525,9 @@ class PreprocessingPipeline:
                     cur_max = np.maximum.reduceat(cur_max[plan.order], plan.starts, axis=0)
 
             # Category counts: encode once per column, then coarsen using the same plans.
+            # Track columns that are skipped due to matrix size limits (for metadata consistency)
+            skipped_categories: set[str] = set()
+
             for sanitized_col, mapping in tqdm(
                 list(self.category_mapping.items()),
                 desc=f"Writing categories ({coord_key})",
@@ -503,6 +537,16 @@ class PreprocessingPipeline:
                 categories = list(mapping.keys())
                 n_cats = len(categories)
                 if n_cats == 0:
+                    continue
+
+                # Second-layer check: n_bins_max * n_cats must not exceed max_category_matrix_elems
+                matrix_elems = n_bins_max * n_cats
+                if matrix_elems > self.config.max_category_matrix_elems:
+                    logger.warning(
+                        f"Skipping category '{sanitized_col}': matrix size {n_bins_max:,} bins x {n_cats:,} cats = "
+                        f"{matrix_elems:,} elements exceeds max_category_matrix_elems={self.config.max_category_matrix_elems:,}"
+                    )
+                    skipped_categories.add(sanitized_col)
                     continue
 
                 codes = pd.Categorical(
@@ -529,6 +573,11 @@ class PreprocessingPipeline:
                             plan.starts,
                             axis=0,
                         ).astype(np.uint32, copy=False)
+
+            # Remove skipped categories from category_mapping to keep metadata consistent
+            for col in skipped_categories:
+                if col in self.category_mapping:
+                    del self.category_mapping[col]
 
             # Numeric columns: aggregate by mean (faster than median) and coarsen.
             for sanitized_col in tqdm(

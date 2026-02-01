@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasmap-preprocess"
-version = "0.1.0"
+version = "0.2.0"
 description = "Preprocessing pipeline for AtlasMap: H5AD to multi-resolution Zarr bins"
 readme = "README.md"
 license = {text = "MIT"}

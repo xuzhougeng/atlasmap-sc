@@ -20,7 +20,7 @@ def setup_logging(verbose: bool) -> None:
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version="0.2.0")
 def main():
     """AtlasMap Preprocessing CLI.
 
@@ -100,6 +100,18 @@ def main():
     help="Obs columns to exclude from numeric aggregation (overrides --numeric).",
 )
 @click.option(
+    "--exclude-category",
+    "exclude_category_columns",
+    multiple=True,
+    help="Obs columns to exclude from category aggregation (e.g., high-cardinality columns like observation_joinid).",
+)
+@click.option(
+    "--max-category-cardinality",
+    default=2000,
+    type=int,
+    help="Maximum unique values for a category column. Columns exceeding this are auto-skipped to prevent memory issues.",
+)
+@click.option(
     "--chunk-size",
     default=256,
     type=int,
@@ -145,6 +157,8 @@ def run(
     categories: tuple[str, ...],
     numeric_columns: tuple[str, ...],
     exclude_numeric_columns: tuple[str, ...],
+    exclude_category_columns: tuple[str, ...],
+    max_category_cardinality: int,
     chunk_size: int,
     write_cell_ids: bool,
     batch_size: int,
@@ -175,6 +189,8 @@ def run(
         use_all_expressed=use_all_expressed,
         min_cells_expressed=min_cells,
         category_columns=list(categories),
+        exclude_category_columns=list(exclude_category_columns),
+        max_category_cardinality=max_category_cardinality,
         numeric_columns=list(numeric_columns),
         exclude_numeric_columns=list(exclude_numeric_columns),
         chunk_size=chunk_size,

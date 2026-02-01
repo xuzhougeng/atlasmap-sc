@@ -123,6 +123,8 @@ atlasmap-preprocess run -i data.h5ad -o ./output
 | `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
 | `--no-soma` | | | 禁用 TileDBSOMA 存储（默认启用） |
 | `--category` | `-c` | 非数值（含 bool）obs 列 | 要包含的 obs 列（可多次指定）。不指定时默认包含所有非数值（含 bool）`adata.obs` 列（按类别计数）；数值列默认忽略。 |
+| `--exclude-category` | | | 从类别聚合中排除的 obs 列（可多次指定）。用于排除高基数列如 `observation_joinid`。 |
+| `--max-category-cardinality` | | `2000` | 类别列的最大唯一值数量。超过此值的列会被自动跳过（避免内存爆炸）。 |
 | `--numeric` | | | 要按数值聚合（mean）的 `adata.obs` 列（可多次指定；opt-in）。 |
 | `--exclude-numeric` | | | 从数值聚合中排除的 `adata.obs` 列（覆盖 `--numeric`）。 |
 | `--chunk-size` | | `256` | Zarr chunk 大小 |
@@ -215,6 +217,8 @@ category_columns:
   - cell_type
   - leiden
 default_category: cell_type
+exclude_category_columns: []  # 排除的类别列（如 observation_joinid）
+max_category_cardinality: 2000  # 超过此唯一值数量的列自动跳过
 
 # Zarr 设置
 zarr_compressor: zstd
@@ -313,6 +317,62 @@ output/
 4. **跳过** 基因选择、类别映射、Zarr 分箱（复用已有输出）
 5. **写入 SOMA**（可选）：使用复用的基因列表和类别信息
 6. **更新元数据**：仅更新 `metadata.json` 中的 SOMA 相关标记
+
+## 高基数类别列处理
+
+### 问题说明
+
+默认情况下，预处理会将所有非数值型的 `adata.obs` 列作为类别列进行 per-bin 统计。对于超大数据集，如果某些列的唯一值数量非常多（如 `observation_joinid`、`barcode`、`cell_id` 等 per-cell 唯一标识符），会导致内存爆炸。
+
+例如：11M cells 数据集中 `observation_joinid` 有 1100 万个唯一值，与 22 万个 bins 相乘后需要分配 ~19 TiB 内存，必然 OOM。
+
+### 解决方案
+
+**方案 A（推荐）**：显式指定要聚合的类别列（白名单）
+
+```bash
+# 只处理你真正需要的类别列
+atlasmap-preprocess run -i data.h5ad -o ./output \
+    --category cell_type \
+    --category donor_id \
+    --category tissue
+```
+
+**方案 B**：排除高基数列
+
+```bash
+# 排除特定的高基数列
+atlasmap-preprocess run -i data.h5ad -o ./output \
+    --exclude-category observation_joinid \
+    --exclude-category barcode
+```
+
+**方案 C**：调整阈值（自动跳过高基数列）
+
+```bash
+# 超过 2000 个唯一值的列会被自动跳过（默认行为）
+# 可以调整阈值：
+atlasmap-preprocess run -i data.h5ad -o ./output \
+    --max-category-cardinality 1000
+```
+
+### 不应作为类别列处理的常见列
+
+以下类型的列不适合做 per-bin 类别统计，应排除或不指定：
+
+- `observation_joinid` / `obs_id` - 每个细胞的唯一标识
+- `barcode` / `cell_barcode` - 细胞条形码
+- `cell_id` / `cell_name` - 细胞名称
+- 任何基本上每行唯一的列
+
+### 适合作为类别列处理的列
+
+- `cell_type` / `cell_type_ontology_term_id` - 细胞类型
+- `donor_id` / `sample_id` - 样本/捐赠者标识
+- `tissue` / `organ` - 组织/器官
+- `disease` - 疾病状态
+- `sex` - 性别
+- `leiden` / `louvain` - 聚类结果
 
 ## 技术细节
 

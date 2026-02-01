@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Ensure Numba has a writable cache directory. Some environments (e.g. read-only
 # site-packages) can cause Scanpy's `@njit(cache=True)` imports to fail unless
