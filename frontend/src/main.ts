@@ -444,6 +444,18 @@ async function init() {
         return computed;
     })();
     
+    const tileSize = 256;
+    const tilePixelsLog2 = (() => {
+        let ts = tileSize;
+        let log2 = 0;
+        while (ts > 1) {
+            ts >>= 1;
+            log2++;
+        }
+        return log2;
+    })();
+    const dataMaxViewZoom = Math.max(0, renderZoom - tilePixelsLog2);
+
     // Zoom switch mode: 'AUTO' | 'MAX' | 'NONE'
     // - AUTO: auto switch to cell canvas based on n_cells (uses autoMaxNativeZoom)
     // - MAX: tiles to max resolution (renderZoom), then cell canvas beyond
@@ -451,14 +463,15 @@ async function init() {
     type ZoomSwitchMode = 'AUTO' | 'MAX' | 'NONE';
     let zoomSwitchMode: ZoomSwitchMode = 'AUTO';
     
-    // Initial values based on AUTO mode
-    let currentMaxNativeZoom = autoMaxNativeZoom;
-    let currentMaxZoom = autoMaxNativeZoom + 4;
-    
+    // Initial values based on AUTO mode (clamped to data max view zoom)
+    let currentMaxNativeZoom = Math.min(autoMaxNativeZoom, dataMaxViewZoom);
+    let currentMaxZoom = currentMaxNativeZoom + 4;
+
     const mapController = new MapController(mapContainer, {
         apiUrl: tilesBaseUrl,
         coord: effectiveCoord ?? undefined,
-        tileSize: 256,
+        tileSize,
+        renderZoom,
         maxZoom: currentMaxZoom,
         maxNativeZoom: currentMaxNativeZoom,
         // Start at zoom level 2 for better initial detail.
@@ -485,8 +498,9 @@ async function init() {
         switch (mode) {
             case 'AUTO':
                 // Auto mode: use computed autoMaxNativeZoom, allow cell canvas beyond
-                newMaxNativeZoom = autoMaxNativeZoom;
-                newMaxZoom = autoMaxNativeZoom + 4;
+                // Clamp to the highest view zoom that still increases data resolution.
+                newMaxNativeZoom = Math.min(autoMaxNativeZoom, dataMaxViewZoom);
+                newMaxZoom = newMaxNativeZoom + 4;
                 cellCanvasEnabled = true;
                 break;
             case 'MAX':

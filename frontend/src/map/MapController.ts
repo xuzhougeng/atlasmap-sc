@@ -10,6 +10,8 @@ export interface MapConfig {
     apiUrl: string;
     coord?: string;
     tileSize: number;
+    // Max bin zoom from preprocessing (zoom_levels - 1). Optional for UI display.
+    renderZoom?: number;
     // Leaflet zoom range (allows extra "magnification" zooms beyond native data)
     maxZoom: number;
     // Highest tile zoom the backend can serve; above this Leaflet scales tiles.
@@ -60,10 +62,13 @@ export class MapController {
     private categoryLabelsVisible: boolean = true;
     private categoryLabelFontScale: number = 1.0;
     private pointSize: number = 1.0;
+    private zoomInfoEl: HTMLElement | null = null;
+    private tilePixelsLog2: number;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.container = container;
         this.config = config;
+        this.tilePixelsLog2 = this.computeTilePixelsLog2(config.tileSize);
 
         // Calculate bounds from config (CRS.Simple expects [lat, lng] = [y, x])
         this.bounds = L.latLngBounds(
@@ -123,10 +128,11 @@ export class MapController {
         const ZoomInfo = L.Control.extend({
             onAdd: (map: L.Map) => {
                 const div = L.DomUtil.create('div', 'zoom-info');
-                div.innerHTML = `Zoom: ${map.getZoom()}`;
+                this.zoomInfoEl = div;
+                this.updateZoomDisplay();
 
                 map.on('zoomend', () => {
-                    div.innerHTML = `Zoom: ${map.getZoom()}`;
+                    this.updateZoomDisplay();
                 });
 
                 return div;
@@ -146,10 +152,59 @@ export class MapController {
 
         // Zoom change handler
         this.map.on('zoomend', () => {
-            console.log(`Zoom level: ${this.map.getZoom()}`);
+            const info = this.getZoomInfo();
+            const scaledNote = info.scaled ? ' (scaled)' : '';
+            const maxNote = info.dataAtMax ? ' (max)' : '';
+            console.log(
+                `[Zoom] view=${info.mapZoom}, tile=${info.tileZoom}${scaledNote}, ` +
+                `data=${info.dataZoom}${maxNote}, maxNative=${info.maxNativeZoom}, render=${info.renderZoom}`
+            );
             this.updateCategoryLabelStyle();
             this.renderCategoryLabels();
         });
+    }
+
+    private computeTilePixelsLog2(tileSize: number): number {
+        let ts = Math.max(1, Math.floor(tileSize));
+        let log2 = 0;
+        while (ts > 1) {
+            ts >>= 1;
+            log2++;
+        }
+        return log2;
+    }
+
+    private getZoomInfo(): {
+        mapZoom: number;
+        tileZoom: number;
+        dataZoom: number;
+        scaled: boolean;
+        dataAtMax: boolean;
+        maxNativeZoom: number;
+        renderZoom: number;
+    } {
+        const mapZoom = this.map.getZoom();
+        const maxNativeZoom = this.config.maxNativeZoom;
+        const tileZoom = Math.min(mapZoom, maxNativeZoom);
+        const renderZoom = this.config.renderZoom ?? maxNativeZoom;
+        const dataZoom = Math.min(renderZoom, tileZoom + this.tilePixelsLog2);
+        const scaled = mapZoom > maxNativeZoom;
+        const dataAtMax = dataZoom >= renderZoom;
+        return { mapZoom, tileZoom, dataZoom, scaled, dataAtMax, maxNativeZoom, renderZoom };
+    }
+
+    private updateZoomDisplay(): void {
+        if (!this.zoomInfoEl) return;
+        const info = this.getZoomInfo();
+        const scaledNote = info.scaled ? ' (scaled)' : '';
+        const maxNote = info.dataAtMax ? ' (max)' : '';
+        this.zoomInfoEl.innerHTML =
+            `<div class="zoom-info__row"><span class="zoom-info__label">View</span>` +
+            `<span class="zoom-info__value">z${info.mapZoom}</span></div>` +
+            `<div class="zoom-info__row"><span class="zoom-info__label">Tiles</span>` +
+            `<span class="zoom-info__value">z${info.tileZoom}${scaledNote}</span></div>` +
+            `<div class="zoom-info__row"><span class="zoom-info__label">Data</span>` +
+            `<span class="zoom-info__value">z${info.dataZoom}${maxNote}</span></div>`;
     }
 
     setCategoryLabelsVisible(visible: boolean): void {
@@ -447,6 +502,8 @@ export class MapController {
         if (currentZoom > maxZoom) {
             this.map.setZoom(maxZoom);
         }
+
+        this.updateZoomDisplay();
 
         // Rebuild the current tile layer to apply new constraints
         this.rebuildCurrentTileLayer();

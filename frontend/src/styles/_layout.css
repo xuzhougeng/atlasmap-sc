@@ -134,6 +134,28 @@
     color: var(--text-primary);
     font-size: 0.75rem;
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.zoom-info__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.zoom-info__label {
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.zoom-info__value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Expression Colorbar (map overlay) */
