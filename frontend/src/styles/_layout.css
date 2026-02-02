@@ -110,7 +110,7 @@
 /* Map Container */
 .map-container {
     flex: 1;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-map);
     position: relative;
     min-height: 0;
 }

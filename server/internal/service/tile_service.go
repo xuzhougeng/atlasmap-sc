@@ -32,14 +32,23 @@ type TileService struct {
 	renderer  *render.TileRenderer
 
 	renderZoom int
+	tileSize   int // tile size in pixels (typically 256)
 
+	// Per-zoom bins cache
+	binsZoomMu    sync.Mutex
+	binsZoomCache map[int][]zarr.Bin
+	binsZoomErr   map[int]error
+
+	// Legacy single-zoom bins cache (for backward compatibility with functions that use renderZoom)
 	binsOnce sync.Once
 	bins     []zarr.Bin
 	binsErr  error
 
+	// Per-zoom expression cache: key = "zoom:gene"
 	exprMu    sync.Mutex
 	exprCache map[string]expressionCacheEntry
 
+	// Per-zoom category cache: key = "zoom:column"
 	catMu    sync.Mutex
 	catCache map[string][]int
 
@@ -48,13 +57,24 @@ type TileService struct {
 
 	categoryCentroidsMu    sync.Mutex
 	categoryCentroidsCache map[string][]CategoryCentroidItem
+
+	// Spatial index for cell-level queries (lazy loaded)
+	spatialIndexOnce sync.Once
+	spatialIndex     *soma.SpatialIndex
+	spatialIndexErr  error
 }
 
 // NewTileService creates a new tile service.
 func NewTileService(cfg TileServiceConfig) *TileService {
 	renderZoom := 0
-	if md := cfg.ZarrReader.Metadata(); md != nil && md.ZoomLevels > 0 {
-		renderZoom = md.ZoomLevels - 1
+	tileSize := 256 // default tile size
+	if md := cfg.ZarrReader.Metadata(); md != nil {
+		if md.ZoomLevels > 0 {
+			renderZoom = md.ZoomLevels - 1
+		}
+		if md.TileSize > 0 {
+			tileSize = md.TileSize
+		}
 	}
 
 	datasetID := cfg.DatasetID
@@ -70,6 +90,9 @@ func NewTileService(cfg TileServiceConfig) *TileService {
 		cache:                  cfg.Cache,
 		renderer:               cfg.Renderer,
 		renderZoom:             renderZoom,
+		tileSize:               tileSize,
+		binsZoomCache:          make(map[int][]zarr.Bin),
+		binsZoomErr:            make(map[int]error),
 		exprCache:              make(map[string]expressionCacheEntry),
 		catCache:               make(map[string][]int),
 		geneCategoryMeansCache: make(map[string][]GeneCategoryMeanItem),
@@ -99,24 +122,73 @@ func (s *TileService) loadBins() error {
 	return s.binsErr
 }
 
-func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int, int, int, error) {
-	if mapZoom < 0 || mapZoom > s.renderZoom {
-		return nil, nil, 0, 0, fmt.Errorf("invalid zoom level: %d", mapZoom)
-	}
-	if tileX < 0 || tileY < 0 {
-		return nil, nil, 0, 0, fmt.Errorf("invalid tile coordinates: %d/%d", tileX, tileY)
+// loadBinsForZoom lazily loads bins for a specific zoom level.
+func (s *TileService) loadBinsForZoom(zoom int) ([]zarr.Bin, error) {
+	s.binsZoomMu.Lock()
+	defer s.binsZoomMu.Unlock()
+
+	// Check if already cached
+	if bins, ok := s.binsZoomCache[zoom]; ok {
+		if err, ok := s.binsZoomErr[zoom]; ok && err != nil {
+			return nil, err
+		}
+		return bins, nil
 	}
 
-	if err := s.loadBins(); err != nil {
-		return nil, nil, 0, 0, err
+	// Load from Zarr
+	bins, err := s.zarr.GetBins(zoom, 0, 0)
+	s.binsZoomCache[zoom] = bins
+	s.binsZoomErr[zoom] = err
+	return bins, err
+}
+
+// sourceZoomForTile computes the appropriate source zoom level for rendering a tile.
+// This ensures binSize >= 1px by limiting sourceZoom so that binsPerTileAxis <= tileSize.
+// Formula: sourceZoom = min(renderZoom, mapZoom + tilePixelsLog2)
+// where tilePixelsLog2 = log2(tileSize).
+func (s *TileService) sourceZoomForTile(mapZoom int) int {
+	// Compute log2 of tile size (for 256, this is 8)
+	tilePixelsLog2 := 0
+	ts := s.tileSize
+	for ts > 1 {
+		ts >>= 1
+		tilePixelsLog2++
+	}
+
+	// sourceZoom = min(renderZoom, mapZoom + tilePixelsLog2)
+	sourceZoom := mapZoom + tilePixelsLog2
+	if sourceZoom > s.renderZoom {
+		sourceZoom = s.renderZoom
+	}
+	return sourceZoom
+}
+
+// binsForTile returns bins for a tile, along with their indices, binsPerTileAxis, flippedTileY, sourceZoom, and any error.
+// sourceZoom is the zoom level used to load the bins (may be < renderZoom to ensure binSize >= 1px).
+func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int, int, int, int, error) {
+	if mapZoom < 0 || mapZoom > s.renderZoom {
+		return nil, nil, 0, 0, 0, fmt.Errorf("invalid zoom level: %d", mapZoom)
+	}
+	if tileX < 0 || tileY < 0 {
+		return nil, nil, 0, 0, 0, fmt.Errorf("invalid tile coordinates: %d/%d", tileX, tileY)
 	}
 
 	tilesPerAxis := 1 << mapZoom
 	if tileX >= tilesPerAxis || tileY >= tilesPerAxis {
-		return nil, nil, 0, 0, fmt.Errorf("tile out of range: %d/%d (tiles_per_axis=%d)", tileX, tileY, tilesPerAxis)
+		return nil, nil, 0, 0, 0, fmt.Errorf("tile out of range: %d/%d (tiles_per_axis=%d)", tileX, tileY, tilesPerAxis)
 	}
 
-	binsPerTileAxis := 1 << (s.renderZoom - mapZoom)
+	// Compute sourceZoom: use a zoom level that ensures binSize >= 1px
+	sourceZoom := s.sourceZoomForTile(mapZoom)
+
+	// Load bins for the source zoom level
+	bins, err := s.loadBinsForZoom(sourceZoom)
+	if err != nil {
+		return nil, nil, 0, 0, 0, err
+	}
+
+	// binsPerTileAxis at the source zoom level relative to the requested mapZoom
+	binsPerTileAxis := 1 << (sourceZoom - mapZoom)
 	startX := int32(tileX * binsPerTileAxis)
 	endX := int32((tileX + 1) * binsPerTileAxis)
 	// Flip Y so that tileY=0 corresponds to the top (max-Y) of the dataset,
@@ -127,7 +199,7 @@ func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int,
 
 	outBins := make([]zarr.Bin, 0, 64)
 	outIdx := make([]int, 0, 64)
-	for i, bin := range s.bins {
+	for i, bin := range bins {
 		if bin.X < startX || bin.X >= endX {
 			continue
 		}
@@ -138,14 +210,22 @@ func (s *TileService) binsForTile(mapZoom, tileX, tileY int) ([]zarr.Bin, []int,
 		outIdx = append(outIdx, i)
 	}
 
-	return outBins, outIdx, binsPerTileAxis, flippedTileY, nil
+	return outBins, outIdx, binsPerTileAxis, flippedTileY, sourceZoom, nil
 }
 
+// expressionForGene loads expression for a gene at renderZoom (backward compatible).
 func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, error) {
+	return s.expressionForGeneAtZoom(gene, s.renderZoom)
+}
+
+// expressionForGeneAtZoom loads expression for a gene at a specific zoom level.
+func (s *TileService) expressionForGeneAtZoom(gene string, zoom int) (expressionCacheEntry, error) {
 	s.exprMu.Lock()
 	defer s.exprMu.Unlock()
 
-	if cached, ok := s.exprCache[gene]; ok {
+	// Cache key includes zoom level
+	cacheKey := fmt.Sprintf("%d:%s", zoom, gene)
+	if cached, ok := s.exprCache[cacheKey]; ok {
 		return cached, nil
 	}
 
@@ -154,14 +234,14 @@ func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, erro
 		return expressionCacheEntry{}, fmt.Errorf("gene not found: %s", gene)
 	}
 
-	values, err := s.zarr.GetExpression(s.renderZoom, geneIdx, "mean")
+	values, err := s.zarr.GetExpression(zoom, geneIdx, "mean")
 	if err != nil {
 		return expressionCacheEntry{}, err
 	}
 
 	if len(values) == 0 {
 		cached := expressionCacheEntry{values: values, min: 0, max: 0, autoMax: 0}
-		s.exprCache[gene] = cached
+		s.exprCache[cacheKey] = cached
 		return cached, nil
 	}
 
@@ -211,23 +291,31 @@ func (s *TileService) expressionForGene(gene string) (expressionCacheEntry, erro
 	}
 
 	cached := expressionCacheEntry{values: values, min: minV, max: maxV, autoMax: autoMax}
-	s.exprCache[gene] = cached
+	s.exprCache[cacheKey] = cached
 	return cached, nil
 }
 
+// categoryForColumn loads category data at renderZoom (backward compatible).
 func (s *TileService) categoryForColumn(column string) ([]int, error) {
+	return s.categoryForColumnAtZoom(column, s.renderZoom)
+}
+
+// categoryForColumnAtZoom loads category data at a specific zoom level.
+func (s *TileService) categoryForColumnAtZoom(column string, zoom int) ([]int, error) {
 	s.catMu.Lock()
 	defer s.catMu.Unlock()
 
-	if cached, ok := s.catCache[column]; ok {
+	// Cache key includes zoom level
+	cacheKey := fmt.Sprintf("%d:%s", zoom, column)
+	if cached, ok := s.catCache[cacheKey]; ok {
 		return cached, nil
 	}
 
-	values, err := s.zarr.GetCategoryDataForBins(s.renderZoom, column)
+	values, err := s.zarr.GetCategoryDataForBins(zoom, column)
 	if err != nil {
 		return nil, err
 	}
-	s.catCache[column] = values
+	s.catCache[cacheKey] = values
 	return values, nil
 }
 
@@ -239,8 +327,8 @@ func (s *TileService) GetTile(z, x, y int) ([]byte, error) {
 		return data, nil
 	}
 
-	// Load bins for this tile (rendered from highest-available zoom level)
-	bins, _, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
+	// Load bins for this tile (sourceZoom ensures binSize >= 1px)
+	bins, _, binsPerTileAxis, renderTileY, _, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
@@ -289,13 +377,14 @@ func (s *TileService) GetExpressionTile(
 		return data, nil
 	}
 
-	// Load bins (rendered from highest-available zoom level)
-	bins, indices, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
+	// Load bins (sourceZoom ensures binSize >= 1px)
+	bins, indices, binsPerTileAxis, renderTileY, sourceZoom, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
 
-	exprAll, err := s.expressionForGene(gene)
+	// Load expression at the same zoom level as bins
+	exprAll, err := s.expressionForGeneAtZoom(gene, sourceZoom)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load expression: %w", err)
 	}
@@ -373,14 +462,14 @@ func (s *TileService) GetCategoryTile(z, x, y int, column string, categoryFilter
 		return data, nil
 	}
 
-	// Load bins (rendered from highest-available zoom level)
-	bins, indices, binsPerTileAxis, renderTileY, err := s.binsForTile(z, x, y)
+	// Load bins (sourceZoom ensures binSize >= 1px)
+	bins, indices, binsPerTileAxis, renderTileY, sourceZoom, err := s.binsForTile(z, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load bins: %w", err)
 	}
 
-	// Load category data
-	categoryAll, err := s.categoryForColumn(column)
+	// Load category data at the same zoom level as bins
+	categoryAll, err := s.categoryForColumnAtZoom(column, sourceZoom)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load category data: %w", err)
 	}
@@ -681,4 +770,169 @@ func (s *TileService) QueryBinsExpressingGene(
 // GetGeneStats returns statistics for a gene at a specific zoom level.
 func (s *TileService) GetGeneStats(gene string, zoom int) (*zarr.GeneStats, error) {
 	return s.zarr.GetGeneStats(gene, zoom)
+}
+
+// CellInfo represents a single cell with its position and optional attributes.
+type CellInfo struct {
+	JoinID     int64   `json:"joinid"`
+	X          float32 `json:"x"`
+	Y          float32 `json:"y"`
+	Expression float32 `json:"expression,omitempty"`
+	Category   string  `json:"category,omitempty"`
+}
+
+// CellQueryResult is the response for GetCellsInBounds.
+type CellQueryResult struct {
+	Cells      []CellInfo `json:"cells"`
+	TotalCount int        `json:"total_count"`
+	Truncated  bool       `json:"truncated"`
+}
+
+// loadSpatialIndex lazily loads the spatial index.
+func (s *TileService) loadSpatialIndex() (*soma.SpatialIndex, error) {
+	s.spatialIndexOnce.Do(func() {
+		if s.soma == nil || !s.soma.Supported() {
+			s.spatialIndexErr = fmt.Errorf("soma not configured or not supported")
+			return
+		}
+
+		md := s.zarr.Metadata()
+		if md == nil {
+			s.spatialIndexErr = fmt.Errorf("metadata not available")
+			return
+		}
+
+		coordRange := md.Bounds.MaxX - md.Bounds.MinX
+		if coordRange <= 0 {
+			coordRange = 256.0
+		}
+
+		s.spatialIndex, s.spatialIndexErr = s.soma.LoadSpatialIndex(s.renderZoom, coordRange)
+	})
+	return s.spatialIndex, s.spatialIndexErr
+}
+
+// GetCellsInBounds returns cells within the given bounding box.
+// Options:
+//   - gene: if set, include expression values for this gene
+//   - category: if set, include category values for this column
+//   - categoryFilter: if set, only return cells with category values in this list
+//   - limit: maximum number of cells to return (default 5000)
+func (s *TileService) GetCellsInBounds(
+	minX, minY, maxX, maxY float64,
+	gene string,
+	category string,
+	categoryFilter []string,
+	limit int,
+) (*CellQueryResult, error) {
+	if limit <= 0 {
+		limit = 5000
+	}
+	if limit > 50000 {
+		limit = 50000
+	}
+
+	// Match tile filtering semantics:
+	// - nil  => no filter (show all)
+	// - []   => filter-to-none (show none)
+	if categoryFilter != nil && len(categoryFilter) == 0 {
+		return &CellQueryResult{
+			Cells:      []CellInfo{},
+			TotalCount: 0,
+			Truncated:  false,
+		}, nil
+	}
+
+	idx, err := s.loadSpatialIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	// Query cells in bbox (with limit + 1 to detect truncation)
+	cellJoinIDs := idx.QueryCellsInBounds(minX, minY, maxX, maxY, limit+1)
+	truncated := len(cellJoinIDs) > limit
+	if truncated {
+		cellJoinIDs = cellJoinIDs[:limit]
+	}
+
+	if len(cellJoinIDs) == 0 {
+		return &CellQueryResult{
+			Cells:      []CellInfo{},
+			TotalCount: 0,
+			Truncated:  false,
+		}, nil
+	}
+
+	// Get coordinates
+	xMap, yMap := idx.GetCellCoordinates(cellJoinIDs)
+
+	// Optionally load expression
+	var exprMap map[int64]float32
+	if gene != "" && s.soma != nil && s.soma.Supported() {
+		_, exprMap, err = s.soma.ExpressionByCellJoinID(gene, cellJoinIDs)
+		if err != nil {
+			// Gene not found or other error - continue without expression
+			exprMap = nil
+		}
+	}
+
+	// Optionally load category
+	var catMap map[int64]string
+	if category != "" && s.soma != nil && s.soma.Supported() {
+		catMap, err = s.soma.ReadObsCategoryColumn(category, cellJoinIDs)
+		if err != nil {
+			// Column not found or other error - continue without category
+			catMap = nil
+		}
+	}
+
+	// Build category filter set
+	var catFilterSet map[string]struct{}
+	if len(categoryFilter) > 0 && catMap != nil {
+		catFilterSet = make(map[string]struct{}, len(categoryFilter))
+		for _, v := range categoryFilter {
+			catFilterSet[v] = struct{}{}
+		}
+	}
+
+	// Build result
+	cells := make([]CellInfo, 0, len(cellJoinIDs))
+	for _, cid := range cellJoinIDs {
+		x, okX := xMap[cid]
+		y, okY := yMap[cid]
+		if !okX || !okY {
+			continue
+		}
+
+		// Apply category filter
+		catVal := ""
+		if catMap != nil {
+			catVal = catMap[cid]
+			if catFilterSet != nil {
+				if _, ok := catFilterSet[catVal]; !ok {
+					continue
+				}
+			}
+		}
+
+		cell := CellInfo{
+			JoinID: cid,
+			X:      x,
+			Y:      y,
+		}
+		if exprMap != nil {
+			cell.Expression = exprMap[cid] // defaults to 0 if not in map
+		}
+		if catMap != nil {
+			cell.Category = catVal
+		}
+
+		cells = append(cells, cell)
+	}
+
+	return &CellQueryResult{
+		Cells:      cells,
+		TotalCount: len(cells),
+		Truncated:  truncated,
+	}, nil
 }

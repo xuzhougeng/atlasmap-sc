@@ -69,4 +69,35 @@ func (r *Reader) ObsGroupIndex(column string) (map[string][]int64, error) {
 	return nil, ErrUnsupported
 }
 
+// SpatialIndex holds pre-computed spatial index for fast bbox queries.
+type SpatialIndex struct {
+	RenderZoom      int
+	BinsPerAxis     int
+	BinSize         float64
+	CoordinateRange float64
+	NCells          int
+	X               []float32
+	Y               []float32
+	Offsets         []int
+	CellIDs         []int64
+}
 
+// LoadSpatialIndex is a stub that returns ErrUnsupported.
+func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*SpatialIndex, error) {
+	return nil, ErrUnsupported
+}
+
+// QueryCellsInBounds is a stub that returns nil.
+func (idx *SpatialIndex) QueryCellsInBounds(minX, minY, maxX, maxY float64, limit int) []int64 {
+	return nil
+}
+
+// GetCellCoordinates is a stub that returns empty maps.
+func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]float32, map[int64]float32) {
+	return nil, nil
+}
+
+// ReadObsCategoryColumn is a stub that returns ErrUnsupported.
+func (r *Reader) ReadObsCategoryColumn(column string, cellJoinIDs []int64) (map[int64]string, error) {
+	return nil, ErrUnsupported
+}

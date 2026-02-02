@@ -277,6 +277,9 @@ export class MapController {
         this.currentExpressionColorScale = colorScale;
 
         // Add expression-colored tile layer
+        // Keep tiles visible beyond maxNativeZoom, but avoid requesting higher-zoom tiles.
+        // Leaflet will reuse tiles at maxNativeZoom and scale them.
+        // (cell canvas layer will take over visually at higher zooms)
         this.expressionLayer = L.tileLayer(
             this.buildExpressionTileUrl(gene),
             {
@@ -320,6 +323,9 @@ export class MapController {
         const tileUrl = this.buildCategoryTileUrl(column);
 
         // Add category-colored tile layer
+        // Keep tiles visible beyond maxNativeZoom, but avoid requesting higher-zoom tiles.
+        // Leaflet will reuse tiles at maxNativeZoom and scale them.
+        // (cell canvas layer will take over visually at higher zooms)
         const layerOptions: L.TileLayerOptions = {
             tileSize: this.config.tileSize,
             noWrap: true,

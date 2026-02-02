@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"sync"
 
 	tiledb "github.com/TileDB-Inc/TileDB-Go"
@@ -617,6 +618,374 @@ func (r *Reader) ObsGroupIndex(column string) (map[string][]int64, error) {
 	return idx, nil
 }
 
+// SpatialIndex holds pre-computed spatial index for fast bbox queries.
+type SpatialIndex struct {
+	RenderZoom      int     // zoom level used for bin indexing
+	BinsPerAxis     int     // 1 << RenderZoom
+	BinSize         float64 // coordinate_range / BinsPerAxis
+	CoordinateRange float64
+	NCells          int
+	// Per-cell data (indexed by soma_joinid)
+	X []float32
+	Y []float32
+	// CSR-like structure: for each bin, which cells belong to it
+	// binID = binY * BinsPerAxis + binX
+	Offsets []int   // length = nBins+1
+	CellIDs []int64 // length = NCells, cell_joinids sorted by bin
+}
+
+// LoadSpatialIndex reads obs table and builds a spatial index at the given zoom level.
+// This is expensive (reads entire obs table) and should be cached.
+func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*SpatialIndex, error) {
+	binsPerAxis := 1 << renderZoom
+
+	obsURI := r.experimentURI + "/obs"
+	arr, err := tiledb.NewArray(r.ctx, obsURI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open obs array: %w", err)
+	}
+	defer arr.Free()
+	if err := arr.Open(tiledb.TILEDB_READ); err != nil {
+		return nil, fmt.Errorf("failed to open obs array for read: %w", err)
+	}
+	defer arr.Close()
+
+	// Get non-empty domain
+	ned, isEmpty, err := arr.NonEmptyDomainFromName("soma_joinid")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get obs non-empty domain: %w", err)
+	}
+	if isEmpty || ned == nil {
+		return &SpatialIndex{
+			RenderZoom:      renderZoom,
+			BinsPerAxis:     binsPerAxis,
+			BinSize:         coordinateRange / float64(binsPerAxis),
+			CoordinateRange: coordinateRange,
+			NCells:          0,
+			X:               []float32{},
+			Y:               []float32{},
+			Offsets:         make([]int, binsPerAxis*binsPerAxis+1),
+			CellIDs:         []int64{},
+		}, nil
+	}
+	minID, maxID, err := boundsMinMaxInt64(ned.Bounds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse obs non-empty domain: %w", err)
+	}
+
+	sub, err := arr.NewSubarray()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create obs subarray: %w", err)
+	}
+	defer sub.Free()
+	if err := sub.AddRangeByName("soma_joinid", tiledb.MakeRange[int64](minID, maxID)); err != nil {
+		return nil, fmt.Errorf("failed to set obs range: %w", err)
+	}
+
+	q, err := tiledb.NewQuery(r.ctx, arr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create obs query: %w", err)
+	}
+	defer q.Free()
+	if err := q.SetSubarray(sub); err != nil {
+		return nil, fmt.Errorf("failed to set obs subarray: %w", err)
+	}
+	if err := q.SetLayout(tiledb.TILEDB_ROW_MAJOR); err != nil {
+		return nil, fmt.Errorf("failed to set obs query layout: %w", err)
+	}
+
+	binSize := coordinateRange / float64(binsPerAxis)
+	nBins := binsPerAxis * binsPerAxis
+
+	// Estimate cell count
+	estimatedCells := int(maxID - minID + 1)
+	if estimatedCells < 1 {
+		estimatedCells = 1
+	}
+
+	// Collect cells with their positions
+	type cellData struct {
+		joinID int64
+		x, y   float32
+		binID  int
+	}
+	cells := make([]cellData, 0, estimatedCells)
+
+	// Stream in chunks
+	const chunkRows = 8192
+	joinIDs := make([]int64, chunkRows)
+	xCoords := make([]float32, chunkRows)
+	yCoords := make([]float32, chunkRows)
+
+	// Some SOMA dataframe attributes may be nullable; TileDB requires validity buffers in that case.
+	xNullable, err := attributeNullable(arr, "x_normalized")
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect x_normalized nullable: %w", err)
+	}
+	yNullable, err := attributeNullable(arr, "y_normalized")
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect y_normalized nullable: %w", err)
+	}
+	var xValid []uint8
+	var yValid []uint8
+	if xNullable {
+		xValid = make([]uint8, chunkRows)
+	}
+	if yNullable {
+		yValid = make([]uint8, chunkRows)
+	}
+
+	for {
+		if _, err := q.SetDataBuffer("soma_joinid", joinIDs); err != nil {
+			return nil, fmt.Errorf("failed to set buffer soma_joinid: %w", err)
+		}
+		if _, err := q.SetDataBuffer("x_normalized", xCoords); err != nil {
+			return nil, fmt.Errorf("failed to set buffer x_normalized: %w", err)
+		}
+		if _, err := q.SetDataBuffer("y_normalized", yCoords); err != nil {
+			return nil, fmt.Errorf("failed to set buffer y_normalized: %w", err)
+		}
+		if xNullable {
+			if _, err := q.SetValidityBuffer("x_normalized", xValid); err != nil {
+				return nil, fmt.Errorf("failed to set validity buffer x_normalized: %w", err)
+			}
+		}
+		if yNullable {
+			if _, err := q.SetValidityBuffer("y_normalized", yValid); err != nil {
+				return nil, fmt.Errorf("failed to set validity buffer y_normalized: %w", err)
+			}
+		}
+
+		if err := q.Submit(); err != nil {
+			return nil, fmt.Errorf("obs spatial query submit failed: %w", err)
+		}
+		status, err := q.Status()
+		if err != nil {
+			return nil, fmt.Errorf("obs spatial query status failed: %w", err)
+		}
+
+		elems, err := q.ResultBufferElements()
+		if err != nil {
+			return nil, fmt.Errorf("obs spatial query ResultBufferElements failed: %w", err)
+		}
+		usedJoin := int(elems["soma_joinid"][1])
+		if usedJoin > len(joinIDs) {
+			usedJoin = len(joinIDs)
+		}
+
+		lim := usedJoin
+		if usedX := int(elems["x_normalized"][1]); usedX > 0 && usedX < lim {
+			lim = usedX
+		}
+		if usedY := int(elems["y_normalized"][1]); usedY > 0 && usedY < lim {
+			lim = usedY
+		}
+		if xNullable {
+			if used := int(elems["x_normalized"][2]); used > 0 && used < lim {
+				lim = used
+			}
+		}
+		if yNullable {
+			if used := int(elems["y_normalized"][2]); used > 0 && used < lim {
+				lim = used
+			}
+		}
+
+		for i := 0; i < lim; i++ {
+			// Skip null coordinates if present.
+			if xNullable && xValid[i] == 0 {
+				continue
+			}
+			if yNullable && yValid[i] == 0 {
+				continue
+			}
+			x := xCoords[i]
+			y := yCoords[i]
+
+			// Compute bin indices
+			binX := int(float64(x) / binSize)
+			binY := int(float64(y) / binSize)
+			// Clamp to valid range
+			if binX < 0 {
+				binX = 0
+			}
+			if binX >= binsPerAxis {
+				binX = binsPerAxis - 1
+			}
+			if binY < 0 {
+				binY = 0
+			}
+			if binY >= binsPerAxis {
+				binY = binsPerAxis - 1
+			}
+			binID := binY*binsPerAxis + binX
+
+			cells = append(cells, cellData{
+				joinID: joinIDs[i],
+				x:      x,
+				y:      y,
+				binID:  binID,
+			})
+		}
+
+		if status == tiledb.TILEDB_COMPLETED {
+			break
+		}
+		if status != tiledb.TILEDB_INCOMPLETE {
+			return nil, fmt.Errorf("unexpected obs spatial query status: %v", status)
+		}
+	}
+
+	nCells := len(cells)
+
+	// Sort cells by binID
+	sort.Slice(cells, func(i, j int) bool {
+		return cells[i].binID < cells[j].binID
+	})
+
+	// Build CSR structure
+	offsets := make([]int, nBins+1)
+	cellIDs := make([]int64, nCells)
+	X := make([]float32, nCells)
+	Y := make([]float32, nCells)
+
+	// Count cells per bin
+	binCounts := make([]int, nBins)
+	for _, c := range cells {
+		binCounts[c.binID]++
+	}
+
+	// Compute offsets
+	offsets[0] = 0
+	for i := 0; i < nBins; i++ {
+		offsets[i+1] = offsets[i] + binCounts[i]
+	}
+
+	// Fill cellIDs and coordinates (cells are already sorted by binID)
+	for i, c := range cells {
+		cellIDs[i] = c.joinID
+		X[i] = c.x
+		Y[i] = c.y
+	}
+
+	return &SpatialIndex{
+		RenderZoom:      renderZoom,
+		BinsPerAxis:     binsPerAxis,
+		BinSize:         binSize,
+		CoordinateRange: coordinateRange,
+		NCells:          nCells,
+		X:               X,
+		Y:               Y,
+		Offsets:         offsets,
+		CellIDs:         cellIDs,
+	}, nil
+}
+
+// QueryCellsInBounds returns cell joinIDs within the given bounding box.
+func (idx *SpatialIndex) QueryCellsInBounds(minX, minY, maxX, maxY float64, limit int) []int64 {
+	if idx.NCells == 0 {
+		return nil
+	}
+
+	// Compute bin range
+	minBinX := int(minX / idx.BinSize)
+	maxBinX := int(maxX / idx.BinSize)
+	minBinY := int(minY / idx.BinSize)
+	maxBinY := int(maxY / idx.BinSize)
+
+	// Clamp to valid range
+	if minBinX < 0 {
+		minBinX = 0
+	}
+	if maxBinX >= idx.BinsPerAxis {
+		maxBinX = idx.BinsPerAxis - 1
+	}
+	if minBinY < 0 {
+		minBinY = 0
+	}
+	if maxBinY >= idx.BinsPerAxis {
+		maxBinY = idx.BinsPerAxis - 1
+	}
+
+	// Collect candidate cells from bins
+	result := make([]int64, 0, 1024)
+	for binY := minBinY; binY <= maxBinY; binY++ {
+		for binX := minBinX; binX <= maxBinX; binX++ {
+			binID := binY*idx.BinsPerAxis + binX
+			start := idx.Offsets[binID]
+			end := idx.Offsets[binID+1]
+
+			for i := start; i < end; i++ {
+				x := float64(idx.X[i])
+				y := float64(idx.Y[i])
+				// Precise bbox check
+				if x >= minX && x <= maxX && y >= minY && y <= maxY {
+					result = append(result, idx.CellIDs[i])
+					if limit > 0 && len(result) >= limit {
+						return result
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// GetCellCoordinates returns the x,y coordinates for a list of cell joinIDs.
+// Returns maps: joinID -> x, joinID -> y
+func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]float32, map[int64]float32) {
+	// Build lookup from cellIDs to index
+	// Note: CellIDs array is sorted by binID, not by joinID, so we need a map
+	joinIDToIdx := make(map[int64]int, idx.NCells)
+	for i, cid := range idx.CellIDs {
+		joinIDToIdx[cid] = i
+	}
+
+	xMap := make(map[int64]float32, len(cellJoinIDs))
+	yMap := make(map[int64]float32, len(cellJoinIDs))
+
+	for _, cid := range cellJoinIDs {
+		if i, ok := joinIDToIdx[cid]; ok {
+			xMap[cid] = idx.X[i]
+			yMap[cid] = idx.Y[i]
+		}
+	}
+
+	return xMap, yMap
+}
+
+// ReadObsCategoryColumn reads a string category column for given cell joinIDs.
+// Returns map: cell_joinid -> category_value
+func (r *Reader) ReadObsCategoryColumn(column string, cellJoinIDs []int64) (map[int64]string, error) {
+	if len(cellJoinIDs) == 0 {
+		return map[int64]string{}, nil
+	}
+
+	// Use ObsGroupIndex which already caches column value -> cell joinids
+	groupIdx, err := r.ObsGroupIndex(column)
+	if err != nil {
+		return nil, err
+	}
+
+	// Invert the mapping: cell_joinid -> value
+	result := make(map[int64]string, len(cellJoinIDs))
+	cellSet := make(map[int64]struct{}, len(cellJoinIDs))
+	for _, cid := range cellJoinIDs {
+		cellSet[cid] = struct{}{}
+	}
+
+	for value, joinids := range groupIdx {
+		for _, cid := range joinids {
+			if _, ok := cellSet[cid]; ok {
+				result[cid] = value
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func (r *Reader) loadObsGroupIndex(column string) (map[string][]int64, error) {
 	obsURI := r.experimentURI + "/obs"
 	arr, err := tiledb.NewArray(r.ctx, obsURI)
@@ -786,5 +1155,3 @@ func (r *Reader) loadObsGroupIndex(column string) (map[string][]int64, error) {
 		}
 	}
 }
-
-

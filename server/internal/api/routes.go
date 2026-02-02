@@ -117,6 +117,9 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			// SOMA obs metadata endpoints (for groupby column discovery)
 			r.Get("/soma/obs/columns", datasetSomaObsColumnsHandler)
 			r.Get("/soma/obs/{column}/values", datasetSomaObsValuesHandler)
+
+			// SOMA cells endpoint for cell-level rendering
+			r.Get("/soma/cells", datasetSomaCellsHandler)
 		})
 	})
 
@@ -1193,6 +1196,80 @@ func datasetSomaObsValuesHandler(w http.ResponseWriter, r *http.Request) {
 		"column": column,
 		"values": values,
 	})
+}
+
+// datasetSomaCellsHandler returns cells within a bounding box for cell-level rendering.
+func datasetSomaCellsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := getDatasetService(r)
+	if svc == nil {
+		http.Error(w, "dataset service not available", http.StatusInternalServerError)
+		return
+	}
+	sr := svc.Soma()
+	if sr == nil {
+		http.Error(w, "soma not configured for this dataset", http.StatusNotFound)
+		return
+	}
+	if !sr.Supported() {
+		http.Error(w, soma.ErrUnsupported.Error(), http.StatusNotImplemented)
+		return
+	}
+
+	// Parse required bbox parameters
+	minXStr := strings.TrimSpace(r.URL.Query().Get("min_x"))
+	minYStr := strings.TrimSpace(r.URL.Query().Get("min_y"))
+	maxXStr := strings.TrimSpace(r.URL.Query().Get("max_x"))
+	maxYStr := strings.TrimSpace(r.URL.Query().Get("max_y"))
+
+	if minXStr == "" || minYStr == "" || maxXStr == "" || maxYStr == "" {
+		http.Error(w, "missing required bbox parameters: min_x, min_y, max_x, max_y", http.StatusBadRequest)
+		return
+	}
+
+	minX, err := strconv.ParseFloat(minXStr, 64)
+	if err != nil {
+		http.Error(w, "invalid min_x: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	minY, err := strconv.ParseFloat(minYStr, 64)
+	if err != nil {
+		http.Error(w, "invalid min_y: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	maxX, err := strconv.ParseFloat(maxXStr, 64)
+	if err != nil {
+		http.Error(w, "invalid max_x: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	maxY, err := strconv.ParseFloat(maxYStr, 64)
+	if err != nil {
+		http.Error(w, "invalid max_y: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Parse optional parameters
+	gene := strings.TrimSpace(r.URL.Query().Get("gene"))
+	category := strings.TrimSpace(r.URL.Query().Get("category"))
+
+	limit := 5000
+	if limitStr := strings.TrimSpace(r.URL.Query().Get("limit")); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	// Parse category filter
+	var categoryFilter []string
+	categoryFilter, _ = parseCategoryFilter(r.URL.Query())
+
+	result, err := svc.GetCellsInBounds(minX, minY, maxX, maxY, gene, category, categoryFilter, limit)
+	if err != nil {
+		http.Error(w, "failed to get cells: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // BLAST Job handlers

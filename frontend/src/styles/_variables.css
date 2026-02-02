@@ -4,7 +4,8 @@
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-tertiary: #0f3460;
-    --bg-map: #0d0d1a;
+    /* Map background should stay white for UMAP canvas/tiles. */
+    --bg-map: #ffffff;
     --text-primary: #eaeaea;
     --text-secondary: #a0a0a0;
     --accent-primary: #e94560;
@@ -25,7 +26,8 @@
     --bg-primary: #f0f2f5;
     --bg-secondary: #ffffff;
     --bg-tertiary: #e4e6eb;
-    --bg-map: #e8eaed;
+    /* Map background should stay white for UMAP canvas/tiles. */
+    --bg-map: #ffffff;
     --text-primary: #1a1a2e;
     --text-secondary: #5a5a6e;
     --accent-primary: #e94560;

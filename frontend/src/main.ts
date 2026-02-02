@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import './styles/main.css';
 
 import { MapController } from './map/MapController';
+import { CellCanvasLayer } from './map/CellCanvasLayer';
 import { GeneSelector } from './components/GeneSelector';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TabPanel, TabType } from './components/TabPanel';
@@ -392,8 +393,51 @@ async function init() {
 
     // Initialize map
     const mapContainer = document.getElementById('map-container')!;
-    const maxNativeZoom = Math.max(0, metadata.zoom_levels - 1);
-    // Allow a few extra zoom levels to "magnify" the highest native tiles.
+    
+    // Calculate maxNativeZoom automatically based on n_cells and viewport size.
+    // This determines when to switch from tile-based to canvas-based rendering.
+    // Goal: canvas mode should have ~5000 cells visible in the viewport (matching backend limit).
+    const renderZoom = Math.max(0, metadata.zoom_levels - 1);
+    const maxNativeZoom = (() => {
+        const nCells = metadata.n_cells || 0;
+        const bounds = metadata.bounds;
+        const worldWidth = bounds.max_x - bounds.min_x;
+        const worldHeight = bounds.max_y - bounds.min_y;
+        const worldArea = worldWidth * worldHeight;
+        
+        if (nCells <= 0 || worldArea <= 0) {
+            return renderZoom;
+        }
+        
+        // Use container size or default to 1024x768 for initial calculation
+        const containerRect = mapContainer.getBoundingClientRect();
+        const wPx = containerRect.width > 0 ? containerRect.width : 1024;
+        const hPx = containerRect.height > 0 ? containerRect.height : 768;
+        const viewportPixels = wPx * hPx;
+        
+        // Target: ~5000 cells visible in canvas mode (matches backend default limit)
+        const targetCells = 5000;
+        
+        // Cell density in world units
+        const density = nCells / worldArea;
+        
+        // At zoom z, viewport covers (viewportPixels / 4^z) world units
+        // We want: density * (viewportPixels / 4^z) <= targetCells
+        // Solving for z: z >= 0.5 * log2(density * viewportPixels / targetCells)
+        const canvasMinZoom = Math.ceil(0.5 * Math.log2(density * viewportPixels / targetCells));
+        
+        // maxNativeZoom is one less than canvasMinZoom (tiles cover 0 to maxNativeZoom)
+        // But don't exceed the backend's renderZoom
+        const computed = Math.max(0, Math.min(renderZoom, canvasMinZoom - 1));
+        
+        console.log(`Auto maxNativeZoom: n_cells=${nCells}, viewport=${wPx}x${hPx}, ` +
+                    `density=${density.toFixed(2)}, canvasMinZoom=${canvasMinZoom}, ` +
+                    `computed=${computed}, renderZoom=${renderZoom}`);
+        
+        return computed;
+    })();
+    
+    // Allow extra zoom levels for cell-level rendering (beyond tile-based rendering)
     const maxZoom = maxNativeZoom + 4;
     const mapController = new MapController(mapContainer, {
         apiUrl: tilesBaseUrl,
@@ -405,6 +449,57 @@ async function init() {
         initialZoom: 2,
         bounds: metadata.bounds,
     });
+
+    // Initialize cell canvas layer for rendering at zoom > maxNativeZoom
+    const cellCanvasLayer = new CellCanvasLayer({
+        api,
+        map: mapController.getMap(),
+        maxNativeZoom,
+        bounds: metadata.bounds,
+    });
+
+    // Helper to update cell canvas layer for category mode
+    async function updateCellCanvasLayerCategory(column: string, filter: string[] | null): Promise<void> {
+        try {
+            const colors = await api.getCategoryColors(column);
+            cellCanvasLayer.setColorOptions({
+                mode: 'category',
+                categoryColumn: column,
+                categoryFilter: filter,
+                categoryColors: colors,
+            });
+        } catch (error) {
+            console.warn('Failed to load category colors for cell layer:', error);
+            cellCanvasLayer.setColorOptions({
+                mode: 'category',
+                categoryColumn: column,
+                categoryFilter: filter,
+            });
+        }
+    }
+
+    // Helper to update cell canvas layer for expression mode
+    async function updateCellCanvasLayerExpression(gene: string, colormap: string): Promise<void> {
+        try {
+            const stats = await api.getGeneStats(gene, maxNativeZoom);
+            const p80 = stats.p80_expression;
+            const autoMax = typeof p80 === 'number' && Number.isFinite(p80) && p80 > 0 ? p80 : stats.max_expression;
+            cellCanvasLayer.setColorOptions({
+                mode: 'expression',
+                gene,
+                expressionColormap: colormap,
+                expressionMin: 0,
+                expressionMax: autoMax,
+            });
+        } catch (error) {
+            console.warn('Failed to load gene stats for cell layer:', error);
+            cellCanvasLayer.setColorOptions({
+                mode: 'expression',
+                gene,
+                expressionColormap: colormap,
+            });
+        }
+    }
 
     // Expression colorbar overlay (shown only when expression tiles are active)
     const expressionColorbarContainer = document.createElement('div');
@@ -471,8 +566,11 @@ async function init() {
                     mapController.setCategoryColumn(column, filter);
                     categoryLegend.loadLegend(column);
                     categoryLegend.show();
+                    // Update cell canvas layer for category mode
+                    void updateCellCanvasLayerCategory(column, filter);
                 } else {
                     categoryLegend.hide();
+                    // Cell canvas will be updated when gene is selected
                 }
 
                 void refreshCategoryLabels();
@@ -506,6 +604,8 @@ async function init() {
                 cellQueryPanel?.setCategoryColumn(column);
                 currentCategoryFilter = filter ?? null;
                 void refreshCategoryLabels();
+                // Update cell canvas layer for category mode
+                void updateCellCanvasLayerCategory(column, filter);
             },
         }
     );
@@ -548,6 +648,8 @@ async function init() {
                 mapController.updateCategoryFilter(filter);
                 currentCategoryFilter = filter ?? null;
                 mapController.setCategoryLabelFilter(currentCategoryFilter);
+                // Update cell canvas layer filter
+                cellCanvasLayer.setColorOptions({ categoryFilter: filter ?? null });
             }
             if (column === currentCategoryColumn) {
                 state.setState({ selectedCategories: filter ?? [] });
@@ -637,6 +739,8 @@ async function init() {
                     scale,
                     expressionRangeSelector?.getRange() ?? null
                 );
+                // Update cell canvas layer colormap
+                cellCanvasLayer.setColorOptions({ expressionColormap: scale });
             }
             void refreshExpressionColorbar();
         },
@@ -655,6 +759,13 @@ async function init() {
             const { colorGene, colorMode, colorScale } = state.getState();
             if (colorMode === 'expression' && colorGene) {
                 mapController.setExpressionGene(colorGene, colorScale, range);
+                // Update cell canvas layer range
+                if (range) {
+                    cellCanvasLayer.setColorOptions({
+                        expressionMin: range.min,
+                        expressionMax: range.max,
+                    });
+                }
             }
             void refreshExpressionColorbar();
         },
@@ -712,6 +823,9 @@ async function init() {
 
         // Update cell query panel with selected gene
         cellQueryPanel?.setGene(gene);
+
+        // Update cell canvas layer for expression mode
+        void updateCellCanvasLayerExpression(gene, state.getState().colorScale);
     });
 
     // Handle gene parameter from URL (e.g., from DE results page)
@@ -735,6 +849,9 @@ async function init() {
         if (geneInput) {
             geneInput.value = geneParamFromUrl;
         }
+
+        // Update cell canvas layer for expression mode
+        void updateCellCanvasLayerExpression(geneParamFromUrl, state.getState().colorScale);
     }
 
     // Initialize with default category (skip if gene was specified in URL)
@@ -744,6 +861,8 @@ async function init() {
         categoryLegend.loadLegend(defaultCategory);
         currentCategoryFilter = filter ?? null;
         void refreshCategoryLabels();
+        // Initialize cell canvas layer for category mode
+        void updateCellCanvasLayerCategory(defaultCategory, filter);
     }
 
     // Set up toolbar buttons

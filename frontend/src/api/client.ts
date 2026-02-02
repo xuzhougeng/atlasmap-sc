@@ -97,6 +97,20 @@ export interface GeneCategoryMeansResponse {
     items: GeneCategoryMeanItem[];
 }
 
+export interface CellInfo {
+    joinid: number;
+    x: number;
+    y: number;
+    expression?: number;
+    category?: string;
+}
+
+export interface CellQueryResult {
+    cells: CellInfo[];
+    total_count: number;
+    truncated: boolean;
+}
+
 export interface BinQueryParams {
     threshold?: number;
     offset?: number;
@@ -374,5 +388,51 @@ export class ApiClient {
             const message = await this.readError(response);
             throw new Error(`HTTP ${response.status}: ${message}`);
         }
+    }
+
+    /**
+     * Get cells within a bounding box for cell-level rendering.
+     */
+    async getSomaCellsInBounds(
+        bounds: { minX: number; minY: number; maxX: number; maxY: number },
+        options: {
+            gene?: string;
+            category?: string;
+            categories?: string[] | null;
+            limit?: number;
+        } = {},
+        signal?: AbortSignal
+    ): Promise<CellQueryResult> {
+        const query = new URLSearchParams();
+        query.set('min_x', bounds.minX.toString());
+        query.set('min_y', bounds.minY.toString());
+        query.set('max_x', bounds.maxX.toString());
+        query.set('max_y', bounds.maxY.toString());
+
+        if (options.gene) {
+            query.set('gene', options.gene);
+        }
+        if (options.category) {
+            query.set('category', options.category);
+        }
+        // Match tile filtering semantics:
+        // - undefined => no filter (don't send param)
+        // - null      => no filter (explicit, don't send param)
+        // - []        => filter-to-none (send "[]")
+        // - ["A",..]  => filter to these values
+        if (options.categories !== undefined && options.categories !== null) {
+            query.set('categories', JSON.stringify(options.categories));
+        }
+        if (options.limit) {
+            query.set('limit', options.limit.toString());
+        }
+
+        const url = this.buildUrl('/soma/cells', query);
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const message = await this.readError(response);
+            throw new Error(`HTTP ${response.status}: ${message}`);
+        }
+        return response.json();
     }
 }

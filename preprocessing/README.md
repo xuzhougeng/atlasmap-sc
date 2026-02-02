@@ -40,14 +40,14 @@ pip install -e .
 
 ```bash
 wget -O blood.h5ad https://datasets.cellxgene.cziscience.com/c3d1a5e6-780b-4fe9-a39b-1864f927e87b.h5ad
-atlasmap-preprocess run -i blood.h5ad -o ./data/blood
+atlasmap-preprocess run -i blood.h5ad -o ./data/blood --zoom-levels 12
 ```
 
 使用所有的表达基因
 
 ```bash
 wget -O retina.h5ad https://datasets.cellxgene.cziscience.com/fc4b5c6c-26ae-4c65-9798-51f604b69ba6.h5ad
-atlasmap-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --category cell_type
+atlasmap-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --category cell_type --zoom-levels 12
 ```
 
 完整参数
@@ -59,7 +59,7 @@ atlasmap-preprocess run \
     --umap-key X_umap \
     --coord-key X_umap \
     --coord-key X_tsne \
-    --zoom-levels 8 \
+    --zoom-levels 12 \
     --n-genes 500 \
     --category cell_type \
     --category leiden \
@@ -117,7 +117,7 @@ atlasmap-preprocess run -i data.h5ad -o ./output
 | `--output` | `-o` | 必填 | 输出目录路径 |
 | `--umap-key` | | `X_umap` | 默认坐标键（旧参数名；用于指定默认/主坐标系） |
 | `--coord-key` | | | 坐标键（来自 `adata.obsm`，可多次指定以生成多套坐标系 tiles） |
-| `--zoom-levels` | `-z` | `8` | 缩放级别数量（1-12） |
+| `--zoom-levels` | `-z` | `8` | 缩放级别数量（1-12）。**推荐使用 12**，见下方说明。 |
 | `--n-genes` | `-g` | `500` | 预聚合的基因数量 |
 | `--all-expressed` | `-a` | | 使用所有表达的基因而非 top N 基因 |
 | `--min-cells` | | `3` | 基因至少在多少个细胞中表达（仅与 `--all-expressed` 一起使用） |
@@ -132,6 +132,22 @@ atlasmap-preprocess run -i data.h5ad -o ./output
 | `--batch-size` | | `100000` | 处理批次大小 |
 | `--name` | | | 数据集名称 |
 | `--verbose` | `-v` | | 启用详细日志 |
+
+#### 关于 `zoom_levels` 的说明
+
+`zoom_levels` 决定预处理输出的 **bins 分辨率**（最高 zoom = zoom_levels - 1）。
+
+- 这个参数**不等于** Leaflet/前端的 zoom 范围。
+- 后端会根据请求的 tile zoom 自动选择合适的 bins zoom 来渲染，保证每个 bin 至少占 1 像素。
+- **推荐统一使用 `--zoom-levels 12`**（或至少 11），无论数据集大小。这样在 Leaflet zoom=0~4 时依然能看到清晰的 tiles，而不会出现"马赛克"。
+- 前端会根据 `n_cells` 自动估算何时从 tiles 切换到 canvas 渲染（高倍放大时显示单个细胞），不再需要手动按 cell 数调整 zoom_levels。
+
+**示例：**
+
+```bash
+# 推荐用法
+make preprocess INPUT="data.h5ad" OUTPUT="./output" ZOOM_LEVEL=12 PREPROCESS_NO_SOMA=0
+```
 
 ### `atlasmap-preprocess visualize`
 
@@ -198,7 +214,7 @@ coordinate_keys:
 coordinate_range: 256.0
 
 # 分箱设置
-zoom_levels: 8
+zoom_levels: 12  # 推荐使用 12，保证低倍缩放时 tiles 清晰
 tile_size: 256
 
 # 基因选择

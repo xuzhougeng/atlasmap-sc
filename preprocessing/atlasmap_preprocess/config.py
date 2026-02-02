@@ -24,7 +24,7 @@ class PreprocessConfig:
     coordinate_range: float = 256.0  # Normalize to [0, coordinate_range)
 
     # Binning settings
-    zoom_levels: int = 8
+    zoom_levels: int = 12  # Recommend 12 for clear tiles at low zoom levels
     tile_size: int = 256  # Pixels per tile
 
     # Gene selection
