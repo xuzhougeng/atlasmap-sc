@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sort"
 	"sync"
 
 	tiledb "github.com/TileDB-Inc/TileDB-Go"
@@ -697,22 +696,9 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 	binSize := coordinateRange / float64(binsPerAxis)
 	nBins := binsPerAxis * binsPerAxis
 
-	// Estimate cell count
-	estimatedCells := int(maxID - minID + 1)
-	if estimatedCells < 1 {
-		estimatedCells = 1
-	}
-
-	// Collect cells with their positions
-	type cellData struct {
-		joinID int64
-		x, y   float32
-		binID  int
-	}
-	cells := make([]cellData, 0, estimatedCells)
-
-	// Stream in chunks
-	const chunkRows = 8192
+	// Stream in chunks. Use a larger chunk size to reduce query overhead on huge datasets.
+	// Memory cost: joinIDs (8B) + x (4B) + y (4B) ~= 16B/row.
+	const chunkRows = 262144
 	joinIDs := make([]int64, chunkRows)
 	xCoords := make([]float32, chunkRows)
 	yCoords := make([]float32, chunkRows)
@@ -735,45 +721,50 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 		yValid = make([]uint8, chunkRows)
 	}
 
-	for {
+	// Two-pass construction to avoid an O(N log N) sort and large intermediate allocations:
+	// pass 1: count cells per bin
+	// pass 2: fill CellIDs/X/Y using prefix sums
+	binCounts := make([]int, nBins)
+
+	// Helper to set buffers and compute loop limit for a submitted query.
+	setBuffersAndGetLimit := func(q *tiledb.Query) (lim int, status tiledb.QueryStatus, err error) {
 		if _, err := q.SetDataBuffer("soma_joinid", joinIDs); err != nil {
-			return nil, fmt.Errorf("failed to set buffer soma_joinid: %w", err)
+			return 0, 0, fmt.Errorf("failed to set buffer soma_joinid: %w", err)
 		}
 		if _, err := q.SetDataBuffer("x_normalized", xCoords); err != nil {
-			return nil, fmt.Errorf("failed to set buffer x_normalized: %w", err)
+			return 0, 0, fmt.Errorf("failed to set buffer x_normalized: %w", err)
 		}
 		if _, err := q.SetDataBuffer("y_normalized", yCoords); err != nil {
-			return nil, fmt.Errorf("failed to set buffer y_normalized: %w", err)
+			return 0, 0, fmt.Errorf("failed to set buffer y_normalized: %w", err)
 		}
 		if xNullable {
 			if _, err := q.SetValidityBuffer("x_normalized", xValid); err != nil {
-				return nil, fmt.Errorf("failed to set validity buffer x_normalized: %w", err)
+				return 0, 0, fmt.Errorf("failed to set validity buffer x_normalized: %w", err)
 			}
 		}
 		if yNullable {
 			if _, err := q.SetValidityBuffer("y_normalized", yValid); err != nil {
-				return nil, fmt.Errorf("failed to set validity buffer y_normalized: %w", err)
+				return 0, 0, fmt.Errorf("failed to set validity buffer y_normalized: %w", err)
 			}
 		}
-
 		if err := q.Submit(); err != nil {
-			return nil, fmt.Errorf("obs spatial query submit failed: %w", err)
+			return 0, 0, fmt.Errorf("obs spatial query submit failed: %w", err)
 		}
-		status, err := q.Status()
+		status, err = q.Status()
 		if err != nil {
-			return nil, fmt.Errorf("obs spatial query status failed: %w", err)
+			return 0, 0, fmt.Errorf("obs spatial query status failed: %w", err)
 		}
 
 		elems, err := q.ResultBufferElements()
 		if err != nil {
-			return nil, fmt.Errorf("obs spatial query ResultBufferElements failed: %w", err)
+			return 0, 0, fmt.Errorf("obs spatial query ResultBufferElements failed: %w", err)
 		}
+
 		usedJoin := int(elems["soma_joinid"][1])
 		if usedJoin > len(joinIDs) {
 			usedJoin = len(joinIDs)
 		}
-
-		lim := usedJoin
+		lim = usedJoin
 		if usedX := int(elems["x_normalized"][1]); usedX > 0 && usedX < lim {
 			lim = usedX
 		}
@@ -790,6 +781,15 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 				lim = used
 			}
 		}
+		return lim, status, nil
+	}
+
+	// Pass 1: count per bin
+	for {
+		lim, status, err := setBuffersAndGetLimit(q)
+		if err != nil {
+			return nil, err
+		}
 
 		for i := 0; i < lim; i++ {
 			// Skip null coordinates if present.
@@ -802,10 +802,77 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 			x := xCoords[i]
 			y := yCoords[i]
 
-			// Compute bin indices
 			binX := int(float64(x) / binSize)
 			binY := int(float64(y) / binSize)
-			// Clamp to valid range
+			if binX < 0 {
+				binX = 0
+			}
+			if binX >= binsPerAxis {
+				binX = binsPerAxis - 1
+			}
+			if binY < 0 {
+				binY = 0
+			}
+			if binY >= binsPerAxis {
+				binY = binsPerAxis - 1
+			}
+			binID := binY*binsPerAxis + binX
+			binCounts[binID]++
+		}
+
+		if status == tiledb.TILEDB_COMPLETED {
+			break
+		}
+		if status != tiledb.TILEDB_INCOMPLETE {
+			return nil, fmt.Errorf("unexpected obs spatial query status: %v", status)
+		}
+	}
+
+	// Build CSR offsets and allocate arrays
+	offsets := make([]int, nBins+1)
+	offsets[0] = 0
+	for i := 0; i < nBins; i++ {
+		offsets[i+1] = offsets[i] + binCounts[i]
+	}
+	nCells := offsets[nBins]
+	cellIDs := make([]int64, nCells)
+	X := make([]float32, nCells)
+	Y := make([]float32, nCells)
+
+	// Pass 2: fill arrays using per-bin write cursors.
+	writePos := make([]int, nBins)
+	copy(writePos, offsets[:nBins])
+
+	q2, err := tiledb.NewQuery(r.ctx, arr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create obs query (pass2): %w", err)
+	}
+	defer q2.Free()
+	if err := q2.SetSubarray(sub); err != nil {
+		return nil, fmt.Errorf("failed to set obs subarray (pass2): %w", err)
+	}
+	if err := q2.SetLayout(tiledb.TILEDB_ROW_MAJOR); err != nil {
+		return nil, fmt.Errorf("failed to set obs query layout (pass2): %w", err)
+	}
+
+	for {
+		lim, status, err := setBuffersAndGetLimit(q2)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := 0; i < lim; i++ {
+			if xNullable && xValid[i] == 0 {
+				continue
+			}
+			if yNullable && yValid[i] == 0 {
+				continue
+			}
+			x := xCoords[i]
+			y := yCoords[i]
+
+			binX := int(float64(x) / binSize)
+			binY := int(float64(y) / binSize)
 			if binX < 0 {
 				binX = 0
 			}
@@ -820,52 +887,23 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 			}
 			binID := binY*binsPerAxis + binX
 
-			cells = append(cells, cellData{
-				joinID: joinIDs[i],
-				x:      x,
-				y:      y,
-				binID:  binID,
-			})
+			pos := writePos[binID]
+			if pos >= offsets[binID+1] {
+				// Should not happen, but guard against corrupt counts.
+				continue
+			}
+			cellIDs[pos] = joinIDs[i]
+			X[pos] = x
+			Y[pos] = y
+			writePos[binID]++
 		}
 
 		if status == tiledb.TILEDB_COMPLETED {
 			break
 		}
 		if status != tiledb.TILEDB_INCOMPLETE {
-			return nil, fmt.Errorf("unexpected obs spatial query status: %v", status)
+			return nil, fmt.Errorf("unexpected obs spatial query status (pass2): %v", status)
 		}
-	}
-
-	nCells := len(cells)
-
-	// Sort cells by binID
-	sort.Slice(cells, func(i, j int) bool {
-		return cells[i].binID < cells[j].binID
-	})
-
-	// Build CSR structure
-	offsets := make([]int, nBins+1)
-	cellIDs := make([]int64, nCells)
-	X := make([]float32, nCells)
-	Y := make([]float32, nCells)
-
-	// Count cells per bin
-	binCounts := make([]int, nBins)
-	for _, c := range cells {
-		binCounts[c.binID]++
-	}
-
-	// Compute offsets
-	offsets[0] = 0
-	for i := 0; i < nBins; i++ {
-		offsets[i+1] = offsets[i] + binCounts[i]
-	}
-
-	// Fill cellIDs and coordinates (cells are already sorted by binID)
-	for i, c := range cells {
-		cellIDs[i] = c.joinID
-		X[i] = c.x
-		Y[i] = c.y
 	}
 
 	return &SpatialIndex{

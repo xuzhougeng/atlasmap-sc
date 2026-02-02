@@ -235,6 +235,12 @@ export class CellCanvasLayer {
             return;
         }
 
+        // If the very first fetch is still in-flight (often triggers backend spatial index build),
+        // don't spam new requests; aborting won't cancel the backend warm-up anyway.
+        if (this.abortController && !this.hasFetchedOnce) {
+            return;
+        }
+
         // Cancel previous request
         if (this.abortController) {
             this.abortController.abort();
@@ -284,12 +290,15 @@ export class CellCanvasLayer {
             this.lastRequestedBounds = paddedBounds;
             this.hasFetchedOnce = true;
             this.draw();
+            this.abortController = null;
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
                 // Request was cancelled, ignore
+                this.abortController = null;
                 return;
             }
             console.error('Failed to fetch cells:', err);
+            this.abortController = null;
         }
     }
 
