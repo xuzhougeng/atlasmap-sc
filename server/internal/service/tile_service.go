@@ -2,7 +2,10 @@
 package service
 
 import (
+	"container/heap"
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"sync"
 
@@ -818,12 +821,14 @@ func (s *TileService) loadSpatialIndex() (*soma.SpatialIndex, error) {
 //   - category: if set, include category values for this column
 //   - categoryFilter: if set, only return cells with category values in this list
 //   - limit: maximum number of cells to return (default 5000)
+//   - seed: random seed for deterministic sampling (default 0)
 func (s *TileService) GetCellsInBounds(
 	minX, minY, maxX, maxY float64,
 	gene string,
 	category string,
 	categoryFilter []string,
 	limit int,
+	seed int64,
 ) (*CellQueryResult, error) {
 	if limit <= 0 {
 		limit = 5000
@@ -848,14 +853,19 @@ func (s *TileService) GetCellsInBounds(
 		return nil, err
 	}
 
-	// Query cells in bbox (with limit + 1 to detect truncation)
-	cellJoinIDs := idx.QueryCellsInBounds(minX, minY, maxX, maxY, limit+1)
-	truncated := len(cellJoinIDs) > limit
-	if truncated {
-		cellJoinIDs = cellJoinIDs[:limit]
+	// Query cells in bbox with their coordinates directly (avoids O(NCells) GetCellCoordinates call).
+	// When category filter is active, we oversample to ensure enough cells after filtering.
+	queryLimit := limit + 1
+	if len(categoryFilter) > 0 {
+		// Oversample when filtering is active
+		queryLimit = limit * 4
+		if queryLimit > 50000 {
+			queryLimit = 50000
+		}
 	}
+	cellsWithCoords := idx.QueryCellsInBoundsWithCoords(minX, minY, maxX, maxY, queryLimit)
 
-	if len(cellJoinIDs) == 0 {
+	if len(cellsWithCoords) == 0 {
 		return &CellQueryResult{
 			Cells:      []CellInfo{},
 			TotalCount: 0,
@@ -863,8 +873,11 @@ func (s *TileService) GetCellsInBounds(
 		}, nil
 	}
 
-	// Get coordinates
-	xMap, yMap := idx.GetCellCoordinates(cellJoinIDs)
+	// Build joinID list for attribute lookups
+	cellJoinIDs := make([]int64, len(cellsWithCoords))
+	for i, c := range cellsWithCoords {
+		cellJoinIDs[i] = c.JoinID
+	}
 
 	// Optionally load expression
 	var exprMap map[int64]float32
@@ -895,19 +908,13 @@ func (s *TileService) GetCellsInBounds(
 		}
 	}
 
-	// Build result
-	cells := make([]CellInfo, 0, len(cellJoinIDs))
-	for _, cid := range cellJoinIDs {
-		x, okX := xMap[cid]
-		y, okY := yMap[cid]
-		if !okX || !okY {
-			continue
-		}
-
+	// Build result (pre-filter)
+	cells := make([]CellInfo, 0, len(cellsWithCoords))
+	for _, cwc := range cellsWithCoords {
 		// Apply category filter
 		catVal := ""
 		if catMap != nil {
-			catVal = catMap[cid]
+			catVal = catMap[cwc.JoinID]
 			if catFilterSet != nil {
 				if _, ok := catFilterSet[catVal]; !ok {
 					continue
@@ -916,12 +923,12 @@ func (s *TileService) GetCellsInBounds(
 		}
 
 		cell := CellInfo{
-			JoinID: cid,
-			X:      x,
-			Y:      y,
+			JoinID: cwc.JoinID,
+			X:      cwc.X,
+			Y:      cwc.Y,
 		}
 		if exprMap != nil {
-			cell.Expression = exprMap[cid] // defaults to 0 if not in map
+			cell.Expression = exprMap[cwc.JoinID] // defaults to 0 if not in map
 		}
 		if catMap != nil {
 			cell.Category = catVal
@@ -930,9 +937,97 @@ func (s *TileService) GetCellsInBounds(
 		cells = append(cells, cell)
 	}
 
+	// Deterministic downsampling if we have more cells than the limit
+	truncated := len(cells) > limit
+	if truncated {
+		cells = deterministicSample(cells, limit, seed)
+	}
+
 	return &CellQueryResult{
 		Cells:      cells,
 		TotalCount: len(cells),
 		Truncated:  truncated,
 	}, nil
+}
+
+// cellHash computes a deterministic hash score for a cell based on seed and joinID.
+// The result is used for deterministic sampling - lower scores are kept.
+func cellHash(seed, joinID int64) uint64 {
+	h := fnv.New64a()
+	var buf [16]byte
+	binary.LittleEndian.PutUint64(buf[0:8], uint64(seed))
+	binary.LittleEndian.PutUint64(buf[8:16], uint64(joinID))
+	h.Write(buf[:])
+	return h.Sum64()
+}
+
+// scoredCell holds a cell with its hash score for heap operations.
+type scoredCell struct {
+	score uint64
+	cell  CellInfo
+}
+
+// maxHeap implements a max-heap for top-K selection (we want K smallest scores).
+type maxHeap []scoredCell
+
+func (h maxHeap) Len() int           { return len(h) }
+func (h maxHeap) Less(i, j int) bool { return h[i].score > h[j].score } // max-heap: larger scores at top
+func (h maxHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *maxHeap) Push(x interface{}) {
+	*h = append(*h, x.(scoredCell))
+}
+
+func (h *maxHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// deterministicSample selects k cells from the input using deterministic hash-based sampling.
+// The same seed + cells will always produce the same output, enabling caching.
+func deterministicSample(cells []CellInfo, k int, seed int64) []CellInfo {
+	if k <= 0 {
+		return []CellInfo{}
+	}
+	if len(cells) <= k {
+		return cells
+	}
+
+	// Use a max-heap to maintain the k smallest hash scores.
+	// This is O(n log k) which is efficient for large n and small k.
+	h := &maxHeap{}
+	heap.Init(h)
+
+	for _, cell := range cells {
+		score := cellHash(seed, cell.JoinID)
+		if h.Len() < k {
+			heap.Push(h, scoredCell{score: score, cell: cell})
+		} else if score < (*h)[0].score {
+			// This score is smaller than the largest in heap, replace it
+			heap.Pop(h)
+			heap.Push(h, scoredCell{score: score, cell: cell})
+		}
+	}
+
+	// Extract results and sort by score for stable output order
+	result := make([]CellInfo, h.Len())
+	scored := make([]scoredCell, h.Len())
+	for i := range scored {
+		scored[i] = heap.Pop(h).(scoredCell)
+	}
+	// Sort by score (ascending) for stable output
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score < scored[j].score
+		}
+		return scored[i].cell.JoinID < scored[j].cell.JoinID
+	})
+	for i, sc := range scored {
+		result[i] = sc.cell
+	}
+
+	return result
 }

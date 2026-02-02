@@ -1258,11 +1258,19 @@ func datasetSomaCellsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse seed for deterministic sampling (default 0)
+	var seed int64 = 0
+	if seedStr := strings.TrimSpace(r.URL.Query().Get("seed")); seedStr != "" {
+		if s, err := strconv.ParseInt(seedStr, 10, 64); err == nil {
+			seed = s
+		}
+	}
+
 	// Parse category filter
 	var categoryFilter []string
 	categoryFilter, _ = parseCategoryFilter(r.URL.Query())
 
-	result, err := svc.GetCellsInBounds(minX, minY, maxX, maxY, gene, category, categoryFilter, limit)
+	result, err := svc.GetCellsInBounds(minX, minY, maxX, maxY, gene, category, categoryFilter, limit, seed)
 	if err != nil {
 		http.Error(w, "failed to get cells: "+err.Error(), http.StatusInternalServerError)
 		return

@@ -244,6 +244,14 @@ export class CellCanvasLayer {
         const paddedBounds = this.padBounds(currentBounds, 0.3);
         const thisRequestId = ++this.requestId;
 
+        // Calculate limit based on zoom level:
+        // At lower zooms (closer to maxNativeZoom), we need fewer points since they're denser.
+        // At higher zooms, we can show more points since they're sparser on screen.
+        const zoom = this.config.map.getZoom();
+        const zoomDiff = Math.max(0, zoom - this.config.maxNativeZoom);
+        // Base limit of 5000, scaling up with zoom difference (up to 20000)
+        const limit = Math.min(20000, 5000 * Math.pow(2, Math.min(2, zoomDiff)));
+
         try {
             const result = await this.config.api.getSomaCellsInBounds(
                 paddedBounds,
@@ -251,7 +259,8 @@ export class CellCanvasLayer {
                     gene: this.colorOptions.mode === 'expression' ? this.colorOptions.gene ?? undefined : undefined,
                     category: this.colorOptions.mode === 'category' ? this.colorOptions.categoryColumn ?? undefined : undefined,
                     categories: this.colorOptions.categoryFilter ?? undefined,
-                    limit: 20000,
+                    limit,
+                    seed: 0, // Fixed seed for deterministic downsampling (stable renders)
                 },
                 this.abortController.signal
             );

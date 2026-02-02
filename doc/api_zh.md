@@ -138,6 +138,38 @@ curl 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785/result | 
 - `GET /d/{dataset}/api/soma/obs/columns`：返回 obs 可用列名
 - `GET /d/{dataset}/api/soma/obs/{column}/values`：返回该列的唯一值
 
+#### 细胞级渲染查询
+
+- `GET /d/{dataset}/api/soma/cells`：返回边界框内的细胞用于细胞级渲染
+  - Query 参数：
+    - `min_x`, `min_y`, `max_x`, `max_y`：边界框坐标（必填）
+    - `gene`：基因名，用于包含表达值（可选）
+    - `category`：分类列名，用于包含分类值（可选）
+    - `categories`：分类过滤值，JSON 数组格式，如 `["T","B"]`（可选；空 `[]` = 不显示，不传 = 显示全部）
+    - `limit`：返回最大细胞数（默认 5000，最大 50000）
+    - `seed`：确定性下采样的随机种子（默认 0）
+  - Response：
+    ```json
+    {
+      "cells": [
+        {"joinid": 123, "x": 10.5, "y": 20.3, "expression": 1.5, "category": "T"},
+        ...
+      ],
+      "total_count": 5000,
+      "truncated": true
+    }
+    ```
+  - 说明：
+    - 当边界框内细胞数超过 `limit` 时，后端使用基于哈希的算法进行**确定性下采样**。相同的请求总是返回相同的细胞，确保渲染稳定且可缓存。
+    - `truncated` 字段表示结果是否经过下采样。
+    - 对于分类过滤，系统会先过采样（最多 4 倍 limit），然后再应用过滤，以确保过滤后有足够的细胞。
+
+示例：
+
+```bash
+curl -sS 'http://localhost:8080/d/retina/api/soma/cells?min_x=0&min_y=0&max_x=100&max_y=100&category=cell_type&limit=5000&seed=0'
+```
+
 #### 统计方法说明
 
 - **t-test**：Welch t-test（不假设等方差），p-value 用 Student-t 分布 CDF

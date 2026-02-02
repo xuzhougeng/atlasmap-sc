@@ -392,6 +392,14 @@ export class ApiClient {
 
     /**
      * Get cells within a bounding box for cell-level rendering.
+     * @param bounds - The bounding box for the query
+     * @param options - Query options including:
+     *   - gene: Gene name for expression values
+     *   - category: Category column name
+     *   - categories: Category filter values (null = no filter, [] = show none)
+     *   - limit: Maximum cells to return (default 5000)
+     *   - seed: Random seed for deterministic downsampling (default 0)
+     * @param signal - AbortSignal for cancellation
      */
     async getSomaCellsInBounds(
         bounds: { minX: number; minY: number; maxX: number; maxY: number },
@@ -400,6 +408,7 @@ export class ApiClient {
             category?: string;
             categories?: string[] | null;
             limit?: number;
+            seed?: number;
         } = {},
         signal?: AbortSignal
     ): Promise<CellQueryResult> {
@@ -425,6 +434,10 @@ export class ApiClient {
         }
         if (options.limit) {
             query.set('limit', options.limit.toString());
+        }
+        // Seed for deterministic downsampling (0 = default deterministic sampling)
+        if (options.seed !== undefined) {
+            query.set('seed', options.seed.toString());
         }
 
         const url = this.buildUrl('/soma/cells', query);

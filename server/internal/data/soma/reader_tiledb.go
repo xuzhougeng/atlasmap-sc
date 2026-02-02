@@ -881,6 +881,13 @@ func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*Spa
 	}, nil
 }
 
+// CellWithCoords holds a cell's joinID and its coordinates.
+type CellWithCoords struct {
+	JoinID int64
+	X      float32
+	Y      float32
+}
+
 // QueryCellsInBounds returns cell joinIDs within the given bounding box.
 func (idx *SpatialIndex) QueryCellsInBounds(minX, minY, maxX, maxY float64, limit int) []int64 {
 	if idx.NCells == 0 {
@@ -932,6 +939,63 @@ func (idx *SpatialIndex) QueryCellsInBounds(minX, minY, maxX, maxY float64, limi
 	return result
 }
 
+// QueryCellsInBoundsWithCoords returns cells with their coordinates within the given bounding box.
+// This is more efficient than QueryCellsInBounds + GetCellCoordinates as it avoids building a full
+// joinID->index map (O(NCells) per request).
+func (idx *SpatialIndex) QueryCellsInBoundsWithCoords(minX, minY, maxX, maxY float64, limit int) []CellWithCoords {
+	if idx.NCells == 0 {
+		return nil
+	}
+
+	// Compute bin range
+	minBinX := int(minX / idx.BinSize)
+	maxBinX := int(maxX / idx.BinSize)
+	minBinY := int(minY / idx.BinSize)
+	maxBinY := int(maxY / idx.BinSize)
+
+	// Clamp to valid range
+	if minBinX < 0 {
+		minBinX = 0
+	}
+	if maxBinX >= idx.BinsPerAxis {
+		maxBinX = idx.BinsPerAxis - 1
+	}
+	if minBinY < 0 {
+		minBinY = 0
+	}
+	if maxBinY >= idx.BinsPerAxis {
+		maxBinY = idx.BinsPerAxis - 1
+	}
+
+	// Collect candidate cells from bins with their coordinates
+	result := make([]CellWithCoords, 0, 1024)
+	for binY := minBinY; binY <= maxBinY; binY++ {
+		for binX := minBinX; binX <= maxBinX; binX++ {
+			binID := binY*idx.BinsPerAxis + binX
+			start := idx.Offsets[binID]
+			end := idx.Offsets[binID+1]
+
+			for i := start; i < end; i++ {
+				x := idx.X[i]
+				y := idx.Y[i]
+				// Precise bbox check
+				if float64(x) >= minX && float64(x) <= maxX && float64(y) >= minY && float64(y) <= maxY {
+					result = append(result, CellWithCoords{
+						JoinID: idx.CellIDs[i],
+						X:      x,
+						Y:      y,
+					})
+					if limit > 0 && len(result) >= limit {
+						return result
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
 // GetCellCoordinates returns the x,y coordinates for a list of cell joinIDs.
 // Returns maps: joinID -> x, joinID -> y
 func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]float32, map[int64]float32) {
@@ -957,7 +1021,176 @@ func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]floa
 
 // ReadObsCategoryColumn reads a string category column for given cell joinIDs.
 // Returns map: cell_joinid -> category_value
+// This method performs a direct TileDB query on the subset of cells, avoiding O(NCells) scans.
 func (r *Reader) ReadObsCategoryColumn(column string, cellJoinIDs []int64) (map[int64]string, error) {
+	if len(cellJoinIDs) == 0 {
+		return map[int64]string{}, nil
+	}
+
+	obsURI := r.experimentURI + "/obs"
+	arr, err := tiledb.NewArray(r.ctx, obsURI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open obs array: %w", err)
+	}
+	defer arr.Free()
+	if err := arr.Open(tiledb.TILEDB_READ); err != nil {
+		return nil, fmt.Errorf("failed to open obs array for read: %w", err)
+	}
+	defer arr.Close()
+
+	// Check if column exists
+	schema, err := arr.Schema()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get obs schema: %w", err)
+	}
+	defer schema.Free()
+
+	attr, err := schema.AttributeFromName(column)
+	if err != nil {
+		return nil, fmt.Errorf("column not found in obs: %s", column)
+	}
+	defer attr.Free()
+
+	// Create subarray with point ranges for each cell joinID
+	sub, err := arr.NewSubarray()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create obs subarray: %w", err)
+	}
+	defer sub.Free()
+
+	// Add ranges for each cell (TileDB supports multiple point ranges)
+	for _, cid := range cellJoinIDs {
+		if err := sub.AddRangeByName("soma_joinid", tiledb.MakeRange[int64](cid, cid)); err != nil {
+			return nil, fmt.Errorf("failed to add cell range: %w", err)
+		}
+	}
+
+	q, err := tiledb.NewQuery(r.ctx, arr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create obs query: %w", err)
+	}
+	defer q.Free()
+	if err := q.SetSubarray(sub); err != nil {
+		return nil, fmt.Errorf("failed to set obs subarray: %w", err)
+	}
+	_ = q.SetLayout(tiledb.TILEDB_UNORDERED)
+
+	// Allocate buffers
+	n := len(cellJoinIDs)
+	joinIDs := make([]int64, n)
+	offsets := make([]uint64, n)
+	colNullable, _ := attributeNullable(arr, column)
+	var validity []uint8
+	if colNullable {
+		validity = make([]uint8, n)
+	}
+	// Estimate avg 32 bytes per string value
+	dataBytes := make([]byte, n*32)
+
+	result := make(map[int64]string, n)
+	for {
+		if _, err := q.SetDataBuffer("soma_joinid", joinIDs); err != nil {
+			return nil, fmt.Errorf("failed to set buffer soma_joinid: %w", err)
+		}
+		if _, err := q.SetOffsetsBuffer(column, offsets); err != nil {
+			return nil, fmt.Errorf("failed to set offsets buffer %s: %w", column, err)
+		}
+		if _, err := q.SetDataBuffer(column, dataBytes); err != nil {
+			return nil, fmt.Errorf("failed to set data buffer %s: %w", column, err)
+		}
+		if colNullable {
+			if _, err := q.SetValidityBuffer(column, validity); err != nil {
+				return nil, fmt.Errorf("failed to set validity buffer %s: %w", column, err)
+			}
+		}
+
+		if err := q.Submit(); err != nil {
+			return nil, fmt.Errorf("obs query submit failed: %w", err)
+		}
+		status, err := q.Status()
+		if err != nil {
+			return nil, fmt.Errorf("obs query status failed: %w", err)
+		}
+		elems, err := q.ResultBufferElements()
+		if err != nil {
+			return nil, fmt.Errorf("obs query ResultBufferElements failed: %w", err)
+		}
+
+		usedJoin := int(elems["soma_joinid"][1])
+		usedOffsets := int(elems[column][0])
+		usedBytes := int(elems[column][1])
+		usedValid := 0
+		if colNullable {
+			usedValid = int(elems[column][2])
+		}
+		if usedJoin > len(joinIDs) {
+			usedJoin = len(joinIDs)
+		}
+		if usedOffsets > len(offsets) {
+			usedOffsets = len(offsets)
+		}
+		if usedBytes > len(dataBytes) {
+			usedBytes = len(dataBytes)
+		}
+		if colNullable && usedValid > len(validity) {
+			usedValid = len(validity)
+		}
+
+		// Grow buffer if needed
+		if status == tiledb.TILEDB_INCOMPLETE && usedOffsets == 0 && usedBytes == 0 && usedJoin == 0 {
+			if len(dataBytes) < 64*1024*1024 {
+				dataBytes = make([]byte, len(dataBytes)*2)
+				continue
+			}
+			return nil, fmt.Errorf("obs query buffers too small for column %s", column)
+		}
+
+		join := joinIDs[:usedJoin]
+		off := offsets[:usedOffsets]
+		data := dataBytes[:usedBytes]
+		var val []uint8
+		if colNullable {
+			val = validity[:usedValid]
+		}
+
+		lim := usedJoin
+		if usedOffsets < lim {
+			lim = usedOffsets
+		}
+		if colNullable && usedValid > 0 && usedValid < lim {
+			lim = usedValid
+		}
+		for i := 0; i < lim; i++ {
+			if colNullable && usedValid > 0 && val[i] == 0 {
+				continue
+			}
+			start := int(off[i])
+			end := len(data)
+			if i+1 < usedOffsets {
+				end = int(off[i+1])
+			}
+			if start < 0 || end < start || end > len(data) {
+				continue
+			}
+			v := string(data[start:end])
+			if v != "" {
+				result[join[i]] = v
+			}
+		}
+
+		if status == tiledb.TILEDB_COMPLETED {
+			return result, nil
+		}
+		if status != tiledb.TILEDB_INCOMPLETE {
+			return nil, fmt.Errorf("unexpected TileDB query status for obs: %v", status)
+		}
+	}
+}
+
+// ReadObsCategoryColumnCached reads a string category column for given cell joinIDs.
+// This method uses the cached ObsGroupIndex for small datasets, falling back to direct
+// TileDB queries for large requests. Kept for backward compatibility.
+func (r *Reader) ReadObsCategoryColumnCached(column string, cellJoinIDs []int64) (map[int64]string, error) {
 	if len(cellJoinIDs) == 0 {
 		return map[int64]string{}, nil
 	}

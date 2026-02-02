@@ -137,6 +137,38 @@ curl 'http://localhost:8080/d/retina/api/soma/de/jobs/8d72e092e14fc785/result | 
 - `GET /d/{dataset}/api/soma/obs/columns`: Returns available obs column names
 - `GET /d/{dataset}/api/soma/obs/{column}/values`: Returns unique values for the column
 
+#### Cell-level Rendering Query
+
+- `GET /d/{dataset}/api/soma/cells`: Returns cells within a bounding box for cell-level rendering
+  - Query parameters:
+    - `min_x`, `min_y`, `max_x`, `max_y`: Bounding box coordinates (required)
+    - `gene`: Gene name to include expression values (optional)
+    - `category`: Category column name to include category values (optional)
+    - `categories`: Category filter values as JSON array, e.g., `["T","B"]` (optional; empty `[]` = show none, omit = show all)
+    - `limit`: Maximum cells to return (default 5000, max 50000)
+    - `seed`: Random seed for deterministic downsampling (default 0)
+  - Response:
+    ```json
+    {
+      "cells": [
+        {"joinid": 123, "x": 10.5, "y": 20.3, "expression": 1.5, "category": "T"},
+        ...
+      ],
+      "total_count": 5000,
+      "truncated": true
+    }
+    ```
+  - Notes:
+    - When the number of cells in the bounding box exceeds `limit`, the backend performs **deterministic downsampling** using a hash-based algorithm with the provided `seed`. This ensures that the same request always returns the same cells, enabling stable rendering and caching.
+    - The `truncated` field indicates whether the result was downsampled.
+    - For category filtering, cells are oversampled (up to 4x limit) before filtering to ensure enough cells remain after applying the filter.
+
+Example:
+
+```bash
+curl -sS 'http://localhost:8080/d/retina/api/soma/cells?min_x=0&min_y=0&max_x=100&max_y=100&category=cell_type&limit=5000&seed=0'
+```
+
 #### Statistical Methods
 
 - **t-test**: Welch t-test (does not assume equal variance), p-value calculated using Student-t distribution CDF

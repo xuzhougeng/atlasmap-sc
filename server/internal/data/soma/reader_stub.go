@@ -82,6 +82,13 @@ type SpatialIndex struct {
 	CellIDs         []int64
 }
 
+// CellWithCoords holds a cell's joinID and its coordinates.
+type CellWithCoords struct {
+	JoinID int64
+	X      float32
+	Y      float32
+}
+
 // LoadSpatialIndex is a stub that returns ErrUnsupported.
 func (r *Reader) LoadSpatialIndex(renderZoom int, coordinateRange float64) (*SpatialIndex, error) {
 	return nil, ErrUnsupported
@@ -92,6 +99,11 @@ func (idx *SpatialIndex) QueryCellsInBounds(minX, minY, maxX, maxY float64, limi
 	return nil
 }
 
+// QueryCellsInBoundsWithCoords is a stub that returns nil.
+func (idx *SpatialIndex) QueryCellsInBoundsWithCoords(minX, minY, maxX, maxY float64, limit int) []CellWithCoords {
+	return nil
+}
+
 // GetCellCoordinates is a stub that returns empty maps.
 func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]float32, map[int64]float32) {
 	return nil, nil
@@ -99,5 +111,10 @@ func (idx *SpatialIndex) GetCellCoordinates(cellJoinIDs []int64) (map[int64]floa
 
 // ReadObsCategoryColumn is a stub that returns ErrUnsupported.
 func (r *Reader) ReadObsCategoryColumn(column string, cellJoinIDs []int64) (map[int64]string, error) {
+	return nil, ErrUnsupported
+}
+
+// ReadObsCategoryColumnCached is a stub that returns ErrUnsupported.
+func (r *Reader) ReadObsCategoryColumnCached(column string, cellJoinIDs []int64) (map[int64]string, error) {
 	return nil, ErrUnsupported
 }
