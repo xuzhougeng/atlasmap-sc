@@ -43,6 +43,8 @@ export class CellCanvasLayer {
     private isActive = false;
     private hasFetchedOnce = false;
     private pointSize = 3;
+    // Global enable flag: when false, the layer never activates regardless of zoom
+    private enabled = true;
 
     // Debounce
     private moveEndTimer: number | null = null;
@@ -132,7 +134,8 @@ export class CellCanvasLayer {
 
     private checkZoomLevel(): void {
         const zoom = this.config.map.getZoom();
-        const shouldBeActive = zoom > this.config.maxNativeZoom;
+        // Only activate if enabled AND zoom exceeds maxNativeZoom
+        const shouldBeActive = this.enabled && zoom > this.config.maxNativeZoom;
 
         if (shouldBeActive && !this.isActive) {
             this.activate();
@@ -425,6 +428,52 @@ export class CellCanvasLayer {
         if (this.isActive) {
             this.draw();
         }
+    }
+
+    /**
+     * Enable or disable the cell canvas layer globally.
+     * When disabled, the layer will deactivate and never activate regardless of zoom level.
+     * When enabled, the layer will activate/deactivate based on zoom level as normal.
+     */
+    setEnabled(enabled: boolean): void {
+        if (this.enabled === enabled) return;
+
+        this.enabled = enabled;
+
+        if (!enabled && this.isActive) {
+            // Disable: force deactivation
+            this.deactivate();
+        } else if (enabled) {
+            // Enable: check if we should activate based on current zoom
+            this.checkZoomLevel();
+        }
+    }
+
+    /**
+     * Check if the layer is enabled.
+     */
+    isEnabled(): boolean {
+        return this.enabled;
+    }
+
+    /**
+     * Update the maxNativeZoom threshold.
+     * This determines when the cell canvas layer activates (zoom > maxNativeZoom).
+     */
+    setMaxNativeZoom(maxNativeZoom: number): void {
+        if (this.config.maxNativeZoom === maxNativeZoom) return;
+
+        this.config.maxNativeZoom = maxNativeZoom;
+
+        // Recheck zoom level with the new threshold
+        this.checkZoomLevel();
+    }
+
+    /**
+     * Get the current maxNativeZoom threshold.
+     */
+    getMaxNativeZoom(): number {
+        return this.config.maxNativeZoom;
     }
 
     /**

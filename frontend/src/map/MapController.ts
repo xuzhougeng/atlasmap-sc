@@ -404,6 +404,63 @@ export class MapController {
     }
 
     /**
+     * Get max zoom level allowed by Leaflet
+     */
+    getMaxZoom(): number {
+        return this.config.maxZoom;
+    }
+
+    /**
+     * Update zoom constraints dynamically.
+     * This updates both the Leaflet map's maxZoom and the tile layer's maxZoom/maxNativeZoom.
+     * If the current zoom exceeds the new maxZoom, it will be clamped.
+     */
+    setZoomConstraints(maxZoom: number, maxNativeZoom: number): void {
+        const prevMaxZoom = this.config.maxZoom;
+        const prevMaxNativeZoom = this.config.maxNativeZoom;
+
+        // Skip if nothing changed
+        if (maxZoom === prevMaxZoom && maxNativeZoom === prevMaxNativeZoom) {
+            return;
+        }
+
+        this.config.maxZoom = maxZoom;
+        this.config.maxNativeZoom = maxNativeZoom;
+
+        // Update Leaflet map's max zoom
+        this.map.setMaxZoom(maxZoom);
+
+        // Clamp current zoom if it exceeds the new maxZoom
+        const currentZoom = this.map.getZoom();
+        if (currentZoom > maxZoom) {
+            this.map.setZoom(maxZoom);
+        }
+
+        // Rebuild the current tile layer to apply new constraints
+        this.rebuildCurrentTileLayer();
+    }
+
+    /**
+     * Rebuild the current tile layer with updated config (maxZoom/maxNativeZoom).
+     * This is needed because Leaflet TileLayer options are read-only after creation.
+     */
+    private rebuildCurrentTileLayer(): void {
+        if (this.currentColorMode === 'expression' && this.currentExpressionGene) {
+            const gene = this.currentExpressionGene;
+            const colorScale = this.currentExpressionColorScale ?? 'viridis';
+            const range = this.currentExpressionRange;
+            // Rebuild by calling setExpressionGene which clears and recreates the layer
+            this.setExpressionGene(gene, colorScale, range);
+        } else if (this.currentColorMode === 'category' && this.currentCategory) {
+            const column = this.currentCategory;
+            const filter = this.selectedCategories;
+            // Rebuild by calling setCategoryColumn which clears and recreates the layer
+            this.setCategoryColumn(column, filter);
+        }
+        // If colorMode is 'default', no tile layer is active, nothing to rebuild
+    }
+
+    /**
      * Get configured data bounds (numeric)
      */
     getDataBounds(): MapConfig['bounds'] {
