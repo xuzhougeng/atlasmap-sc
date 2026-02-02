@@ -687,6 +687,17 @@ class PreprocessingPipeline:
 
         soma_path = self.config.output_dir / "soma" / "experiment.soma"
 
+        # Make SOMA generation idempotent: if an Experiment already exists,
+        # reuse it by default rather than failing (SOMA create() errors on
+        # existing paths). This mirrors the Zarr reuse behavior.
+        if soma_path.exists():
+            logger.info("=" * 60)
+            logger.info(f"Detected existing SOMA Experiment at: {soma_path}")
+            logger.info("Skipping SOMA generation and reusing existing Experiment.")
+            logger.info("To regenerate SOMA, delete/move output_dir/soma/experiment.soma.")
+            logger.info("=" * 60)
+            return
+
         writer = SomaWriter(
             path=soma_path,
             zoom_levels=self.config.zoom_levels,
