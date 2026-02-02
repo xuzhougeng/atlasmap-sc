@@ -51,7 +51,7 @@
 	                                <path fill="currentColor" d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
 	                            </svg>
 	                        </button>
-	                        <button id="btn-labels" class="tool-btn active" title="Toggle labels">
+	                        <button id="btn-labels" class="tool-btn active" title="Toggle labels (long-press for font size)">
 	                            <span class="tool-text">T</span>
 	                        </button>
                             <button id="btn-point-size" class="tool-btn" title="Dot size">
@@ -82,6 +82,26 @@
                                     aria-label="Dot size"
                                 >
                                 <span id="point-size-value" class="tool-range-value">100%</span>
+                            </div>
+                        </div>
+                        <div
+                            id="label-font-size-popover"
+                            class="tool-popover"
+                            role="dialog"
+                            aria-label="Label font size"
+                            aria-hidden="true"
+                        >
+                            <div class="tool-popover__row">
+                                <input
+                                    id="label-font-size-slider"
+                                    type="range"
+                                    min="0.5"
+                                    max="2"
+                                    step="0.1"
+                                    value="1"
+                                    aria-label="Label font size"
+                                >
+                                <span id="label-font-size-value" class="tool-range-value">100%</span>
                             </div>
                         </div>
 	                    <div id="download-status" class="download-status"></div>

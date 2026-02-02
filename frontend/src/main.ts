@@ -33,6 +33,9 @@ interface DatasetsResponse {
     title: string;
 }
 
+// Flag to suppress labels toggle click when opening font-size popover via long-press
+let labelLongPressJustHandled = false;
+
 // Get current dataset from URL query params
 function getCurrentDatasetFromUrl(): string | null {
     const params = new URLSearchParams(window.location.search);
@@ -580,6 +583,10 @@ async function init() {
     if (labelsBtn) {
         labelsBtn.classList.toggle('active', showCategoryLabels);
         labelsBtn.addEventListener('click', () => {
+            if (labelLongPressJustHandled) {
+                labelLongPressJustHandled = false;
+                return;
+            }
             showCategoryLabels = !showCategoryLabels;
             labelsBtn.classList.toggle('active', showCategoryLabels);
             void refreshCategoryLabels();
@@ -1058,6 +1065,10 @@ function setupToolbar(
     const pointSizeSlider = document.getElementById('point-size-slider') as HTMLInputElement | null;
     const pointSizeValue = document.getElementById('point-size-value');
     const pointSizePopover = document.getElementById('point-size-popover') as HTMLDivElement | null;
+    const labelsBtn = document.getElementById('btn-labels') as HTMLButtonElement | null;
+    const labelFontSizePopover = document.getElementById('label-font-size-popover') as HTMLDivElement | null;
+    const labelFontSizeSlider = document.getElementById('label-font-size-slider') as HTMLInputElement | null;
+    const labelFontSizeValue = document.getElementById('label-font-size-value');
 
     const updatePanLockUi = () => {
         if (!panLockBtn) return;
@@ -1177,6 +1188,134 @@ function setupToolbar(
         });
     }
 
+    // Label font size popover (opened by long-press on T button)
+    const setLabelFontSizeUi = (scale: number) => {
+        if (!labelFontSizeValue) return;
+        labelFontSizeValue.textContent = `${Math.round(scale * 100)}%`;
+    };
+
+    const applyLabelFontScale = (scale: number) => {
+        map.setCategoryLabelFontScale(scale);
+        const effective = map.getCategoryLabelFontScale();
+        if (labelFontSizeSlider) {
+            labelFontSizeSlider.value = String(effective);
+        }
+        setLabelFontSizeUi(effective);
+    };
+
+    if (labelFontSizeSlider) {
+        const onInput = () => {
+            const value = Number.parseFloat(labelFontSizeSlider!.value);
+            if (!Number.isFinite(value)) return;
+            applyLabelFontScale(value);
+        };
+        labelFontSizeSlider.addEventListener('input', onInput);
+        onInput();
+        labelFontSizeSlider.disabled = true;
+    }
+
+    const positionLabelFontSizePopover = () => {
+        if (!labelFontSizePopover || !labelsBtn) return;
+        const panel = labelsBtn.closest('.panel') as HTMLElement | null;
+        if (!panel) return;
+
+        const panelRect = panel.getBoundingClientRect();
+        const btnRect = labelsBtn.getBoundingClientRect();
+
+        const padding = 8;
+        const gap = 8;
+
+        const popoverWidth = labelFontSizePopover.offsetWidth;
+        const popoverHeight = labelFontSizePopover.offsetHeight;
+
+        let left = btnRect.left - panelRect.left;
+        let top = btnRect.bottom - panelRect.top + gap;
+
+        const maxLeft = panelRect.width - popoverWidth - padding;
+        if (left > maxLeft) left = maxLeft;
+        if (left < padding) left = padding;
+
+        if (top + popoverHeight > panelRect.height - padding) {
+            top = btnRect.top - panelRect.top - popoverHeight - gap;
+        }
+        if (top < padding) top = padding;
+
+        labelFontSizePopover.style.left = `${left}px`;
+        labelFontSizePopover.style.top = `${top}px`;
+    };
+
+    const closeLabelFontSizePopover = () => {
+        if (!labelFontSizePopover || !labelsBtn) return;
+        labelFontSizePopover.classList.remove('open');
+        labelFontSizePopover.setAttribute('aria-hidden', 'true');
+        if (labelFontSizeSlider) {
+            labelFontSizeSlider.disabled = true;
+        }
+    };
+
+    const openLabelFontSizePopover = () => {
+        if (!labelFontSizePopover || !labelsBtn) return;
+        labelLongPressJustHandled = true;
+        labelFontSizePopover.classList.add('open');
+        labelFontSizePopover.setAttribute('aria-hidden', 'false');
+        if (labelFontSizeSlider) {
+            labelFontSizeSlider.disabled = false;
+        }
+        positionLabelFontSizePopover();
+        labelFontSizeSlider?.focus();
+    };
+
+    const LONG_PRESS_MS = 500;
+    let labelLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearLabelLongPressTimer = () => {
+        if (labelLongPressTimer !== null) {
+            clearTimeout(labelLongPressTimer);
+            labelLongPressTimer = null;
+        }
+    };
+
+    if (labelsBtn && labelFontSizePopover) {
+        labelsBtn.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            clearLabelLongPressTimer();
+            labelLongPressTimer = setTimeout(() => {
+                labelLongPressTimer = null;
+                openLabelFontSizePopover();
+            }, LONG_PRESS_MS);
+        });
+        labelsBtn.addEventListener('mouseup', clearLabelLongPressTimer);
+        labelsBtn.addEventListener('mouseleave', clearLabelLongPressTimer);
+
+        labelsBtn.addEventListener('touchstart', (e) => {
+            clearLabelLongPressTimer();
+            labelLongPressTimer = setTimeout(() => {
+                labelLongPressTimer = null;
+                openLabelFontSizePopover();
+            }, LONG_PRESS_MS);
+        }, { passive: true });
+        labelsBtn.addEventListener('touchend', clearLabelLongPressTimer, { passive: true });
+        labelsBtn.addEventListener('touchcancel', clearLabelLongPressTimer, { passive: true });
+
+        document.addEventListener('click', (e) => {
+            const target = e.target as Node | null;
+            if (!target) return;
+            if (labelFontSizePopover.contains(target)) return;
+            if (labelsBtn.contains(target)) return;
+            closeLabelFontSizePopover();
+        });
+
+        window.addEventListener('resize', () => {
+            if (!labelFontSizePopover.classList.contains('open')) return;
+            positionLabelFontSizePopover();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            closeLabelFontSizePopover();
+        });
+    }
+
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             map.resetView();
@@ -1185,6 +1324,11 @@ function setupToolbar(
             }
             applyPointSize(1);
             closePointSizePopover();
+            if (labelFontSizeSlider) {
+                labelFontSizeSlider.value = '1';
+            }
+            applyLabelFontScale(1);
+            closeLabelFontSizePopover();
 
             // Reset to category tab
             tabPanel.switchTab('category');

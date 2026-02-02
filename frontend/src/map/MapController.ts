@@ -58,6 +58,7 @@ export class MapController {
     private categoryLabelItems: CategoryCentroidItem[] | null = null;
     private categoryLabelFilter: string[] | null = null;
     private categoryLabelsVisible: boolean = true;
+    private categoryLabelFontScale: number = 1.0;
     private pointSize: number = 1.0;
 
     constructor(container: HTMLElement, config: MapConfig) {
@@ -209,8 +210,19 @@ export class MapController {
         const baseSizePx = 12;
         const zoom0 = this.config.initialZoom ?? 0;
         const scale = Math.pow(2, (zoom - zoom0) * 0.15);
-        const sizePx = Math.max(11, Math.min(26, baseSizePx * scale));
+        const sizePx = Math.max(11, Math.min(26, baseSizePx * scale)) * this.categoryLabelFontScale;
         this.container.style.setProperty('--category-label-font-size', `${sizePx.toFixed(2)}px`);
+    }
+
+    setCategoryLabelFontScale(scale: number): void {
+        const clamped = Math.min(2, Math.max(0.5, scale));
+        if (this.categoryLabelFontScale === clamped) return;
+        this.categoryLabelFontScale = clamped;
+        this.updateCategoryLabelStyle();
+    }
+
+    getCategoryLabelFontScale(): number {
+        return this.categoryLabelFontScale;
     }
 
     private formatPointSize(): string {
