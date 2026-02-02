@@ -268,6 +268,18 @@ export class CellCanvasLayer {
             // Check if this is still the current request
             if (thisRequestId !== this.requestId) return;
 
+            // Log downsampling info for debugging
+            if (result.truncated) {
+                console.log(
+                    `[CellCanvas] Downsampling applied: returned ${result.cells.length} cells ` +
+                    `(limit=${limit}, seed=0, zoom=${zoom.toFixed(1)}, zoomDiff=${zoomDiff.toFixed(1)})`
+                );
+            } else {
+                console.log(
+                    `[CellCanvas] Fetched ${result.cells.length} cells (no downsampling needed, limit=${limit})`
+                );
+            }
+
             this.cells = result.cells;
             this.lastRequestedBounds = paddedBounds;
             this.hasFetchedOnce = true;
