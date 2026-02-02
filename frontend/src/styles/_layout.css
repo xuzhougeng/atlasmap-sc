@@ -367,9 +367,21 @@
         font-size: 0.6rem;
     }
 
-    /* Zoom info: smaller */
+    /* Zoom info: smaller and move to bottom-left on mobile */
     .zoom-info {
         padding: 4px 8px;
         font-size: 0.65rem;
+    }
+
+    .leaflet-control.zoom-info {
+        position: fixed;
+        left: 8px;
+        bottom: 10px;
+        right: auto;
+    }
+
+    /* Hide cell-canvas zoom prompt on mobile (small screen, no need to zoom further) */
+    .zoom-canvas-prompt {
+        display: none !important;
     }
 }

@@ -536,12 +536,14 @@ async function init() {
 
     // Cell canvas toggle button (OFF by default)
     const zoomSwitchBtn = document.getElementById('btn-zoom-switch') as HTMLButtonElement | null;
-    const zoomSwitchText = zoomSwitchBtn?.querySelector('.tool-text') as HTMLElement | null;
+    const iconZoomTiles = document.getElementById('icon-zoom-tiles') as HTMLElement | null;
+    const iconZoomCells = document.getElementById('icon-zoom-cells') as HTMLElement | null;
     let cellCanvasEnabled = false;
 
     function updateCellCanvasButton(enabled: boolean): void {
-        if (zoomSwitchText) {
-            zoomSwitchText.textContent = enabled ? 'CELLS ON' : 'CELLS OFF';
+        if (iconZoomTiles && iconZoomCells) {
+            iconZoomTiles.style.display = enabled ? 'none' : 'block';
+            iconZoomCells.style.display = enabled ? 'block' : 'none';
         }
         if (zoomSwitchBtn) {
             zoomSwitchBtn.title = enabled
@@ -591,6 +593,7 @@ async function init() {
 
     const showZoomPrompt = (): void => {
         if (cellCanvasEnabled) return;
+        if (window.matchMedia('(max-width: 768px)').matches) return; // skip on mobile
         zoomPrompt.classList.remove('hidden');
         if (zoomPromptTimer !== null) {
             clearTimeout(zoomPromptTimer);
