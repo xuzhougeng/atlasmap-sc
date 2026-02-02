@@ -34,6 +34,10 @@ PREPROCESS_NO_SOMA ?= 1
 # - ZOOM_LEVEL: required. Number of zoom levels to generate (passed to preprocessing as --zoom-levels).
 ZOOM_LEVEL ?=
 PREPROCESS_N_GENES ?= 500
+# - VAR_NAMES_KEY / PREPROCESS_VAR_NAMES_KEY: optional. Use adata.var[KEY] as adata.var_names
+#   Example: VAR_NAMES_KEY=gene_short_name
+VAR_NAMES_KEY ?=
+PREPROCESS_VAR_NAMES_KEY ?=
 # - PREPROCESS_ALL_EXPRESSED=1: use all expressed genes (skip HVG/top-N)
 # - PREPROCESS_MIN_CELLS=1: include genes expressed in >= N cells (only with all-expressed)
 PREPROCESS_ALL_EXPRESSED ?= 1
@@ -128,7 +132,7 @@ test-frontend: prepare-frontend
 preprocess: preprocess-venv
 	@echo "Running preprocessing pipeline..."
 	@if [ -z "$(INPUT)" ]; then \
-		echo "Usage: make preprocess INPUT=path/to/data.h5ad OUTPUT=data/dataset_x ZOOM_LEVEL=8 [PREPROCESS_NO_SOMA=0]"; \
+		echo "Usage: make preprocess INPUT=path/to/data.h5ad OUTPUT=data/dataset_x ZOOM_LEVEL=8 [PREPROCESS_NO_SOMA=0] [VAR_NAMES_KEY=gene_short_name]"; \
 		exit 1; \
 	fi
 	@if [ -z "$(ZOOM_LEVEL)" ]; then \
@@ -137,6 +141,12 @@ preprocess: preprocess-venv
 	fi
 	@set -e; \
 	ZOOM="$(ZOOM_LEVEL)"; \
+	VAR_NAMES_KEY_EFF=""; \
+	if [ -n "$(VAR_NAMES_KEY)" ]; then VAR_NAMES_KEY_EFF="$(VAR_NAMES_KEY)"; \
+	elif [ -n "$(PREPROCESS_VAR_NAMES_KEY)" ]; then VAR_NAMES_KEY_EFF="$(PREPROCESS_VAR_NAMES_KEY)"; \
+	fi; \
+	VAR_NAMES_ARG=""; \
+	if [ -n "$$VAR_NAMES_KEY_EFF" ]; then VAR_NAMES_ARG="--var-names-key $$VAR_NAMES_KEY_EFF"; fi; \
 	NO_SOMA_FLAG=""; \
 	case "$(PREPROCESS_NO_SOMA)" in \
 		1|true|TRUE|yes|YES) NO_SOMA_FLAG="--no-soma" ;; \
@@ -151,10 +161,11 @@ preprocess: preprocess-venv
 		EXCLUDE_CAT_ARGS="$$EXCLUDE_CAT_ARGS --exclude-category $$col"; \
 	done; \
 	MAX_CAT_CARD_ARG="--max-category-cardinality $(PREPROCESS_MAX_CATEGORY_CARDINALITY)"; \
-	echo "Preprocess: zoom_levels=$$ZOOM, all_expressed=$(PREPROCESS_ALL_EXPRESSED), min_cells=$(PREPROCESS_MIN_CELLS), n_genes=$(PREPROCESS_N_GENES), no_soma=$(PREPROCESS_NO_SOMA), max_cat_card=$(PREPROCESS_MAX_CATEGORY_CARDINALITY)"; \
+	echo "Preprocess: zoom_levels=$$ZOOM, var_names_key=$$VAR_NAMES_KEY_EFF, all_expressed=$(PREPROCESS_ALL_EXPRESSED), min_cells=$(PREPROCESS_MIN_CELLS), n_genes=$(PREPROCESS_N_GENES), no_soma=$(PREPROCESS_NO_SOMA), max_cat_card=$(PREPROCESS_MAX_CATEGORY_CARDINALITY)"; \
 	cd $(PREPROCESS_DIR) && PATH="$$HOME/.local/bin:$$PATH" UV_LINK_MODE=$(UV_LINK_MODE) $(UV) run -m atlasmap_preprocess.cli run \
 		--input $(PREPROCESS_INPUT) \
 		--output $(PREPROCESS_OUTPUT) \
+		$$VAR_NAMES_ARG \
 		--zoom-levels "$$ZOOM" \
 		--n-genes "$(PREPROCESS_N_GENES)" \
 		$$ALL_EXPRESSED_FLAG $$MIN_CELLS_ARGS \

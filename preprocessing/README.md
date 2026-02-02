@@ -56,6 +56,7 @@ atlasmap-preprocess run -i retina.h5ad -o ./data/retina --all-expressed --catego
 atlasmap-preprocess run \
     -i data.h5ad \
     -o ./output \
+    --var-names-key gene_short_name \
     --umap-key X_umap \
     --coord-key X_umap \
     --coord-key X_tsne \
@@ -115,6 +116,7 @@ atlasmap-preprocess run -i data.h5ad -o ./output
 |------|------|--------|------|
 | `--input` | `-i` | 必填 | 输入 H5AD 文件路径 |
 | `--output` | `-o` | 必填 | 输出目录路径 |
+| `--var-names-key` | | | 将 `adata.var[VAR_NAMES_KEY]` 作为 `adata.var_names`（例如 `gene_short_name`），用于基因筛选/预聚合基因列表/前端基因查询。 |
 | `--umap-key` | | `X_umap` | 默认坐标键（旧参数名；用于指定默认/主坐标系） |
 | `--coord-key` | | | 坐标键（来自 `adata.obsm`，可多次指定以生成多套坐标系 tiles） |
 | `--zoom-levels` | `-z` | `8` | 缩放级别数量（1-12）。**推荐使用 12**，见下方说明。 |
@@ -205,6 +207,7 @@ figures/
 # 输入输出
 input_path: data.h5ad
 output_dir: ./preprocessed
+var_names_key: gene_short_name
 
 # 坐标设置
 umap_key: X_umap

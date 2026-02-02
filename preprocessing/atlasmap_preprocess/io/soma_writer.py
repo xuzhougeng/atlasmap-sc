@@ -236,6 +236,17 @@ class SomaWriter:
         n_genes = adata.n_vars
         preagg_set = set(preaggregated_genes)
 
+        gene_id = (
+            adata.var["_atlasmap_gene_id"].astype(str).values
+            if "_atlasmap_gene_id" in adata.var.columns
+            else adata.var_names.astype(str).values
+        )
+        gene_name = (
+            adata.var["_atlasmap_gene_name"].astype(str).values
+            if "_atlasmap_gene_name" in adata.var.columns
+            else adata.var_names.astype(str).values
+        )
+
         # Build preagg_index: -1 if not in list, else index in list
         preagg_indices = []
         for gene in adata.var_names:
@@ -246,8 +257,8 @@ class SomaWriter:
 
         var_data = {
             "soma_joinid": np.arange(n_genes, dtype=np.int64),
-            "gene_id": adata.var_names.astype(str).values,
-            "gene_name": adata.var_names.astype(str).values,
+            "gene_id": gene_id,
+            "gene_name": gene_name,
             "is_preaggregated": np.array([g in preagg_set for g in adata.var_names]),
             "preagg_index": np.array(preagg_indices, dtype=np.int32),
         }

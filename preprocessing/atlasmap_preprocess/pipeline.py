@@ -194,6 +194,36 @@ class PreprocessingPipeline:
         """Load H5AD file."""
         logger.info(f"Loading H5AD from: {self.config.input_path}")
         self.adata = sc.read_h5ad(self.config.input_path)
+        # Optional: remap var_names from a column (e.g., gene_short_name).
+        var_names_key = getattr(self.config, "var_names_key", None)
+        if var_names_key:
+            if var_names_key not in self.adata.var.columns:
+                available = list(self.adata.var.columns)
+                raise KeyError(
+                    f"var_names_key '{var_names_key}' not found in adata.var. "
+                    f"Available var columns: {available}"
+                )
+
+            # Preserve original ids before overriding var_names (useful for SOMA gene_id).
+            original_var_names = self.adata.var_names.astype(str).values
+            self.adata.var["_atlasmap_gene_id"] = original_var_names
+
+            new_names = self.adata.var[var_names_key]
+            if getattr(new_names, "isna", None) is not None and new_names.isna().any():
+                n_missing = int(new_names.isna().sum())
+                raise ValueError(
+                    f"adata.var['{var_names_key}'] contains {n_missing} missing values; "
+                    f"cannot set as var_names."
+                )
+
+            self.adata.var_names = new_names.astype(str).values
+            # Ensure uniqueness to avoid downstream ambiguous gene lookups.
+            self.adata.var_names_make_unique()
+            self.adata.var["_atlasmap_gene_name"] = self.adata.var_names.astype(str).values
+            logger.info(
+                f"Using adata.var['{var_names_key}'] as var_names "
+                f"(unique n_vars={self.adata.n_vars:,})"
+            )
         logger.info(f"Loaded {self.adata.n_obs:,} cells, {self.adata.n_vars:,} genes")
 
     def _process_coordinates(self) -> None:

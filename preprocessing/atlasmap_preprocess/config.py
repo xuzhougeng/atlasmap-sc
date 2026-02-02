@@ -13,6 +13,10 @@ class PreprocessConfig:
     # Input/Output
     input_path: Path
     output_dir: Path
+    # Optional: choose which `adata.var` column becomes `adata.var_names`.
+    # Useful when the desired gene names are stored in a column (e.g. gene_short_name)
+    # rather than the var index.
+    var_names_key: Optional[str] = None
 
     # Coordinate settings
     # NOTE: `umap_key` is kept for backward compatibility; it now represents the
@@ -82,6 +86,7 @@ class PreprocessConfig:
         data = {
             "input_path": str(self.input_path),
             "output_dir": str(self.output_dir),
+            "var_names_key": self.var_names_key,
             "umap_key": self.umap_key,
             "coordinate_keys": self.coordinate_keys or [self.umap_key],
             "coordinate_range": self.coordinate_range,
@@ -117,6 +122,11 @@ class PreprocessConfig:
         """Validate configuration parameters."""
         if not self.input_path.exists():
             raise FileNotFoundError(f"Input file not found: {self.input_path}")
+
+        # Normalize var_names_key
+        if self.var_names_key is not None:
+            key = str(self.var_names_key).strip()
+            self.var_names_key = key if key else None
 
         # Coordinate keys
         keys = self.coordinate_keys if self.coordinate_keys else [self.umap_key]

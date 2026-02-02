@@ -46,6 +46,11 @@ def main():
     help="Output directory for preprocessed data",
 )
 @click.option(
+    "--var-names-key",
+    default=None,
+    help="Use this adata.var column as adata.var_names (e.g., gene_short_name).",
+)
+@click.option(
     "--umap-key",
     default="X_umap",
     help="Default coordinate key in adata.obsm (legacy name; default: X_umap)",
@@ -148,6 +153,7 @@ def main():
 def run(
     input_path: Path,
     output_dir: Path,
+    var_names_key: str | None,
     umap_key: str,
     coordinate_keys: tuple[str, ...],
     zoom_levels: int,
@@ -182,6 +188,7 @@ def run(
     config = PreprocessConfig(
         input_path=input_path,
         output_dir=output_dir,
+        var_names_key=var_names_key,
         umap_key=umap_key,
         coordinate_keys=list(coordinate_keys),
         zoom_levels=zoom_levels,
