@@ -19,11 +19,11 @@ PREPROCESS_VENV_DIR := $(PREPROCESS_DIR)/.venv
 PREPROCESS_PYTHON ?= 3.11
 UV_LINK_MODE ?= copy
 
-# Preprocessing defaults (can be overridden, e.g. `make preprocess PREPROCESS_NO_SOMA=0`)
+# Preprocessing defaults (can be overridden, e.g. `make preprocess PREPROCESS_NO_SOMA=0 ZOOM_LEVEL=8`)
 # - PREPROCESS_NO_SOMA=1: skip writing TileDBSOMA store (faster, smaller output)
-# - PREPROCESS_ZOOM_LEVELS=auto: pick zoom levels based on input file size
 PREPROCESS_NO_SOMA ?= 1
-PREPROCESS_ZOOM_LEVELS ?= auto
+# - ZOOM_LEVEL: required. Number of zoom levels to generate (passed to preprocessing as --zoom-levels).
+ZOOM_LEVEL ?=
 PREPROCESS_N_GENES ?= 500
 # - PREPROCESS_ALL_EXPRESSED=1: use all expressed genes (skip HVG/top-N)
 # - PREPROCESS_MIN_CELLS=1: include genes expressed in >= N cells (only with all-expressed)
@@ -105,25 +105,15 @@ test-frontend: prepare-frontend
 preprocess: preprocess-venv
 	@echo "Running preprocessing pipeline..."
 	@if [ -z "$(INPUT)" ]; then \
-		echo "Usage: make preprocess INPUT=path/to/data.h5ad [OUTPUT=data/dataset_x]"; \
+		echo "Usage: make preprocess INPUT=path/to/data.h5ad OUTPUT=data/dataset_x ZOOM_LEVEL=8 [PREPROCESS_NO_SOMA=0]"; \
+		exit 1; \
+	fi
+	@if [ -z "$(ZOOM_LEVEL)" ]; then \
+		echo "Missing required var: ZOOM_LEVEL (example: ZOOM_LEVEL=8)"; \
 		exit 1; \
 	fi
 	@set -e; \
-	ZOOM="$(PREPROCESS_ZOOM_LEVELS)"; \
-	if [ "$$ZOOM" = "auto" ]; then \
-		# Heuristic: larger datasets get more zoom levels (higher resolution) \
-		if stat -c%s "$(INPUT)" >/dev/null 2>&1; then \
-			SZ=$$(stat -c%s "$(INPUT)"); \
-		else \
-			SZ=$$(stat -f%z "$(INPUT)"); \
-		fi; \
-		if [ "$$SZ" -lt 50000000 ]; then ZOOM=8; \
-		elif [ "$$SZ" -lt 200000000 ]; then ZOOM=9; \
-		elif [ "$$SZ" -lt 1000000000 ]; then ZOOM=10; \
-		elif [ "$$SZ" -lt 4000000000 ]; then ZOOM=11; \
-		elif [ "$$SZ" -lt 16000000000 ]; then ZOOM=12; \
-		else ZOOM=11; fi; \
-	fi; \
+	ZOOM="$(ZOOM_LEVEL)"; \
 	NO_SOMA_FLAG=""; \
 	case "$(PREPROCESS_NO_SOMA)" in \
 		1|true|TRUE|yes|YES) NO_SOMA_FLAG="--no-soma" ;; \
