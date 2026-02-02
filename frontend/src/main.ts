@@ -400,50 +400,6 @@ async function init() {
     // renderZoom is the maximum bins resolution from preprocessing (zoom_levels - 1)
     const renderZoom = Math.max(0, metadata.zoom_levels - 1);
     
-    // Calculate autoMaxNativeZoom based on n_cells and viewport size.
-    // This determines when to switch from tile-based to canvas-based rendering in AUTO mode.
-    // Goal: canvas mode should have ~5000 cells visible in the viewport (matching backend limit).
-    const autoMaxNativeZoom = (() => {
-        const nCells = metadata.n_cells || 0;
-        const bounds = metadata.bounds;
-        const worldWidth = bounds.max_x - bounds.min_x;
-        const worldHeight = bounds.max_y - bounds.min_y;
-        const worldArea = worldWidth * worldHeight;
-        
-        if (nCells <= 0 || worldArea <= 0) {
-            return renderZoom;
-        }
-        
-        // Use container size or default to 1024x768 for initial calculation
-        const containerRect = mapContainer.getBoundingClientRect();
-        const wPx = containerRect.width > 0 ? containerRect.width : 1024;
-        const hPx = containerRect.height > 0 ? containerRect.height : 768;
-        const viewportPixels = wPx * hPx;
-        
-        // Target: keep cell-canvas mode lightweight.
-        // Lower target => switch to canvas later (higher zoom), and allow tiles to be used longer.
-        // Empirically, ~500 visible cells can still feel laggy on some machines, so we aim lower.
-        const targetCells = 300;
-        
-        // Cell density in world units
-        const density = nCells / worldArea;
-        
-        // At zoom z, viewport covers (viewportPixels / 4^z) world units
-        // We want: density * (viewportPixels / 4^z) <= targetCells
-        // Solving for z: z >= 0.5 * log2(density * viewportPixels / targetCells)
-        const canvasMinZoom = Math.ceil(0.5 * Math.log2(density * viewportPixels / targetCells));
-        
-        // autoMaxNativeZoom is one less than canvasMinZoom (tiles cover 0 to autoMaxNativeZoom)
-        // But don't exceed the backend's renderZoom
-        const computed = Math.max(0, Math.min(renderZoom, canvasMinZoom - 1));
-        
-        console.log(`Auto maxNativeZoom: n_cells=${nCells}, viewport=${wPx}x${hPx}, ` +
-                    `density=${density.toFixed(2)}, canvasMinZoom=${canvasMinZoom}, ` +
-                    `computed=${computed}, renderZoom=${renderZoom}`);
-        
-        return computed;
-    })();
-    
     const tileSize = 256;
     const tilePixelsLog2 = (() => {
         let ts = tileSize;
@@ -454,18 +410,12 @@ async function init() {
         }
         return log2;
     })();
-    const dataMaxViewZoom = Math.max(0, renderZoom - tilePixelsLog2);
+    // Base zoom limit for tiles (0..4 by default, clamped to renderZoom).
+    const baseMaxNativeZoom = Math.min(4, renderZoom);
+    const canvasExtraZoom = 4;
 
-    // Zoom switch mode: 'AUTO' | 'MAX' | 'NONE'
-    // - AUTO: auto switch to cell canvas based on n_cells (uses autoMaxNativeZoom)
-    // - MAX: tiles to max resolution (renderZoom), then cell canvas beyond
-    // - NONE: tiles only, no cell canvas, no zoom beyond renderZoom
-    type ZoomSwitchMode = 'AUTO' | 'MAX' | 'NONE';
-    let zoomSwitchMode: ZoomSwitchMode = 'AUTO';
-    
-    // Initial values based on AUTO mode (clamped to data max view zoom)
-    let currentMaxNativeZoom = Math.min(autoMaxNativeZoom, dataMaxViewZoom);
-    let currentMaxZoom = currentMaxNativeZoom + 4;
+    let currentMaxNativeZoom = baseMaxNativeZoom;
+    let currentMaxZoom = baseMaxNativeZoom;
 
     const mapController = new MapController(mapContainer, {
         apiUrl: tilesBaseUrl,
@@ -486,48 +436,25 @@ async function init() {
         maxNativeZoom: currentMaxNativeZoom,
         bounds: metadata.bounds,
     });
+    // Default: cell canvas disabled
+    cellCanvasLayer.setEnabled(false);
     
-    // Apply zoom switch mode: updates map constraints and cell canvas layer
-    function applyZoomSwitchMode(mode: ZoomSwitchMode): void {
-        zoomSwitchMode = mode;
-        
-        let newMaxNativeZoom: number;
-        let newMaxZoom: number;
-        let cellCanvasEnabled: boolean;
-        
-        switch (mode) {
-            case 'AUTO':
-                // Auto mode: use computed autoMaxNativeZoom, allow cell canvas beyond
-                // Clamp to the highest view zoom that still increases data resolution.
-                newMaxNativeZoom = Math.min(autoMaxNativeZoom, dataMaxViewZoom);
-                newMaxZoom = newMaxNativeZoom + 4;
-                cellCanvasEnabled = true;
-                break;
-            case 'MAX':
-                // Max mode: tiles to renderZoom, cell canvas beyond
-                newMaxNativeZoom = renderZoom;
-                newMaxZoom = renderZoom + 4;
-                cellCanvasEnabled = true;
-                break;
-            case 'NONE':
-                // None mode: tiles only to renderZoom, no cell canvas, no extra zoom
-                newMaxNativeZoom = renderZoom;
-                newMaxZoom = renderZoom;
-                cellCanvasEnabled = false;
-                break;
-        }
-        
+    // Apply cell canvas toggle: updates map constraints and cell canvas layer.
+    function applyCellCanvasMode(enabled: boolean): void {
+        const newMaxNativeZoom = baseMaxNativeZoom;
+        const newMaxZoom = enabled ? baseMaxNativeZoom + canvasExtraZoom : baseMaxNativeZoom;
+
         currentMaxNativeZoom = newMaxNativeZoom;
         currentMaxZoom = newMaxZoom;
-        
+
         // Update map zoom constraints (this also rebuilds tile layers)
         mapController.setZoomConstraints(newMaxZoom, newMaxNativeZoom);
-        
+
         // Update cell canvas layer
-        cellCanvasLayer.setEnabled(cellCanvasEnabled);
+        cellCanvasLayer.setEnabled(enabled);
         cellCanvasLayer.setMaxNativeZoom(newMaxNativeZoom);
-        
-        console.log(`Zoom switch mode: ${mode}, maxNativeZoom=${newMaxNativeZoom}, maxZoom=${newMaxZoom}, cellCanvas=${cellCanvasEnabled}`);
+
+        console.log(`Cell canvas: ${enabled ? 'ON' : 'OFF'}, maxNativeZoom=${newMaxNativeZoom}, maxZoom=${newMaxZoom}`);
     }
 
     // Helper to update cell canvas layer for category mode
@@ -607,46 +534,120 @@ async function init() {
         });
     }
 
-    // Zoom switch button: cycles through AUTO -> MAX -> NONE
+    // Cell canvas toggle button (OFF by default)
     const zoomSwitchBtn = document.getElementById('btn-zoom-switch') as HTMLButtonElement | null;
     const zoomSwitchText = zoomSwitchBtn?.querySelector('.tool-text') as HTMLElement | null;
-    
-    function updateZoomSwitchButton(mode: ZoomSwitchMode): void {
+    let cellCanvasEnabled = false;
+
+    function updateCellCanvasButton(enabled: boolean): void {
         if (zoomSwitchText) {
-            zoomSwitchText.textContent = mode;
+            zoomSwitchText.textContent = enabled ? 'CELLS ON' : 'CELLS OFF';
         }
         if (zoomSwitchBtn) {
-            const titles: Record<ZoomSwitchMode, string> = {
-                'AUTO': 'Zoom mode: AUTO (auto switch to cell canvas based on cell density)',
-                'MAX': 'Zoom mode: MAX (tiles to max resolution, then cell canvas)',
-                'NONE': 'Zoom mode: NONE (tiles only, no cell canvas, no extra zoom)',
-            };
-            zoomSwitchBtn.title = titles[mode];
+            zoomSwitchBtn.title = enabled
+                ? 'Cell canvas: ON (allow zoom beyond tiles; tiles scale)'
+                : `Cell canvas: OFF (zoom locked to tiles 0-${baseMaxNativeZoom})`;
+            zoomSwitchBtn.classList.toggle('active', enabled);
         }
     }
-    
+
     if (zoomSwitchBtn) {
-        // Initialize button text
-        updateZoomSwitchButton(zoomSwitchMode);
-        
+        updateCellCanvasButton(cellCanvasEnabled);
         zoomSwitchBtn.addEventListener('click', () => {
-            // Cycle: AUTO -> MAX -> NONE -> AUTO
-            const nextMode: Record<ZoomSwitchMode, ZoomSwitchMode> = {
-                'AUTO': 'MAX',
-                'MAX': 'NONE',
-                'NONE': 'AUTO',
-            };
-            const newMode = nextMode[zoomSwitchMode];
-            applyZoomSwitchMode(newMode);
-            updateZoomSwitchButton(newMode);
-            
+            cellCanvasEnabled = !cellCanvasEnabled;
+            applyCellCanvasMode(cellCanvasEnabled);
+            updateCellCanvasButton(cellCanvasEnabled);
+
             // Update cellQueryPanel if it exists (defined later in init)
-            // This ensures gene stats are fetched at the correct zoom level
             if (typeof cellQueryPanel !== 'undefined' && cellQueryPanel) {
                 cellQueryPanel.setMaxNativeZoom(mapController.getMaxNativeZoom());
             }
         });
     }
+
+    // Prompt to enable cell canvas when user tries to zoom past tile limit.
+    const zoomPrompt = document.createElement('div');
+    zoomPrompt.className = 'zoom-canvas-prompt hidden';
+    const zoomRangeLabel = `0-${baseMaxNativeZoom}`;
+    zoomPrompt.innerHTML =
+        `<div class="zoom-canvas-prompt__text">Reached max tile zoom (${zoomRangeLabel}). Enable cell canvas to zoom further?</div>` +
+        '<div class="zoom-canvas-prompt__actions">' +
+        '<button type="button" class="zoom-canvas-prompt__btn zoom-canvas-prompt__btn--primary">Enable</button>' +
+        '<button type="button" class="zoom-canvas-prompt__btn zoom-canvas-prompt__btn--ghost">Dismiss</button>' +
+        '</div>';
+    mapContainer.appendChild(zoomPrompt);
+
+    const enableBtn = zoomPrompt.querySelector('.zoom-canvas-prompt__btn--primary') as HTMLButtonElement | null;
+    const dismissBtn = zoomPrompt.querySelector('.zoom-canvas-prompt__btn--ghost') as HTMLButtonElement | null;
+    let zoomPromptTimer: number | null = null;
+
+    const hideZoomPrompt = (): void => {
+        zoomPrompt.classList.add('hidden');
+        if (zoomPromptTimer !== null) {
+            clearTimeout(zoomPromptTimer);
+            zoomPromptTimer = null;
+        }
+    };
+
+    const showZoomPrompt = (): void => {
+        if (cellCanvasEnabled) return;
+        zoomPrompt.classList.remove('hidden');
+        if (zoomPromptTimer !== null) {
+            clearTimeout(zoomPromptTimer);
+        }
+        zoomPromptTimer = window.setTimeout(() => {
+            zoomPromptTimer = null;
+            zoomPrompt.classList.add('hidden');
+        }, 3500);
+    };
+
+    const leafletMap = mapController.getMap();
+    const tryPromptOnZoomIn = (): void => {
+        if (cellCanvasEnabled) return;
+        const currentZoom = leafletMap.getZoom();
+        const maxZoom = leafletMap.getMaxZoom();
+        if (currentZoom >= maxZoom) {
+            showZoomPrompt();
+        }
+    };
+
+    mapContainer.addEventListener('wheel', (event) => {
+        if (event.deltaY < 0) {
+            tryPromptOnZoomIn();
+        }
+    }, { passive: true });
+
+    mapContainer.addEventListener('dblclick', () => {
+        tryPromptOnZoomIn();
+    });
+
+    const zoomInControl = mapContainer.querySelector('.leaflet-control-zoom-in') as HTMLAnchorElement | null;
+    if (zoomInControl) {
+        zoomInControl.addEventListener('click', () => {
+            tryPromptOnZoomIn();
+        });
+    }
+
+    enableBtn?.addEventListener('click', () => {
+        if (!cellCanvasEnabled) {
+            cellCanvasEnabled = true;
+            applyCellCanvasMode(true);
+            updateCellCanvasButton(true);
+            if (typeof cellQueryPanel !== 'undefined' && cellQueryPanel) {
+                cellQueryPanel.setMaxNativeZoom(mapController.getMaxNativeZoom());
+            }
+        }
+        hideZoomPrompt();
+        leafletMap.zoomIn(1);
+    });
+
+    dismissBtn?.addEventListener('click', () => {
+        hideZoomPrompt();
+    });
+
+    leafletMap.on('zoomend', () => {
+        hideZoomPrompt();
+    });
 
     const refreshCategoryLabels = async (): Promise<void> => {
         mapController.setCategoryLabelsVisible(showCategoryLabels);
