@@ -1,5 +1,6 @@
 .PHONY: all build run dev dev-soma test clean preprocess preprocess-venv ensure-go \
-	check-node check-npm prepare-go prepare-python prepare-frontend prepare
+	check-node check-npm prepare-go prepare-python prepare-frontend prepare \
+	tiledb-check tiledb-install
 
 # Variables
 GO_SERVER_DIR := server
@@ -10,6 +11,14 @@ SERVER_CONFIG ?= ../config/server.yaml
 NODE ?= node
 NPM ?= npm
 TRASH_DIR ?= .Trash
+
+# TileDB (for SOMA build/run)
+TILEDB_PREFIX ?= $(HOME)/local/tiledb
+TILEDB_SRC_ROOT ?= $(HOME)/local/src
+TILEDB_SRC_DIR ?= $(TILEDB_SRC_ROOT)/TileDB
+TILEDB_BUILD_DIR ?= $(TILEDB_SRC_DIR)/build
+TILEDB_REPO ?= https://github.com/TileDB-Inc/TileDB.git
+TILEDB_FORCE ?= 0
 
 # Python (preprocessing) environment (uv)
 UV_BIN ?= $(HOME)/.local/bin/uv
@@ -83,10 +92,24 @@ dev-soma:
 	@$(MAKE) -j2 dev-soma-server dev-frontend
 
 dev-soma-server: ensure-go
+	@set -e; \
+	PREFIX="$(TILEDB_PREFIX)"; \
+	if [ -f "$$PREFIX/lib/pkgconfig/tiledb.pc" ]; then \
+		: ; \
+	elif [ -n "$$CONDA_PREFIX" ] && [ -f "$$CONDA_PREFIX/lib/pkgconfig/tiledb.pc" ]; then \
+		PREFIX="$$CONDA_PREFIX"; \
+	else \
+		echo "TileDB not found."; \
+		echo "Install one of:"; \
+		echo "  - local TileDB: make tiledb-install TILEDB_PREFIX=$(TILEDB_PREFIX)"; \
+		echo "  - conda TileDB: set CONDA_PREFIX to an env that has tiledb + pkgconfig"; \
+		exit 1; \
+	fi; \
 	cd $(GO_SERVER_DIR) && \
+		PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" \
 		CGO_ENABLED=1 \
-		CGO_CFLAGS="-I$$CONDA_PREFIX/include" \
-		CGO_LDFLAGS="-L$$CONDA_PREFIX/lib -ltiledb -Wl,-rpath,$$CONDA_PREFIX/lib" \
+		CGO_CFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --cflags tiledb)" \
+		CGO_LDFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --libs tiledb) -Wl,-rpath,$$PREFIX/lib" \
 		$(GO_ENV) go run -tags soma ./cmd/server -config "$(SERVER_CONFIG)"
 
 dev-frontend: prepare-frontend
@@ -278,6 +301,66 @@ check-node:
 check-npm:
 	@echo "Found npm: $$($(NODE_ENV) npm -v)"
 
+# TileDB checks / install (used for SOMA build/run)
+tiledb-check:
+	@set -e; \
+	if ! command -v pkg-config >/dev/null 2>&1; then \
+		echo "pkg-config not found. Please install it first (e.g. apt install pkg-config)."; \
+		exit 1; \
+	fi; \
+	PREFIX="$(TILEDB_PREFIX)"; \
+	if [ -f "$$PREFIX/lib/pkgconfig/tiledb.pc" ]; then \
+		echo "Found TileDB (pkg-config) at: $$PREFIX"; \
+		PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --modversion tiledb; \
+	else \
+		echo "TileDB not found at $(TILEDB_PREFIX)."; \
+		echo "Run: make tiledb-install TILEDB_PREFIX=$(TILEDB_PREFIX)"; \
+		exit 1; \
+	fi
+
+tiledb-install:
+	@set -e; \
+	if ! command -v git >/dev/null 2>&1; then \
+		echo "git not found. Please install it first."; \
+		exit 1; \
+	fi; \
+	if ! command -v cmake >/dev/null 2>&1; then \
+		echo "cmake not found. Please install it first."; \
+		exit 1; \
+	fi; \
+	if ! command -v pkg-config >/dev/null 2>&1; then \
+		echo "pkg-config not found. Please install it first (e.g. apt install pkg-config)."; \
+		exit 1; \
+	fi; \
+	mkdir -p "$(TILEDB_SRC_ROOT)"; \
+	if [ -d "$(TILEDB_SRC_DIR)/.git" ]; then \
+		echo "Using existing TileDB source: $(TILEDB_SRC_DIR)"; \
+	else \
+		echo "Cloning TileDB into: $(TILEDB_SRC_DIR)"; \
+		git clone --depth 1 "$(TILEDB_REPO)" "$(TILEDB_SRC_DIR)"; \
+	fi; \
+	if [ -e "$(TILEDB_PREFIX)" ]; then \
+		if [ "$(TILEDB_FORCE)" = "1" ]; then \
+			mkdir -p "$(TRASH_DIR)"; \
+			TS=$$(date +%Y%m%d-%H%M%S); \
+			echo "Moving existing $(TILEDB_PREFIX) to $(TRASH_DIR)/tiledb-$$TS"; \
+			mv "$(TILEDB_PREFIX)" "$(TRASH_DIR)/tiledb-$$TS"; \
+			mkdir -p "$(TILEDB_PREFIX)"; \
+		else \
+			echo "TileDB prefix exists: $(TILEDB_PREFIX)"; \
+			echo "Reusing it. To force reinstall: make tiledb-install TILEDB_FORCE=1"; \
+		fi; \
+	else \
+		mkdir -p "$(TILEDB_PREFIX)"; \
+	fi; \
+	echo "Building TileDB (Release) and installing to $(TILEDB_PREFIX)"; \
+	cmake -S "$(TILEDB_SRC_DIR)" -B "$(TILEDB_BUILD_DIR)" \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX="$(TILEDB_PREFIX)" \
+		-DBUILD_SHARED_LIBS=ON; \
+	cmake --build "$(TILEDB_BUILD_DIR)" --target install --parallel; \
+	$(MAKE) tiledb-check
+
 # Install frontend dependencies
 install-frontend: check-node check-npm
 	cd $(FRONTEND_DIR) && $(NODE_ENV) npm ci
@@ -334,7 +417,9 @@ help:
 	@echo "Usage:"
 	@echo "  make build          - Build all components"
 	@echo "  make dev [SERVER_CONFIG=../config/server.yaml]      - Start development servers"
-	@echo "  make dev-soma [SERVER_CONFIG=../config/server.yaml] - Start SOMA-enabled dev server (requires conda TileDB)"
+	@echo "  make dev-soma [SERVER_CONFIG=../config/server.yaml] - Start SOMA-enabled dev server (uses TILEDB_PREFIX, fallback CONDA_PREFIX)"
+	@echo "  make tiledb-install - Build+install TileDB to \$$HOME/local/tiledb (for SOMA)"
+	@echo "  make tiledb-check   - Check TileDB (pkg-config) under TILEDB_PREFIX"
 	@echo "  make test           - Run all tests"
 	@echo "  make install        - Install all dependencies"
 	@echo "  make prepare        - Prepare Go/Python/Node dependencies (recommended)"
