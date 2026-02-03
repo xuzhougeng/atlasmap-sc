@@ -1,4 +1,4 @@
-.PHONY: all build run dev dev-soma test clean preprocess preprocess-venv ensure-go \
+.PHONY: all build run dev dev-soma build-server-soma test clean preprocess preprocess-venv ensure-go \
 	check-node check-npm prepare-go prepare-python prepare-frontend prepare \
 	tiledb-check tiledb-install
 
@@ -115,6 +115,28 @@ dev-soma-server: ensure-go
 		CGO_CFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --cflags tiledb)" \
 		CGO_LDFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --libs tiledb) -Wl,-rpath,$$PREFIX/lib" \
 		$(GO_ENV) go run -tags soma ./cmd/server -config "$(SERVER_CONFIG)"
+
+# Build Go server binary with SOMA (TileDB) support. Requires TileDB at TILEDB_PREFIX or in CONDA_PREFIX.
+# Output: server/bin/server-soma
+build-server-soma: ensure-go
+	@set -e; \
+	PREFIX="$(TILEDB_PREFIX)"; \
+	if [ -f "$$PREFIX/lib/pkgconfig/tiledb.pc" ]; then \
+		: ; \
+	elif [ -n "$$CONDA_PREFIX" ] && [ -f "$$CONDA_PREFIX/lib/pkgconfig/tiledb.pc" ]; then \
+		PREFIX="$$CONDA_PREFIX"; \
+	else \
+		echo "TileDB not found."; \
+		echo "Install one of: make tiledb-install, or conda install -c conda-forge tiledb pkg-config and activate env."; \
+		exit 1; \
+	fi; \
+	cd $(GO_SERVER_DIR) && \
+		PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" \
+		CGO_ENABLED=1 \
+		CGO_CFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --cflags tiledb)" \
+		CGO_LDFLAGS="$$(PKG_CONFIG_PATH="$$PREFIX/lib/pkgconfig:$${PKG_CONFIG_PATH:-}" pkg-config --libs tiledb) -Wl,-rpath,$$PREFIX/lib" \
+		$(GO_ENV) go build -tags soma -o bin/server-soma ./cmd/server && \
+		echo "Built server with SOMA: $(GO_SERVER_DIR)/bin/server-soma"
 
 dev-frontend: prepare-frontend
 	cd $(FRONTEND_DIR) && $(NODE_ENV) npm run dev
@@ -429,6 +451,7 @@ help:
 	@echo "  make build          - Build all components"
 	@echo "  make dev [SERVER_CONFIG=../config/server.yaml]      - Start development servers"
 	@echo "  make dev-soma [SERVER_CONFIG=../config/server.yaml] - Start SOMA-enabled dev server (uses TILEDB_PREFIX, fallback CONDA_PREFIX)"
+	@echo "  make build-server-soma - Build server binary with SOMA support (output: server/bin/server-soma)"
 	@echo "  make tiledb-install - Build+install TileDB to \$$HOME/local/tiledb (for SOMA)"
 	@echo "  make tiledb-check   - Check TileDB (pkg-config) under TILEDB_PREFIX"
 	@echo "  make test           - Run all tests"
