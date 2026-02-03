@@ -401,15 +401,6 @@ async function init() {
     const renderZoom = Math.max(0, metadata.zoom_levels - 1);
     
     const tileSize = 256;
-    const tilePixelsLog2 = (() => {
-        let ts = tileSize;
-        let log2 = 0;
-        while (ts > 1) {
-            ts >>= 1;
-            log2++;
-        }
-        return log2;
-    })();
     // Base zoom limit for tiles (0..4 by default, clamped to renderZoom).
     const baseMaxNativeZoom = Math.min(4, renderZoom);
     const canvasExtraZoom = 4;
@@ -1305,7 +1296,7 @@ function setupToolbar(
         labelsBtn.addEventListener('mouseup', clearLabelLongPressTimer);
         labelsBtn.addEventListener('mouseleave', clearLabelLongPressTimer);
 
-        labelsBtn.addEventListener('touchstart', (e) => {
+        labelsBtn.addEventListener('touchstart', () => {
             clearLabelLongPressTimer();
             labelLongPressTimer = setTimeout(() => {
                 labelLongPressTimer = null;
