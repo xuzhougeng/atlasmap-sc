@@ -127,6 +127,29 @@
     width: 100%;
 }
 
+/*
+ * TODO: Re-enable zoom/cell canvas UI when the feature is complete.
+ *
+ * What was hidden (temporarily):
+ * - Sidebar button #btn-zoom-switch: toggles "cell canvas" mode (zoom beyond tile levels).
+ * - Prompt .zoom-canvas-prompt: "Reached max tile zoom. Enable cell canvas to zoom further?"
+ * (The bottom-right .leaflet-control.zoom-info "VIEW z4 TILES z4 DATA z9" is left visible.)
+ *
+ * To re-enable:
+ * 1. Remove the two rule blocks below (or comment them out).
+ * 2. In index.html: remove the "hidden" class and the aria-hidden attribute from the
+ *    <button id="btn-zoom-switch"> element so the toolbar button shows again.
+ *
+ * Related code (for fixes/tests): frontend/src/main.ts (cell canvas toggle, prompt show/hide),
+ * frontend/src/map/MapController.ts (addZoomDisplay, zoom info updates).
+ */
+#btn-zoom-switch.hidden {
+    display: none;
+}
+.zoom-canvas-prompt {
+    display: none !important;
+}
+
 .zoom-info {
     background-color: var(--bg-secondary);
     padding: 6px 12px;
