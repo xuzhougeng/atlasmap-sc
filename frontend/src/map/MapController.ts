@@ -64,6 +64,8 @@ export class MapController {
     private pointSize: number = 1.0;
     private zoomInfoEl: HTMLElement | null = null;
     private tilePixelsLog2: number;
+    private interactionsEnabled: boolean = true;
+    private zoomControlRemoved: boolean = false;
 
     constructor(container: HTMLElement, config: MapConfig) {
         this.container = container;
@@ -673,6 +675,57 @@ export class MapController {
      */
     getMap(): L.Map {
         return this.map;
+    }
+
+    /**
+     * Whether map navigation interactions are enabled (drag/zoom, etc.).
+     */
+    isInteractionsEnabled(): boolean {
+        return this.interactionsEnabled;
+    }
+
+    /**
+     * Enable/disable user interactions (pan/zoom) for the map.
+     * Useful for tools like lasso selection that require a stable view while drawing.
+     */
+    setInteractionsEnabled(enabled: boolean): void {
+        if (this.interactionsEnabled === enabled) return;
+        this.interactionsEnabled = enabled;
+
+        const mapAny = this.map as any;
+        const handlers: Array<any> = [
+            mapAny.dragging,
+            mapAny.scrollWheelZoom,
+            mapAny.doubleClickZoom,
+            mapAny.boxZoom,
+            mapAny.keyboard,
+            mapAny.touchZoom,
+            mapAny.tap,
+        ];
+
+        for (const handler of handlers) {
+            if (!handler) continue;
+            if (enabled) {
+                if (typeof handler.enable === 'function') handler.enable();
+            } else {
+                if (typeof handler.disable === 'function') handler.disable();
+            }
+        }
+
+        // Disable the zoom control buttons while interactions are locked.
+        const zoomControl = mapAny.zoomControl as L.Control.Zoom | undefined;
+        if (!enabled) {
+            if (zoomControl && typeof zoomControl.remove === 'function') {
+                zoomControl.remove();
+                this.zoomControlRemoved = true;
+            }
+            return;
+        }
+
+        if (this.zoomControlRemoved && zoomControl && typeof zoomControl.addTo === 'function') {
+            zoomControl.addTo(this.map);
+            this.zoomControlRemoved = false;
+        }
     }
 
     /**

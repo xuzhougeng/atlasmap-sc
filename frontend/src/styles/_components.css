@@ -184,6 +184,81 @@
     color: var(--text-secondary);
 }
 
+.selection-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selection-hint {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.selection-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.selection-meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.selection-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.selection-actions .btn-primary {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+}
+
+.selection-actions .btn-link[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.selection-list {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background-color: var(--bg-primary);
+    overflow: auto;
+    max-height: 240px;
+}
+
+.selection-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}
+
+.selection-item:nth-child(even) {
+    background-color: var(--bg-tertiary);
+}
+
+.selection-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 70%;
+}
+
+.selection-item__count {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+
 .tool-btn {
     width: 40px;
     height: 40px;

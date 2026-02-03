@@ -17,6 +17,7 @@ import { ExpressionColorbar } from './components/ExpressionColorbar';
 import { ExpressionRangeSelector } from './components/ExpressionRangeSelector';
 import { SidebarResizer } from './components/SidebarResizer';
 import { ThemeManager } from './components/ThemeManager';
+import { LassoSelectionPanel } from './components/LassoSelectionPanel';
 import { StateManager, AppState } from './state/StateManager';
 import { ApiClient } from './api/client';
 import { downloadPngAtCurrentZoom } from './map/exportPng';
@@ -995,6 +996,29 @@ async function init() {
             void refreshExpressionColorbar();
         }
     );
+
+    // Lasso selection tool + selection summary panel
+    const selectionPanelContent = document.getElementById('selection-panel-content');
+    const lassoBtn = document.getElementById('btn-lasso') as HTMLButtonElement | null;
+    if (selectionPanelContent) {
+        const lassoPanel = new LassoSelectionPanel(selectionPanelContent, mapController, api, {
+            getCategoryColumn: () => currentCategoryColumn,
+            getCategoryFilter: () => currentCategoryFilter,
+            onEnabledChange: (enabled) => {
+                if (!lassoBtn) return;
+                lassoBtn.classList.toggle('active', enabled);
+                lassoBtn.title = enabled ? 'Lasso select: ON (Esc to exit)' : 'Lasso select (lock pan/zoom)';
+            },
+        });
+
+        if (lassoBtn) {
+            lassoBtn.classList.toggle('active', lassoPanel.isEnabled());
+            lassoBtn.addEventListener('click', () => lassoPanel.toggle());
+        }
+    } else if (lassoBtn) {
+        lassoBtn.disabled = true;
+        lassoBtn.title = 'Lasso select unavailable (missing selection panel)';
+    }
 
     // Initialize sidebar resizer
     const sidebarResizer = document.getElementById('sidebar-resizer');
