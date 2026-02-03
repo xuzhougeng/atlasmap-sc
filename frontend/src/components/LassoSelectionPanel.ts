@@ -21,6 +21,8 @@ export class LassoSelectionPanel {
     private mapController: MapController;
     private api: ApiClient;
     private config: LassoSelectionPanelConfig;
+    private mapElement: HTMLElement;
+    private usesPointerEvents: boolean;
     private enabled = false;
     private drawing = false;
     private points: L.LatLng[] = [];
@@ -30,30 +32,115 @@ export class LassoSelectionPanel {
     private status: 'idle' | 'loading' | 'error' = 'idle';
     private statusMessage: string | null = null;
     private abortController: AbortController | null = null;
+    private activePointerId: number | null = null;
 
-    private readonly onMapMouseDown = (e: L.LeafletEvent): void => {
+    private readonly onPointerDown = (e: PointerEvent): void => {
         if (!this.enabled) return;
         if (this.drawing) return;
-        const ev = e as unknown as L.LeafletMouseEvent;
-        if (!ev.latlng) return;
-        if (typeof (ev.originalEvent as MouseEvent | undefined)?.button === 'number') {
-            const btn = (ev.originalEvent as MouseEvent).button;
-            if (btn !== 0) return;
+
+        // Ignore interactions with UI overlays/controls.
+        const target = e.target as HTMLElement | null;
+        if (
+            target &&
+            (target.closest('.mobile-card') ||
+                target.closest('.mobile-fabs') ||
+                target.closest('.leaflet-control'))
+        ) {
+            return;
         }
-        this.startDrawing(ev.latlng);
+
+        // Only primary pointer (ignore multi-touch/pinch).
+        if (typeof e.isPrimary === 'boolean' && !e.isPrimary) return;
+
+        // Only left click for mouse, allow touch/pen.
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        this.activePointerId = e.pointerId;
+        try {
+            this.mapElement.setPointerCapture(e.pointerId);
+        } catch {
+            // ignore
+        }
+
+        const latlng = this.clientToLatLng(e.clientX, e.clientY);
+        if (!latlng) return;
+        this.startDrawing(latlng);
     };
 
-    private readonly onMapMouseMove = (e: L.LeafletEvent): void => {
+    private readonly onPointerMove = (e: PointerEvent): void => {
         if (!this.enabled) return;
         if (!this.drawing) return;
-        const ev = e as unknown as L.LeafletMouseEvent;
-        if (!ev.latlng) return;
-        this.addPoint(ev.latlng);
+        if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const latlng = this.clientToLatLng(e.clientX, e.clientY);
+        if (!latlng) return;
+        this.addPoint(latlng);
     };
 
-    private readonly onMapMouseUp = (): void => {
+    private readonly onPointerUp = (e: PointerEvent): void => {
         if (!this.enabled) return;
         if (!this.drawing) return;
+        if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.activePointerId = null;
+        void this.finishDrawing();
+    };
+
+    private readonly onPointerCancel = (e: PointerEvent): void => {
+        if (!this.enabled) return;
+        if (!this.drawing) return;
+        if (this.activePointerId !== null && e.pointerId !== this.activePointerId) return;
+        this.activePointerId = null;
+        this.cancelDrawing();
+        this.render();
+    };
+
+    private readonly onTouchStart = (e: TouchEvent): void => {
+        if (!this.enabled) return;
+        if (this.drawing) return;
+        if (e.touches.length !== 1) return;
+
+        const target = e.target as HTMLElement | null;
+        if (
+            target &&
+            (target.closest('.mobile-card') ||
+                target.closest('.mobile-fabs') ||
+                target.closest('.leaflet-control'))
+        ) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+        const latlng = this.clientToLatLng(touch.clientX, touch.clientY);
+        if (!latlng) return;
+        this.startDrawing(latlng);
+    };
+
+    private readonly onTouchMove = (e: TouchEvent): void => {
+        if (!this.enabled) return;
+        if (!this.drawing) return;
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const touch = e.touches[0];
+        const latlng = this.clientToLatLng(touch.clientX, touch.clientY);
+        if (!latlng) return;
+        this.addPoint(latlng);
+    };
+
+    private readonly onTouchEnd = (e: TouchEvent): void => {
+        if (!this.enabled) return;
+        if (!this.drawing) return;
+        e.preventDefault();
+        e.stopPropagation();
         void this.finishDrawing();
     };
 
@@ -81,16 +168,20 @@ export class LassoSelectionPanel {
         this.mapController = mapController;
         this.api = api;
         this.config = config;
+        this.mapElement = this.mapController.getMap().getContainer();
+        this.usesPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
 
-        const map = this.mapController.getMap();
-        map.on('mousedown', this.onMapMouseDown);
-        map.on('mousemove', this.onMapMouseMove);
-        map.on('mouseup', this.onMapMouseUp);
-
-        // Touch support (Leaflet maps touch to similar events, but ensure we capture end)
-        map.on('touchstart', this.onMapMouseDown);
-        map.on('touchmove', this.onMapMouseMove);
-        map.on('touchend', this.onMapMouseUp);
+        if (this.usesPointerEvents) {
+            this.mapElement.addEventListener('pointerdown', this.onPointerDown, { passive: false, capture: true });
+            this.mapElement.addEventListener('pointermove', this.onPointerMove, { passive: false, capture: true });
+            this.mapElement.addEventListener('pointerup', this.onPointerUp, { passive: false, capture: true });
+            this.mapElement.addEventListener('pointercancel', this.onPointerCancel, { passive: false, capture: true });
+        } else {
+            // Fallback for older browsers (e.g. older iOS Safari): use touch events.
+            this.mapElement.addEventListener('touchstart', this.onTouchStart, { passive: false, capture: true });
+            this.mapElement.addEventListener('touchmove', this.onTouchMove, { passive: false, capture: true });
+            this.mapElement.addEventListener('touchend', this.onTouchEnd, { passive: false, capture: true });
+        }
 
         this.render();
     }
@@ -105,11 +196,13 @@ export class LassoSelectionPanel {
         this.enabled = enabled;
         if (enabled) {
             this.mapController.setInteractionsEnabled(false);
+            this.mapElement.classList.add('lasso-mode');
             window.addEventListener('keydown', this.onKeyDown);
         } else {
             this.cancelInFlight();
             this.cancelDrawing();
             this.mapController.setInteractionsEnabled(true);
+            this.mapElement.classList.remove('lasso-mode');
             window.removeEventListener('keydown', this.onKeyDown);
         }
 
@@ -143,6 +236,8 @@ export class LassoSelectionPanel {
 
         window.addEventListener('mouseup', this.onWindowPointerUp);
         window.addEventListener('touchend', this.onWindowPointerUp);
+        window.addEventListener('pointerup', this.onWindowPointerUp);
+        window.addEventListener('pointercancel', this.onWindowPointerUp);
 
         const map = this.mapController.getMap();
         this.drawingLine = L.polyline(this.points, {
@@ -172,6 +267,9 @@ export class LassoSelectionPanel {
         this.drawing = false;
         window.removeEventListener('mouseup', this.onWindowPointerUp);
         window.removeEventListener('touchend', this.onWindowPointerUp);
+        window.removeEventListener('pointerup', this.onWindowPointerUp);
+        window.removeEventListener('pointercancel', this.onWindowPointerUp);
+        this.activePointerId = null;
 
         const map = this.mapController.getMap();
         if (this.drawingLine) {
@@ -273,12 +371,22 @@ export class LassoSelectionPanel {
         this.drawing = false;
         window.removeEventListener('mouseup', this.onWindowPointerUp);
         window.removeEventListener('touchend', this.onWindowPointerUp);
+        window.removeEventListener('pointerup', this.onWindowPointerUp);
+        window.removeEventListener('pointercancel', this.onWindowPointerUp);
+        this.activePointerId = null;
         this.points = [];
         const map = this.mapController.getMap();
         if (this.drawingLine) {
             map.removeLayer(this.drawingLine);
             this.drawingLine = null;
         }
+    }
+
+    private clientToLatLng(clientX: number, clientY: number): L.LatLng | null {
+        const map = this.mapController.getMap();
+        const rect = this.mapElement.getBoundingClientRect();
+        const containerPoint = L.point(clientX - rect.left, clientY - rect.top);
+        return map.containerPointToLatLng(containerPoint);
     }
 
     private render(): void {

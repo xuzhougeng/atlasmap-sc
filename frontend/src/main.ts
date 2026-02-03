@@ -1473,6 +1473,7 @@ function setupMobileUI(tabPanel: TabPanel, mapController: MapController): void {
     const mapContainer = document.getElementById('map-container');
     const tabPanelContainer = document.getElementById('tab-panel-container');
     const toolsPanel = document.getElementById('tools-panel');
+    const selectionPanel = document.getElementById('selection-panel');
     if (!mapContainer || !tabPanelContainer || !toolsPanel) return;
 
     // Track which card is open: 'tabs' | 'tools' | null
@@ -1529,6 +1530,9 @@ function setupMobileUI(tabPanel: TabPanel, mapController: MapController): void {
     const toolsCardBody = toolsCard.querySelector('.mobile-card__body')!;
     tabsCardBody.appendChild(tabPanelContainer);
     toolsCardBody.appendChild(toolsPanel);
+    if (selectionPanel) {
+        toolsCardBody.appendChild(selectionPanel);
+    }
 
     // Card title element for tabs card
     const tabsCardTitle = tabsCard.querySelector('.mobile-card__title') as HTMLElement;
@@ -1543,9 +1547,14 @@ function setupMobileUI(tabPanel: TabPanel, mapController: MapController): void {
         toolsCard.classList.remove('open');
         backdrop.classList.remove('open');
         openCard = null;
-        // Re-enable map dragging when cards are closed
-        leafletMap.dragging.enable();
-        leafletMap.touchZoom.enable();
+        // Re-enable map dragging when cards are closed, unless another tool has locked interactions (e.g. lasso).
+        if (mapController.isInteractionsEnabled()) {
+            leafletMap.dragging.enable();
+            leafletMap.touchZoom.enable();
+        } else {
+            leafletMap.dragging.disable();
+            leafletMap.touchZoom.disable();
+        }
     };
 
     const openTabsCard = (tab: 'category' | 'expression') => {

@@ -127,6 +127,12 @@
     width: 100%;
 }
 
+.leaflet-container.lasso-mode {
+    /* Prevent the browser from treating lasso drags as pan/scroll gestures on mobile. */
+    touch-action: none;
+    cursor: crosshair;
+}
+
 /*
  * TODO: Re-enable zoom/cell canvas UI when the feature is complete.
  *
