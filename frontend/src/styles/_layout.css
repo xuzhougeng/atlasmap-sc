@@ -300,6 +300,114 @@
     background: linear-gradient(to top, #440154 0%, #fde725 100%);
 }
 
+.selection-toast {
+    position: absolute;
+    right: 12px;
+    z-index: 1001;
+    width: min(320px, calc(100% - 24px));
+    pointer-events: auto;
+}
+
+.selection-toast.hidden {
+    display: none;
+}
+
+.selection-toast__card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.selection-toast__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-tertiary);
+}
+
+.selection-toast__title {
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.selection-toast__btn {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    padding: 2px 10px;
+    cursor: pointer;
+}
+
+.selection-toast__btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.selection-toast__meta {
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.selection-toast__meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.selection-toast__note {
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.selection-toast__list {
+    max-height: 220px;
+    overflow: auto;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+}
+
+.selection-toast__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}
+
+.selection-toast__row:nth-child(even) {
+    background-color: var(--bg-tertiary);
+}
+
+.selection-toast__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 72%;
+}
+
+.selection-toast__count {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+
 /* ============================================
    Mobile Responsive Layout (max-width: 768px)
    ============================================ */
@@ -394,6 +502,11 @@
 
     .expression-colorbar-label {
         font-size: 0.6rem;
+    }
+
+    .selection-toast {
+        right: 8px;
+        width: min(340px, calc(100% - 16px));
     }
 
     /* Zoom info: smaller and move to bottom-left on mobile */

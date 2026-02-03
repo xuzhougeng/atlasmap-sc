@@ -23,6 +23,8 @@ export class LassoSelectionPanel {
     private config: LassoSelectionPanelConfig;
     private mapElement: HTMLElement;
     private usesPointerEvents: boolean;
+    private toastElement: HTMLElement;
+    private colorbarObserver: MutationObserver | null = null;
     private enabled = false;
     private drawing = false;
     private points: L.LatLng[] = [];
@@ -33,6 +35,10 @@ export class LassoSelectionPanel {
     private statusMessage: string | null = null;
     private abortController: AbortController | null = null;
     private activePointerId: number | null = null;
+    private readonly onWindowResize = (): void => {
+        if (!this.selectionStats) return;
+        this.positionToast();
+    };
 
     private readonly onPointerDown = (e: PointerEvent): void => {
         if (!this.enabled) return;
@@ -44,7 +50,8 @@ export class LassoSelectionPanel {
             target &&
             (target.closest('.mobile-card') ||
                 target.closest('.mobile-fabs') ||
-                target.closest('.leaflet-control'))
+                target.closest('.leaflet-control') ||
+                target.closest('.selection-toast'))
         ) {
             return;
         }
@@ -110,7 +117,8 @@ export class LassoSelectionPanel {
             target &&
             (target.closest('.mobile-card') ||
                 target.closest('.mobile-fabs') ||
-                target.closest('.leaflet-control'))
+                target.closest('.leaflet-control') ||
+                target.closest('.selection-toast'))
         ) {
             return;
         }
@@ -170,6 +178,25 @@ export class LassoSelectionPanel {
         this.config = config;
         this.mapElement = this.mapController.getMap().getContainer();
         this.usesPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+        this.toastElement = document.createElement('div');
+        this.toastElement.className = 'selection-toast hidden';
+        this.mapElement.appendChild(this.toastElement);
+
+        window.addEventListener('resize', this.onWindowResize);
+
+        // Keep the toast positioned below the expression colorbar when it shows/hides.
+        if (typeof MutationObserver !== 'undefined') {
+            const colorbarRoot = this.mapElement.querySelector(
+                '.expression-colorbar-container .expression-colorbar'
+            ) as HTMLElement | null;
+            if (colorbarRoot) {
+                this.colorbarObserver = new MutationObserver(() => {
+                    if (!this.selectionStats) return;
+                    this.positionToast();
+                });
+                this.colorbarObserver.observe(colorbarRoot, { attributes: true, attributeFilter: ['class'] });
+            }
+        }
 
         if (this.usesPointerEvents) {
             this.mapElement.addEventListener('pointerdown', this.onPointerDown, { passive: false, capture: true });
@@ -453,6 +480,78 @@ export class LassoSelectionPanel {
 
         const clearBtn = this.container.querySelector('#btn-selection-clear') as HTMLButtonElement | null;
         clearBtn?.addEventListener('click', () => this.clearSelection());
+
+        this.renderToast();
+    }
+
+    private renderToast(): void {
+        const selected = this.selectionStats;
+        if (!selected) {
+            this.toastElement.classList.add('hidden');
+            this.toastElement.innerHTML = '';
+            return;
+        }
+
+        this.toastElement.classList.remove('hidden');
+        this.positionToast();
+
+        const categoryColumn = selected.categoryColumn ?? '-';
+        const cellsText = `${selected.totalSelected.toLocaleString()}${selected.truncated ? ' (sampled)' : ''}`;
+
+        const listHtml =
+            selected.categoryCounts.length === 0
+                ? `<div class="selection-toast__row"><span class="selection-toast__label">(no category data)</span><span class="selection-toast__count">-</span></div>`
+                : selected.categoryCounts
+                      .map(
+                          (row) => `
+                            <div class="selection-toast__row">
+                                <span class="selection-toast__label" title="${escapeHtml(row.value)}">${escapeHtml(row.value)}</span>
+                                <span class="selection-toast__count">${row.count.toLocaleString()}</span>
+                            </div>
+                        `
+                      )
+                      .join('');
+
+        this.toastElement.innerHTML = `
+            <div class="selection-toast__card" role="dialog" aria-label="Selection summary">
+                <div class="selection-toast__header">
+                    <span class="selection-toast__title">Selection</span>
+                    <button id="btn-selection-toast-clear" type="button" class="selection-toast__btn">Clear</button>
+                </div>
+                <div class="selection-toast__meta">
+                    <div><strong>Cells</strong>: ${escapeHtml(cellsText)}</div>
+                    <div><strong>Category</strong>: ${escapeHtml(categoryColumn)}</div>
+                    ${selected.truncated ? `<div class="selection-toast__note">Sampled subset (hit query limit)</div>` : ''}
+                </div>
+                <div class="selection-toast__list" role="list">
+                    ${listHtml}
+                </div>
+            </div>
+        `;
+
+        const clearBtn = this.toastElement.querySelector('#btn-selection-toast-clear') as HTMLButtonElement | null;
+        clearBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.clearSelection();
+        });
+    }
+
+    private positionToast(): void {
+        // Avoid overlapping the expression colorbar (also in top-right).
+        const mapRect = this.mapElement.getBoundingClientRect();
+        const colorbarRoot = this.mapElement.querySelector(
+            '.expression-colorbar-container .expression-colorbar'
+        ) as HTMLElement | null;
+
+        let topPx = 12;
+        if (colorbarRoot && !colorbarRoot.classList.contains('hidden')) {
+            const colorbarRect = colorbarRoot.getBoundingClientRect();
+            const below = Math.round(colorbarRect.bottom - mapRect.top + 8);
+            if (Number.isFinite(below) && below > topPx) topPx = below;
+        }
+
+        this.toastElement.style.top = `${topPx}px`;
     }
 
     private getPolygonBoundsAndPoints(latlngs: L.LatLng[]): {
